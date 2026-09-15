@@ -132,6 +132,8 @@
     display:flex;
     flex-direction:column;
   }
+  .card.sold-out .thumb-wrap img{ opacity:.5; }
+  .card.sold-out .copy-btn{ background:var(--line); color:#8a7a72; }
   .thumb-wrap{
     position:relative;
     aspect-ratio:1/1;
@@ -286,6 +288,16 @@ function refFor(p){
   return 'REF-' + raw.slice(-4);
 }
 
+// خريطة أسماء الفئات بالعربي — زيدي فيها أي فئة جديدة تنشأ من تطبيق الجرد
+const CAT_AR = {
+  'Pyjamas': 'بيجاما',
+  'Bustier Short': 'بوستير شورت',
+  'Fond de robe': 'فوندروب',
+  'Nuisettes': 'نوايزيت',
+  'Robes de chambre': 'روب شامبر'
+};
+function catLabel(c){ return CAT_AR[c] || c; }
+
 function renderChips(){
   const cats = [];
   allProducts.forEach(p=>{ if(p.cat && !cats.includes(p.cat)) cats.push(p.cat); });
@@ -299,14 +311,14 @@ function renderChips(){
   cats.forEach(c=>{
     const el = document.createElement('div');
     el.className = 'chip' + (activeCat===c ? ' active' : '');
-    el.textContent = c;
+    el.textContent = catLabel(c);
     el.onclick = ()=>{ activeCat=c; renderChips(); renderGrid(); };
     wrap.appendChild(el);
   });
 }
 
 function renderGrid(){
-  let list = allProducts.filter(p => (p.qty||0) > 0);
+  let list = allProducts.slice();
   if(activeCat !== 'ALL') list = list.filter(p => p.cat === activeCat);
   if(searchTerm.trim()){
     const s = searchTerm.trim().toLowerCase();
@@ -316,7 +328,12 @@ function renderGrid(){
       (p.code||'').includes(s)
     );
   }
-  list.sort((a,b)=> (a.order||0) - (b.order||0));
+  list.sort((a,b)=>{
+    const soldA = (a.qty||0) <= 0 ? 1 : 0;
+    const soldB = (b.qty||0) <= 0 ? 1 : 0;
+    if(soldA !== soldB) return soldA - soldB;
+    return (a.order||0) - (b.order||0);
+  });
 
   document.getElementById('count').textContent = list.length + ' موديل';
 
@@ -329,8 +346,9 @@ function renderGrid(){
   }
 
   list.forEach(p=>{
+    const soldOut = (p.qty||0) <= 0;
     const card = document.createElement('div');
-    card.className = 'card';
+    card.className = 'card' + (soldOut ? ' sold-out' : '');
 
     const thumb = document.createElement('div');
     thumb.className = 'thumb-wrap';
@@ -342,10 +360,15 @@ function renderGrid(){
 
     const catBadge = document.createElement('div');
     catBadge.className = 'badge-cat';
-    catBadge.textContent = p.cat || '';
+    catBadge.textContent = catLabel(p.cat || '');
     thumb.appendChild(catBadge);
 
-    if((p.qty||0) > 0 && p.qty <= 3){
+    if(soldOut){
+      const low = document.createElement('div');
+      low.className = 'badge-low';
+      low.textContent = 'نفذ المخزون';
+      thumb.appendChild(low);
+    } else if(p.qty <= 3){
       const low = document.createElement('div');
       low.className = 'badge-low';
       low.textContent = 'الكمية قليلة';
