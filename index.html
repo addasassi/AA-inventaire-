@@ -1311,6 +1311,19 @@ function showBarcode(id){
   document.getElementById('barcodeModal').classList.add('show');
   document.getElementById('bm-print').onclick = ()=> printLabel(p);
 }
+function showColorBarcode(productId, colorIndex){
+  const p = products.find(x=>x.id===productId);
+  if(!p || !p.colors || !p.colors[colorIndex]) return;
+  const c = p.colors[colorIndex];
+  if(!c.code){ toast('Aucun code-barres pour cette couleur', true); return; }
+  const price = c.price != null ? c.price : p.price;
+  document.getElementById('bm-name').textContent = p.name + ' — Couleur ' + (colorIndex+1);
+  document.getElementById('bm-price').textContent = Number(price).toFixed(2) + ' DA';
+  const canvas = document.getElementById('bm-canvas');
+  JsBarcode(canvas, c.code, {format:"CODE128", displayValue:true, height:60, width:2, fontSize:14, margin:8});
+  document.getElementById('barcodeModal').classList.add('show');
+  document.getElementById('bm-print').onclick = ()=> printLabel({name: p.name + ' - Couleur ' + (colorIndex+1), price, code: c.code});
+}
 document.getElementById('bm-close').addEventListener('click', ()=>{
   document.getElementById('barcodeModal').classList.remove('show');
 });
@@ -1411,12 +1424,15 @@ function renderColorsGrid(){
       <div class="info">
         <div class="name">${escapeHtml(p.name)}</div>
         <div class="meta">${Number(price).toFixed(2)} DA</div>
+        ${c.code ? `<div class="code">#${c.code}</div>` : ''}
       </div>
-      ${isAdmin ? `<div class="actions">
+      <div class="actions">
+        <button class="full" onclick="showColorBarcode('${p.id}',${i})">Code-barres</button>
+        ${isAdmin ? `
         <button onclick="modalAdjustColorQty(${i},1)">+1</button>
         <button onclick="modalAdjustColorQty(${i},-1)">-1</button>
-        <button class="del full" onclick="deleteColorPhoto(${i})">Supprimer</button>
-      </div>` : ''}
+        <button class="del full" onclick="deleteColorPhoto(${i})">Supprimer</button>` : ''}
+      </div>
     </div>`;
   });
   html += addTile + '</div>';
@@ -1469,7 +1485,7 @@ document.getElementById('ac-color-save').addEventListener('click', async ()=>{
   const p = products.find(x=>x.id===currentColorsProductId);
   if(!p) return;
   if(!p.colors) p.colors = [];
-  p.colors.push({img: preview.src, price, qty});
+  p.colors.push({img: preview.src, price, qty, code: genBarcode()});
   await saveProducts();
   refreshCurrentInventoryView();
   renderColorsGrid();
@@ -1572,21 +1588,45 @@ function renderScanHistory(){
 async function handleScannedCode(code){
   await loadProducts();
   const p = products.find(x=>x.code===code);
-  if(!p){
-    toast('Code inconnu : '+code, true);
-    scanHistoryData.unshift({name:code, ok:false, msg:'Code non reconnu'});
-    renderScanHistory(); return;
+  if(p){
+    if(p.qty <= 0){
+      toast(p.name+' — stock déjà à 0', true);
+      scanHistoryData.unshift({name:p.name, ok:false, msg:'Stock déjà à 0'});
+      renderScanHistory(); return;
+    }
+    p.qty -= 1;
+    await saveProducts();
+    refreshCurrentInventoryView();
+    toast(p.name+' — 1 unité retirée ('+p.qty+' restant)');
+    scanHistoryData.unshift({name:p.name, ok:true, qty:p.qty, by: currentUser ? currentUser.name : ''});
+    renderScanHistory();
+    return;
   }
-  if(p.qty <= 0){
-    toast(p.name+' — stock déjà à 0', true);
-    scanHistoryData.unshift({name:p.name, ok:false, msg:'Stock déjà à 0'});
-    renderScanHistory(); return;
+
+  // Recherche parmi les couleurs des produits
+  for(const prod of products){
+    if(!prod.colors) continue;
+    const ci = prod.colors.findIndex(c=>c.code===code);
+    if(ci !== -1){
+      const c = prod.colors[ci];
+      const label = prod.name + ' — Couleur ' + (ci+1);
+      if((c.qty||0) <= 0){
+        toast(label+' — stock déjà à 0', true);
+        scanHistoryData.unshift({name:label, ok:false, msg:'Stock déjà à 0'});
+        renderScanHistory(); return;
+      }
+      c.qty -= 1;
+      await saveProducts();
+      refreshCurrentInventoryView();
+      toast(label+' — 1 unité retirée ('+c.qty+' restant)');
+      scanHistoryData.unshift({name:label, ok:true, qty:c.qty, by: currentUser ? currentUser.name : ''});
+      renderScanHistory();
+      return;
+    }
   }
-  p.qty -= 1;
-  await saveProducts();
-  refreshCurrentInventoryView();
-  toast(p.name+' — 1 unité retirée ('+p.qty+' restant)');
-  scanHistoryData.unshift({name:p.name, ok:true, qty:p.qty, by: currentUser ? currentUser.name : ''});
+
+  toast('Code inconnu : '+code, true);
+  scanHistoryData.unshift({name:code, ok:false, msg:'Code non reconnu'});
   renderScanHistory();
 }
 
