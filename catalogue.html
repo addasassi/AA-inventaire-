@@ -139,9 +139,52 @@
     aspect-ratio:1/1;
     background:#efe4dd;
     overflow:hidden;
+    cursor:zoom-in;
   }
   .thumb-wrap img{
     width:100%;height:100%;object-fit:cover;display:block;
+  }
+  .lightbox{
+    position:fixed;
+    inset:0;
+    background:rgba(20,12,15,.92);
+    z-index:100;
+    display:none;
+    align-items:center;
+    justify-content:center;
+    flex-direction:column;
+    padding:20px;
+  }
+  .lightbox.show{display:flex;}
+  .lightbox img{
+    max-width:100%;
+    max-height:75vh;
+    object-fit:contain;
+    border-radius:12px;
+  }
+  .lightbox-close{
+    position:absolute;
+    top:18px;left:18px;
+    width:38px;height:38px;
+    border-radius:50%;
+    background:rgba(255,255,255,.15);
+    color:#fff;
+    border:none;
+    font-size:20px;
+    display:flex;align-items:center;justify-content:center;
+    cursor:pointer;
+  }
+  .lightbox-info{
+    margin-top:16px;
+    text-align:center;
+    color:#fff;
+    max-width:420px;
+  }
+  .lightbox-info .p-name{color:#fff;margin-bottom:6px;}
+  .lightbox-info .p-price{color:var(--rose);}
+  .lightbox .copy-btn{
+    margin-top:14px;
+    max-width:220px;
   }
   .badge-cat{
     position:absolute;
@@ -259,6 +302,16 @@
 <div id="grid" class="grid"></div>
 <div class="toast" id="toast"></div>
 
+<div class="lightbox" id="lightbox">
+  <button class="lightbox-close" id="lightbox-close">✕</button>
+  <img id="lightbox-img" src="" alt="">
+  <div class="lightbox-info">
+    <div class="p-name" id="lightbox-name"></div>
+    <div class="p-price" id="lightbox-price"></div>
+    <button class="copy-btn" id="lightbox-copy"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> نسخ الصورة</button>
+  </div>
+</div>
+
 <script>
 const firebaseConfig = {
   apiKey: "AIzaSyAfMIEi1MynF82Jp1j1J1BFQM5w8182JTo",
@@ -357,6 +410,7 @@ function renderGrid(){
     img.alt = p.name || '';
     img.loading = 'lazy';
     thumb.appendChild(img);
+    thumb.onclick = ()=> openLightbox(p);
 
     const catBadge = document.createElement('div');
     catBadge.className = 'badge-cat';
@@ -396,6 +450,21 @@ function renderGrid(){
     grid.appendChild(card);
   });
 }
+
+function openLightbox(p){
+  document.getElementById('lightbox-img').src = p.img || '';
+  document.getElementById('lightbox-name').textContent = p.name || '';
+  document.getElementById('lightbox-price').textContent = (p.price||0) + ' دج';
+  document.getElementById('lightbox-copy').onclick = ()=> copyImage(p);
+  document.getElementById('lightbox').classList.add('show');
+}
+function closeLightbox(){
+  document.getElementById('lightbox').classList.remove('show');
+}
+document.getElementById('lightbox-close').onclick = closeLightbox;
+document.getElementById('lightbox').addEventListener('click', (e)=>{
+  if(e.target.id === 'lightbox') closeLightbox();
+});
 
 async function copyImage(p){
   if(!p.img){ toast('ماكانش صورة لهذا المنتوج'); return; }
