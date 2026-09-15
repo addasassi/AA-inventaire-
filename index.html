@@ -148,6 +148,11 @@
   .cat-folder .overlay .cname{color:#fff;font-weight:800;font-size:15px;}
   .cat-folder .overlay .ccount{color:#f0ddd8;font-size:12px;font-weight:600;margin-top:2px;}
   .cat-folder.empty-cat .overlay{background:rgba(58,38,50,0.45);}
+  .cat-folder-actions{position:absolute;top:8px;right:8px;display:flex;gap:6px;z-index:2;}
+  .cat-folder-actions button{width:28px;height:28px;border-radius:50%;border:none;
+    background:rgba(255,255,255,0.9);color:var(--plum);font-size:14px;font-weight:800;
+    cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(0,0,0,0.25);}
+  .cat-folder-actions button:last-child{color:var(--danger);}
   .cat-folder.add-folder,.product.add-product{background:var(--card);border:2px dashed var(--mauve);
     display:flex;align-items:center;justify-content:center;cursor:pointer;}
   .add-folder-inner{text-align:center;}
@@ -606,7 +611,7 @@
 
 <div id="addCategoryModal">
   <div class="modal-card">
-    <h3 style="margin-bottom:14px;">Nouvelle catégorie</h3>
+    <h3 id="cat-modal-title" style="margin-bottom:14px;">Nouvelle catégorie</h3>
     <div class="field" style="text-align:left;">
       <label>Nom de la catégorie</label>
       <input type="text" id="new-cat-name" placeholder="Ex : Ensembles d'été">
@@ -666,21 +671,6 @@ function warnStorage(){
 }
 function escapeHtml(s){
   return (s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-}
-let beepCtx = null;
-function playBeep(){
-  try{
-    if(!beepCtx) beepCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = beepCtx.createOscillator();
-    const gain = beepCtx.createGain();
-    osc.type = 'square';
-    osc.frequency.value = 1500;
-    gain.gain.setValueAtTime(0.25, beepCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, beepCtx.currentTime + 0.12);
-    osc.connect(gain).connect(beepCtx.destination);
-    osc.start();
-    osc.stop(beepCtx.currentTime + 0.12);
-  }catch(e){}
 }
 function placeholderImg(){
   return "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23e3c9c2'/%3E%3C/svg%3E";
@@ -759,11 +749,37 @@ async function deleteProductDoc(id){
 }
 
 /* ---------- Démarrage / Auth ---------- */
+const SESSION_KEY = 'atelier-stock-session';
+function saveSession(user){
+  try{ localStorage.setItem(SESSION_KEY, JSON.stringify({id:user.id})); }catch(e){}
+}
+function clearSession(){
+  try{ localStorage.removeItem(SESSION_KEY); }catch(e){}
+}
+function getSavedSession(){
+  try{
+    const raw = localStorage.getItem(SESSION_KEY);
+    return raw ? JSON.parse(raw) : null;
+  }catch(e){ return null; }
+}
+
 async function boot(){
   try{
     await withTimeout(loadUsers(), 5000);
   }catch(e){ users = users || []; }
   const admin = users.find(u=>u.role==='admin');
+
+  const saved = getSavedSession();
+  if(saved){
+    const u = users.find(x=>x.id===saved.id);
+    if(u){
+      currentUser = u;
+      enterApp();
+      return;
+    }
+    clearSession();
+  }
+
   if(!admin){
     document.getElementById('setupCard').style.display = 'block';
     document.getElementById('loginCard').style.display = 'none';
@@ -782,6 +798,7 @@ document.getElementById('btn-setup').addEventListener('click', async ()=>{
   users.push({id:'u'+Date.now(), role:'admin', name, email, password:obf(pass)});
   await saveUsers();
   currentUser = users[users.length-1];
+  saveSession(currentUser);
   enterApp();
 });
 
@@ -806,6 +823,7 @@ document.getElementById('btn-admin-login').addEventListener('click', async ()=>{
   const u = users.find(x=>x.role==='admin' && x.email===email && x.password===obf(pass));
   if(!u){ toast('Email ou mot de passe incorrect', true); return; }
   currentUser = u;
+  saveSession(u);
   enterApp();
 });
 
@@ -846,6 +864,7 @@ pinPad.addEventListener('click', async (e)=>{
     const u = users.find(x=>x.id===selectedWorkerId);
     if(u && u.pin === enteredPin){
       currentUser = u;
+      saveSession(u);
       enterApp();
     } else {
       toast('Code PIN incorrect', true);
@@ -882,6 +901,7 @@ function enterApp(){
 
 document.getElementById('btn-logout').addEventListener('click', ()=>{
   currentUser = null;
+  clearSession();
   if(equipeTimer) clearInterval(equipeTimer);
   if(productsUnsub){ productsUnsub(); productsUnsub = null; }
   if(ordersUnsub){ ordersUnsub(); ordersUnsub = null; }
@@ -923,7 +943,37 @@ function genBarcode(){
   return code;
 }
 
-let CATS = ["Pyjamas","Bustier Short","Fond de robe","Nuisettes","Robes de chambre"];
+let CATS = ["بيجامات","بيستي شورت","فوندغوب","نويزات","روبات"];
+const FR_TO_AR_MIGRATION = {
+  "Pyjamas": "بيجامات",
+  "Bustier Short": "بيستي شورت",
+  "Fond de robe": "فوندغوب",
+  "Nuisettes": "نويزات",
+  "Robes de chambre": "روبات"
+};
+async function migrateCategoryNamesIfNeeded(){
+  let changed = false;
+  const renameMap = {};
+  CATS = CATS.map(c=>{
+    if(FR_TO_AR_MIGRATION[c]){
+      changed = true;
+      renameMap[c] = FR_TO_AR_MIGRATION[c];
+      return FR_TO_AR_MIGRATION[c];
+    }
+    return c;
+  });
+  if(changed){
+    await saveCategories();
+    await loadProducts();
+    let productsChanged = false;
+    products.forEach(p=>{
+      if(renameMap[p.cat]){ p.cat = renameMap[p.cat]; productsChanged = true; }
+    });
+    if(productsChanged) await saveProducts();
+    refreshCurrentInventoryView();
+    populateCatSelect();
+  }
+}
 async function loadCategories(){
   if(!FIREBASE_OK){ warnStorage(); return; }
   try{
@@ -932,6 +982,7 @@ async function loadCategories(){
       const arr = doc.data().list;
       if(Array.isArray(arr) && arr.length) CATS = arr;
     }
+    await migrateCategoryNamesIfNeeded();
   }catch(e){ warnStorage(); }
 }
 async function saveCategories(){
@@ -946,8 +997,19 @@ function populateCatSelect(){
   sel.innerHTML = CATS.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
   if(CATS.includes(current)) sel.value = current;
 }
+let editingCategoryOldName = null;
 function openAddCategoryModal(){
+  editingCategoryOldName = null;
+  document.getElementById('cat-modal-title').textContent = 'Nouvelle catégorie';
+  document.getElementById('ac-save').textContent = 'Ajouter';
   document.getElementById('new-cat-name').value = '';
+  document.getElementById('addCategoryModal').classList.add('show');
+}
+function openRenameCategoryModal(oldName){
+  editingCategoryOldName = oldName;
+  document.getElementById('cat-modal-title').textContent = 'Renommer la catégorie';
+  document.getElementById('ac-save').textContent = 'Enregistrer';
+  document.getElementById('new-cat-name').value = oldName;
   document.getElementById('addCategoryModal').classList.add('show');
 }
 document.getElementById('ac-cancel').addEventListener('click', ()=>{
@@ -957,14 +1019,47 @@ document.getElementById('ac-save').addEventListener('click', async ()=>{
   const name = document.getElementById('new-cat-name').value.trim();
   if(!name){ toast('Merci de donner un nom à la catégorie', true); return; }
   await loadCategories();
-  if(CATS.some(c=>c.toLowerCase()===name.toLowerCase())){ toast('Cette catégorie existe déjà', true); return; }
-  CATS.push(name);
+
+  if(editingCategoryOldName){
+    const oldName = editingCategoryOldName;
+    if(name !== oldName && CATS.some(c=>c.toLowerCase()===name.toLowerCase())){
+      toast('Cette catégorie existe déjà', true); return;
+    }
+    CATS = CATS.map(c=> c===oldName ? name : c);
+    await saveCategories();
+    await loadProducts();
+    let changed = false;
+    products.forEach(p=>{ if(p.cat===oldName){ p.cat = name; changed = true; } });
+    if(changed) await saveProducts();
+    refreshCurrentInventoryView();
+    populateCatSelect();
+    renderCatFolders();
+    document.getElementById('addCategoryModal').classList.remove('show');
+    toast('Catégorie renommée');
+  } else {
+    if(CATS.some(c=>c.toLowerCase()===name.toLowerCase())){ toast('Cette catégorie existe déjà', true); return; }
+    CATS.push(name);
+    await saveCategories();
+    populateCatSelect();
+    renderCatFolders();
+    document.getElementById('addCategoryModal').classList.remove('show');
+    toast('Catégorie ajoutée');
+  }
+});
+async function deleteCategory(cat){
+  await loadProducts();
+  const count = products.filter(p=>p.cat===cat).length;
+  if(count > 0){
+    toast('Videz d\'abord cette catégorie (' + count + ' produit' + (count>1?'s':'') + ')', true);
+    return;
+  }
+  if(!confirm('Supprimer la catégorie « ' + cat + ' » ?')) return;
+  CATS = CATS.filter(c=> c!==cat);
   await saveCategories();
   populateCatSelect();
   renderCatFolders();
-  document.getElementById('addCategoryModal').classList.remove('show');
-  toast('Catégorie ajoutée');
-});
+  toast('Catégorie supprimée');
+}
 function goToAddProduct(cat){
   document.querySelector('.tab-btn[data-tab="ajout"]').click();
   const sel = document.getElementById('f-cat');
@@ -992,6 +1087,10 @@ function renderCatFolders(){
     const thumb = catThumb(cat) || catEmojiBg();
     return `<div class="cat-folder ${items.length===0?'empty-cat':''}" onclick="openCategory('${cat}')">
       <img src="${thumb}">
+      ${isAdmin ? `<div class="cat-folder-actions">
+        <button onclick="event.stopPropagation(); openRenameCategoryModal('${cat}')" title="Renommer">✎</button>
+        <button onclick="event.stopPropagation(); deleteCategory('${cat}')" title="Supprimer">×</button>
+      </div>` : ''}
       <div class="overlay">
         <div class="cname">${cat}</div>
         <div class="ccount">${items.length} article${items.length>1?'s':''}</div>
@@ -1213,7 +1312,6 @@ async function handlePmScan(){
     return;
   }
   await modalAdjustQty(id, 1);
-  playBeep();
   document.getElementById('pm-scan-input').focus();
 }
 document.getElementById('pm-scan-input').addEventListener('keydown', (e)=>{
@@ -1285,7 +1383,6 @@ async function handleScannedCode(code){
   p.qty -= 1;
   await saveProducts();
   refreshCurrentInventoryView();
-  playBeep();
   toast(p.name+' — 1 unité retirée ('+p.qty+' restant)');
   scanHistoryData.unshift({name:p.name, ok:true, qty:p.qty, by: currentUser ? currentUser.name : ''});
   renderScanHistory();
