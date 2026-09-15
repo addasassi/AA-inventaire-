@@ -244,13 +244,17 @@
   #colorsModal{position:fixed;inset:0;background:rgba(58,38,50,0.55);display:none;align-items:center;
     justify-content:center;z-index:200;padding:20px;}
   #colorsModal.show{display:flex;}
+  #colorViewModal{position:fixed;inset:0;background:rgba(0,0,0,0.92);display:none;align-items:center;
+    justify-content:center;z-index:300;padding:16px;}
+  #colorViewModal.show{display:flex;}
+  #colorViewModal img{max-width:100%;max-height:100%;border-radius:10px;object-fit:contain;}
   .colors-card{max-width:360px;text-align:left;max-height:82vh;overflow-y:auto;}
   .colors-card h3{font-size:17px;margin-bottom:2px;text-align:center;}
   .colors-card .cm-sub{font-size:12.5px;color:var(--mauve-dark);text-align:center;margin-bottom:14px;}
   .colors-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
   .color-tile{position:relative;border-radius:10px;overflow:hidden;aspect-ratio:1/1;background:var(--rose);
     border:1px solid var(--line);}
-  .color-tile img{width:100%;height:100%;object-fit:cover;display:block;}
+  .color-tile img{width:100%;height:100%;object-fit:cover;display:block;cursor:pointer;}
   .color-tile .color-del{position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;
     border:none;background:rgba(255,255,255,0.92);color:var(--danger);font-weight:800;font-size:13px;
     cursor:pointer;display:flex;align-items:center;justify-content:center;}
@@ -617,10 +621,14 @@
   </div>
 </div>
 
+<div id="colorViewModal">
+  <img id="cv-img" src="">
+</div>
+
 <div id="colorsModal">
   <div class="modal-card colors-card">
     <h3 id="cm-name"></h3>
-    <div class="cm-sub">Couleurs disponibles pour ce modèle</div>
+    <div class="cm-sub">الألوان المتوفرة</div>
     <div class="colors-grid" id="cm-grid"></div>
     <input type="file" id="cm-image" accept="image/*" style="display:none;">
     <div class="modal-actions">
@@ -1365,11 +1373,21 @@ function renderColorsGrid(){
   }
   document.getElementById('cm-grid').innerHTML = colors.map((c, i)=> `
     <div class="color-tile">
-      <img src="${c.img}">
+      <img src="${c.img}" onclick="openColorFullscreen(${i})">
       ${isAdmin ? `<button class="color-del" onclick="deleteColorPhoto(${i})">×</button>` : ''}
     </div>
   `).join('') + addTile;
 }
+function openColorFullscreen(index){
+  const p = products.find(x=>x.id===currentColorsProductId);
+  if(!p || !p.colors || !p.colors[index]) return;
+  document.getElementById('cv-img').src = p.colors[index].img;
+  document.getElementById('colorViewModal').classList.add('show');
+}
+function closeColorFullscreen(){
+  document.getElementById('colorViewModal').classList.remove('show');
+}
+document.getElementById('colorViewModal').addEventListener('click', closeColorFullscreen);
 document.getElementById('cm-image').addEventListener('change', async (e)=>{
   const file = e.target.files[0];
   if(!file || !currentColorsProductId) return;
