@@ -223,6 +223,9 @@
   #productModal{position:fixed;inset:0;background:rgba(58,38,50,0.55);display:none;align-items:center;
     justify-content:center;z-index:200;padding:20px;}
   #productModal.show{display:flex;}
+  #addColorModal{position:fixed;inset:0;background:rgba(58,38,50,0.55);display:none;align-items:center;
+    justify-content:center;z-index:260;padding:20px;}
+  #addColorModal.show{display:flex;}
   .pm-card{max-width:320px;}
   .pm-img{width:100%;aspect-ratio:1/1;border-radius:12px;object-fit:cover;background:var(--rose);margin-bottom:12px;}
   .pm-card h3{font-size:17px;}
@@ -241,27 +244,24 @@
   .pm-scan-wrap{margin-top:14px;padding-top:14px;border-top:1px solid var(--line);text-align:left;}
   .pm-scan-wrap label{display:block;font-size:12.5px;color:var(--mauve-dark);margin-bottom:6px;font-weight:700;}
 
-  #colorsModal{position:fixed;inset:0;background:rgba(58,38,50,0.55);display:none;align-items:center;
-    justify-content:center;z-index:200;padding:20px;}
+  #colorsModal{position:fixed;inset:0;background:var(--cream);display:none;flex-direction:column;
+    z-index:250;overflow-y:auto;}
   #colorsModal.show{display:flex;}
+  .colors-header{position:sticky;top:0;z-index:5;background:var(--cream);border-bottom:1px solid var(--line);
+    padding:18px 20px;display:flex;align-items:center;gap:14px;}
+  .colors-header button{background:none;border:none;color:var(--mauve-dark);font-weight:700;font-size:14px;
+    cursor:pointer;padding:0;white-space:nowrap;}
+  .colors-header h3{font-size:17px;color:var(--plum);margin:0;}
+  .colors-body{padding:20px;}
+  .colors-body .cm-sub{font-size:14px;font-weight:700;color:var(--mauve-dark);margin-bottom:14px;}
   #colorViewModal{position:fixed;inset:0;background:rgba(0,0,0,0.92);display:none;align-items:center;
     justify-content:center;z-index:300;padding:16px;}
   #colorViewModal.show{display:flex;}
   #colorViewModal img{max-width:100%;max-height:100%;border-radius:10px;object-fit:contain;}
-  .colors-card{max-width:360px;text-align:left;max-height:82vh;overflow-y:auto;}
-  .colors-card h3{font-size:17px;margin-bottom:2px;text-align:center;}
-  .colors-card .cm-sub{font-size:12.5px;color:var(--mauve-dark);text-align:center;margin-bottom:14px;}
-  .colors-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
-  .color-tile{position:relative;border-radius:10px;overflow:hidden;aspect-ratio:1/1;background:var(--rose);
-    border:1px solid var(--line);}
-  .color-tile img{width:100%;height:100%;object-fit:cover;display:block;cursor:pointer;}
-  .color-tile .color-del{position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;
-    border:none;background:rgba(255,255,255,0.92);color:var(--danger);font-weight:800;font-size:13px;
-    cursor:pointer;display:flex;align-items:center;justify-content:center;}
-  .color-add-tile{border:2px dashed var(--mauve);border-radius:10px;aspect-ratio:1/1;background:var(--card);
+  .color-add-tile{border:2px dashed var(--mauve);border-radius:14px;aspect-ratio:1/1;background:var(--card);
     display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;}
-  .color-add-tile .cap{font-size:24px;font-weight:800;color:var(--mauve-dark);line-height:1;}
-  .color-add-tile .cal{font-size:10px;font-weight:700;color:var(--mauve-dark);margin-top:4px;text-align:center;padding:0 4px;}
+  .color-add-tile .cap{font-size:30px;font-weight:800;color:var(--mauve-dark);line-height:1;}
+  .color-add-tile .cal{font-size:12px;font-weight:700;color:var(--mauve-dark);margin-top:6px;text-align:center;padding:0 8px;}
 
   .empty{text-align:center;padding:60px 20px;color:var(--mauve-dark);}
   .empty h3{margin-bottom:6px;}
@@ -626,18 +626,44 @@
 </div>
 
 <div id="colorsModal">
-  <div class="modal-card colors-card">
+  <header class="colors-header">
+    <button id="cm-back">← Retour</button>
     <h3 id="cm-name"></h3>
+  </header>
+  <div class="colors-body">
     <div class="cm-sub">الألوان المتوفرة</div>
-    <div class="colors-grid" id="cm-grid"></div>
-    <input type="file" id="cm-image" accept="image/*" style="display:none;">
+    <div id="cm-grid"></div>
+  </div>
+</div>
+
+<div id="addColorModal">
+  <div class="modal-card" style="text-align:left;">
+    <h3 style="margin-bottom:14px;text-align:center;">Ajouter une couleur</h3>
+    <div class="field">
+      <label>Photo de la couleur</label>
+      <div class="imgpick">
+        <img class="preview" id="ac-color-preview" src="" style="display:none;">
+        <label class="btn" for="ac-color-image">Choisir une image</label>
+        <input type="file" id="ac-color-image" accept="image/*" style="display:none;">
+      </div>
+    </div>
+    <div class="field">
+      <label>Prix (DA)</label>
+      <input type="number" id="ac-color-price" min="0" step="0.01">
+    </div>
+    <div class="field">
+      <label>Quantité disponible</label>
+      <input type="number" id="ac-color-qty" min="0" step="1" placeholder="0">
+    </div>
     <div class="modal-actions">
-      <button id="cm-close">Fermer</button>
+      <button id="ac-color-cancel">Annuler</button>
+      <button class="primary" id="ac-color-save">Ajouter</button>
     </div>
   </div>
 </div>
 
 <div id="orderDetailModal">
+
   <div class="modal-card order-detail-card">
     <h3 id="od-name"></h3>
     <div class="od-sub" id="od-sub"></div>
@@ -1353,30 +1379,47 @@ function closeColorsModal(){
   document.getElementById('colorsModal').classList.remove('show');
   currentColorsProductId = null;
 }
-document.getElementById('cm-close').addEventListener('click', closeColorsModal);
-document.getElementById('colorsModal').addEventListener('click', (e)=>{
-  if(e.target.id === 'colorsModal') closeColorsModal();
-});
+document.getElementById('cm-back').addEventListener('click', closeColorsModal);
 function renderColorsGrid(){
   const p = products.find(x=>x.id===currentColorsProductId);
   if(!p) return;
   const isAdmin = currentUser && currentUser.role === 'admin';
   document.getElementById('cm-name').textContent = p.name;
   const colors = p.colors || [];
-  const addTile = isAdmin ? `<div class="color-add-tile" onclick="document.getElementById('cm-image').click()">
+  const addTile = isAdmin ? `<div class="color-add-tile" onclick="openAddColorModal()">
       <div class="cap">+</div>
       <div class="cal">Ajouter une couleur</div>
     </div>` : '';
   if(colors.length === 0 && !isAdmin){
-    document.getElementById('cm-grid').innerHTML = '<div class="empty" style="grid-column:1/-1;padding:24px 8px;"><p>Aucune autre couleur enregistrée pour ce modèle.</p></div>';
+    document.getElementById('cm-grid').innerHTML = '<div class="empty"><h3>Aucune couleur</h3><p>Aucune autre couleur enregistrée pour ce modèle.</p></div>';
     return;
   }
-  document.getElementById('cm-grid').innerHTML = colors.map((c, i)=> `
-    <div class="color-tile">
-      <img src="${c.img}" onclick="openColorFullscreen(${i})">
-      ${isAdmin ? `<button class="color-del" onclick="deleteColorPhoto(${i})">×</button>` : ''}
-    </div>
-  `).join('') + addTile;
+  let html = '<div class="grid-wrap">';
+  colors.forEach((c, i)=>{
+    const qty = c.qty || 0;
+    const price = c.price != null ? c.price : p.price;
+    const isOut = qty <= 0;
+    const isLow = !isOut && qty <= 2;
+    const pillClass = isOut ? 'zero' : (isLow ? 'low' : '');
+    const pillText = isOut ? 'Rupture' : (qty + ' en stock');
+    html += `<div class="product ${isOut?'out':''}">
+      <div class="img-wrap" onclick="openColorFullscreen(${i})">
+        <img src="${c.img}">
+        <span class="qty-badge ${pillClass}">${pillText}</span>
+      </div>
+      <div class="info">
+        <div class="name">${escapeHtml(p.name)}</div>
+        <div class="meta">${Number(price).toFixed(2)} DA</div>
+      </div>
+      ${isAdmin ? `<div class="actions">
+        <button onclick="modalAdjustColorQty(${i},1)">+1</button>
+        <button onclick="modalAdjustColorQty(${i},-1)">-1</button>
+        <button class="del full" onclick="deleteColorPhoto(${i})">Supprimer</button>
+      </div>` : ''}
+    </div>`;
+  });
+  html += addTile + '</div>';
+  document.getElementById('cm-grid').innerHTML = html;
 }
 function openColorFullscreen(index){
   const p = products.find(x=>x.id===currentColorsProductId);
@@ -1388,25 +1431,59 @@ function closeColorFullscreen(){
   document.getElementById('colorViewModal').classList.remove('show');
 }
 document.getElementById('colorViewModal').addEventListener('click', closeColorFullscreen);
-document.getElementById('cm-image').addEventListener('change', async (e)=>{
+
+function openAddColorModal(){
+  const p = products.find(x=>x.id===currentColorsProductId);
+  document.getElementById('ac-color-preview').src = '';
+  document.getElementById('ac-color-preview').style.display = 'none';
+  document.getElementById('ac-color-image').value = '';
+  document.getElementById('ac-color-price').value = p ? p.price : '';
+  document.getElementById('ac-color-qty').value = '';
+  document.getElementById('addColorModal').classList.add('show');
+}
+document.getElementById('ac-color-cancel').addEventListener('click', ()=>{
+  document.getElementById('addColorModal').classList.remove('show');
+});
+document.getElementById('ac-color-image').addEventListener('change', async (e)=>{
   const file = e.target.files[0];
-  if(!file || !currentColorsProductId) return;
+  if(!file) return;
   try{
     const dataUrl = await compressImage(file);
-    await loadProducts();
-    const p = products.find(x=>x.id===currentColorsProductId);
-    if(!p){ e.target.value=''; return; }
-    if(!p.colors) p.colors = [];
-    p.colors.push({img: dataUrl});
-    await saveProducts();
-    refreshCurrentInventoryView();
-    renderColorsGrid();
-    toast('Couleur ajoutée');
+    const prev = document.getElementById('ac-color-preview');
+    prev.src = dataUrl;
+    prev.style.display = 'block';
   }catch(err){
     toast("Erreur de traitement de l'image", true);
   }
-  e.target.value = '';
 });
+document.getElementById('ac-color-save').addEventListener('click', async ()=>{
+  const preview = document.getElementById('ac-color-preview');
+  if(!preview.src || preview.style.display === 'none'){
+    toast("Choisissez une image d'abord", true);
+    return;
+  }
+  const price = parseFloat(document.getElementById('ac-color-price').value) || 0;
+  const qty = parseInt(document.getElementById('ac-color-qty').value) || 0;
+  await loadProducts();
+  const p = products.find(x=>x.id===currentColorsProductId);
+  if(!p) return;
+  if(!p.colors) p.colors = [];
+  p.colors.push({img: preview.src, price, qty});
+  await saveProducts();
+  refreshCurrentInventoryView();
+  renderColorsGrid();
+  document.getElementById('addColorModal').classList.remove('show');
+  toast('Couleur ajoutée');
+});
+async function modalAdjustColorQty(index, delta){
+  await loadProducts();
+  const p = products.find(x=>x.id===currentColorsProductId);
+  if(!p || !p.colors || !p.colors[index]) return;
+  p.colors[index].qty = Math.max(0, (p.colors[index].qty||0) + delta);
+  await saveProducts();
+  refreshCurrentInventoryView();
+  renderColorsGrid();
+}
 async function deleteColorPhoto(index){
   await loadProducts();
   const p = products.find(x=>x.id===currentColorsProductId);
