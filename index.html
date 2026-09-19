@@ -295,6 +295,9 @@
   #addCategoryModal{position:fixed;inset:0;background:rgba(58,38,50,0.55);display:none;align-items:center;
     justify-content:center;z-index:200;padding:20px;}
   #addCategoryModal.show{display:flex;}
+  #editOrderModal{position:fixed;inset:0;background:rgba(58,38,50,0.55);display:none;align-items:center;
+    justify-content:center;z-index:270;padding:20px;}
+  #editOrderModal.show{display:flex;}
   .order-detail-card{max-width:380px;text-align:left;max-height:80vh;overflow-y:auto;}
   .order-detail-card h3{font-size:18px;margin-bottom:4px;}
   .od-sub{font-size:13px;color:var(--mauve-dark);font-weight:600;margin-bottom:2px;}
@@ -699,6 +702,52 @@
     <div class="od-total" id="od-total"></div>
     <div class="modal-actions">
       <button id="od-close">Fermer</button>
+      <button class="primary" id="od-edit">✎ Modifier</button>
+    </div>
+  </div>
+</div>
+
+<div id="editOrderModal">
+  <div class="modal-card" style="max-width:340px;text-align:left;max-height:85vh;overflow-y:auto;">
+    <h3 style="text-align:center;margin-bottom:14px;">Modifier la commande</h3>
+    <div class="field">
+      <label>Nom et prénom du client</label>
+      <input type="text" id="eo-name">
+    </div>
+    <div class="field">
+      <label>Numéro de téléphone</label>
+      <input type="text" id="eo-phone" inputmode="tel">
+    </div>
+    <div class="field">
+      <label>Type de livraison</label>
+      <div class="auth-switch">
+        <button type="button" id="eo-dt-domicile" class="active">Livraison à domicile</button>
+        <button type="button" id="eo-dt-stopdesk">Stop Desk</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>Wilaya</label>
+      <select id="eo-wilaya">
+        <option value="">Sélectionner une wilaya…</option>
+      </select>
+    </div>
+    <div class="field">
+      <label id="eo-commune-label">Commune</label>
+      <select id="eo-commune" disabled>
+        <option value="">Sélectionnez d'abord la wilaya</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Adresse (facultatif)</label>
+      <input type="text" id="eo-address">
+    </div>
+    <div class="field">
+      <label>Total (DA)</label>
+      <input type="number" id="eo-total" min="0" step="0.01">
+    </div>
+    <div class="modal-actions">
+      <button id="eo-cancel">Annuler</button>
+      <button class="primary" id="eo-save">Enregistrer</button>
     </div>
   </div>
 </div>
@@ -1787,13 +1836,14 @@ function renderOrdersHistory(){
       ${o.customer.address ? `<div class="oc-line">${escapeHtml(o.customer.address)}</div>` : ''}
       <div class="oc-items">${itemsTxt}</div>
       <div class="oc-line" style="margin-top:6px;">${dateTxt} • par ${escapeHtml(o.createdBy||'')}</div>
-      ${isAdmin ? `<button class="oc-del" onclick="event.stopPropagation(); deleteOrder('${o.id}')">Supprimer la commande</button>` : ''}
+      ${(isAdmin || (currentUser && o.createdBy === currentUser.name)) ? `<button class="oc-del" onclick="event.stopPropagation(); deleteOrder('${o.id}')">Supprimer la commande</button>` : ''}
     </div>`;
   }).join('');
 }
 function showOrderDetail(id){
   const o = orders.find(x=>x.id===id);
   if(!o) return;
+  currentDetailOrderId = id;
   const dtLabel = o.customer.deliveryType === 'stopdesk' ? 'Stop Desk' : 'Livraison à domicile';
   document.getElementById('od-name').textContent = o.customer.name || 'Client';
   document.getElementById('od-sub').textContent = [o.customer.phone, dtLabel, o.customer.wilaya, o.customer.commune].filter(Boolean).join(' • ');
@@ -1815,6 +1865,107 @@ function showOrderDetail(id){
 document.getElementById('od-close').addEventListener('click', ()=>{
   document.getElementById('orderDetailModal').classList.remove('show');
 });
+
+/* ---------- Modifier une commande existante ---------- */
+let currentDetailOrderId = null;
+let editingOrderId = null;
+let eoDeliveryType = 'domicile';
+
+document.getElementById('od-edit').addEventListener('click', ()=>{
+  if(!currentDetailOrderId) return;
+  document.getElementById('orderDetailModal').classList.remove('show');
+  openEditOrderModal(currentDetailOrderId);
+});
+
+function populateEoWilayaSelect(){
+  const sel = document.getElementById('eo-wilaya');
+  sel.innerHTML = '<option value="">Sélectionner une wilaya…</option>' +
+    wilayasList.map(w=> `<option value="${escapeHtml(w.name)}" data-code="${w.code}">${String(w.code).padStart(2,'0')} - ${escapeHtml(w.name)}</option>`).join('');
+}
+function refreshEoCommuneOptions(){
+  const wSel = document.getElementById('eo-wilaya');
+  const opt = wSel.selectedOptions[0];
+  const wilayaName = opt ? opt.value : '';
+  const communeSel = document.getElementById('eo-commune');
+  document.getElementById('eo-commune-label').textContent = eoDeliveryType === 'stopdesk' ? 'Bureau ZR Express' : 'Commune';
+  if(!wilayaName){
+    communeSel.innerHTML = '<option value="">Sélectionnez d\'abord la wilaya</option>';
+    communeSel.disabled = true;
+    return;
+  }
+  if(eoDeliveryType === 'stopdesk'){
+    const offices = officesForWilaya(wilayaName);
+    if(offices.length === 0){
+      communeSel.innerHTML = '<option value="">Aucun bureau Stop Desk dans cette wilaya</option>';
+      communeSel.disabled = true;
+      return;
+    }
+    communeSel.innerHTML = '<option value="">Sélectionner un bureau…</option>' +
+      offices.map(o=> `<option value="${escapeHtml(o.commune)} (${escapeHtml(o.type)})">${escapeHtml(o.commune)} — ${escapeHtml(o.type)}</option>`).join('');
+    communeSel.disabled = false;
+  } else {
+    const code = opt.dataset.code;
+    const communes = code ? (communesByWilaya[code] || []) : [];
+    if(communes.length === 0){
+      communeSel.innerHTML = '<option value="">Sélectionnez d\'abord la wilaya</option>';
+      communeSel.disabled = true;
+      return;
+    }
+    communeSel.innerHTML = '<option value="">Sélectionner une commune…</option>' +
+      communes.map(c=> `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+    communeSel.disabled = false;
+  }
+}
+function setEoDeliveryType(type){
+  eoDeliveryType = type;
+  document.getElementById('eo-dt-domicile').classList.toggle('active', type==='domicile');
+  document.getElementById('eo-dt-stopdesk').classList.toggle('active', type==='stopdesk');
+  refreshEoCommuneOptions();
+}
+document.getElementById('eo-dt-domicile').addEventListener('click', ()=> setEoDeliveryType('domicile'));
+document.getElementById('eo-dt-stopdesk').addEventListener('click', ()=> setEoDeliveryType('stopdesk'));
+document.getElementById('eo-wilaya').addEventListener('change', refreshEoCommuneOptions);
+
+function openEditOrderModal(id){
+  const o = orders.find(x=>x.id===id);
+  if(!o) return;
+  editingOrderId = id;
+  document.getElementById('eo-name').value = o.customer.name || '';
+  document.getElementById('eo-phone').value = o.customer.phone || '';
+  document.getElementById('eo-address').value = o.customer.address || '';
+  document.getElementById('eo-total').value = Number(o.total).toFixed(2);
+  populateEoWilayaSelect();
+  eoDeliveryType = o.customer.deliveryType === 'stopdesk' ? 'stopdesk' : 'domicile';
+  document.getElementById('eo-dt-domicile').classList.toggle('active', eoDeliveryType==='domicile');
+  document.getElementById('eo-dt-stopdesk').classList.toggle('active', eoDeliveryType==='stopdesk');
+  document.getElementById('eo-wilaya').value = o.customer.wilaya || '';
+  refreshEoCommuneOptions();
+  if(o.customer.commune) document.getElementById('eo-commune').value = o.customer.commune;
+  document.getElementById('editOrderModal').classList.add('show');
+}
+document.getElementById('eo-cancel').addEventListener('click', ()=>{
+  document.getElementById('editOrderModal').classList.remove('show');
+  editingOrderId = null;
+});
+document.getElementById('eo-save').addEventListener('click', async ()=>{
+  const o = orders.find(x=>x.id===editingOrderId);
+  if(!o) return;
+  const name = document.getElementById('eo-name').value.trim();
+  const phone = document.getElementById('eo-phone').value.trim();
+  const wilaya = document.getElementById('eo-wilaya').value;
+  const commune = document.getElementById('eo-commune').value;
+  const address = document.getElementById('eo-address').value.trim();
+  const total = parseFloat(document.getElementById('eo-total').value) || 0;
+  if(!name || !phone){ toast('Le nom et le téléphone sont requis', true); return; }
+  o.customer = Object.assign({}, o.customer, {name, phone, wilaya, commune, address, deliveryType: eoDeliveryType});
+  o.total = total;
+  await saveOrderDoc(o);
+  document.getElementById('editOrderModal').classList.remove('show');
+  editingOrderId = null;
+  toast('Commande modifiée');
+  renderOrdersHistory();
+});
+
 async function deleteOrder(id){
   orders = orders.filter(o=>o.id!==id);
   await deleteOrderDoc(id);
