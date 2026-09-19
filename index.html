@@ -1860,6 +1860,9 @@ function showOrderDetail(id){
     </div>`;
   }).join('');
   document.getElementById('od-total').textContent = 'Total : ' + Number(o.total).toFixed(2) + ' DA';
+  const isAdmin = currentUser && currentUser.role === 'admin';
+  const canEdit = isAdmin || (currentUser && o.createdBy === currentUser.name);
+  document.getElementById('od-edit').style.display = canEdit ? '' : 'none';
   document.getElementById('orderDetailModal').classList.add('show');
 }
 document.getElementById('od-close').addEventListener('click', ()=>{
