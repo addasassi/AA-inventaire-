@@ -190,6 +190,11 @@
   .cart-total{margin-top:10px;font-weight:800;font-size:16px;color:var(--plum);text-align:right;}
 
   .order-card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px;cursor:pointer;}
+  .order-filters{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-top:16px;}
+  .order-filters .field{margin-bottom:10px;}
+  .order-filters .field:last-child{margin-bottom:0;}
+  .of-dates{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .of-dates .field{margin-bottom:0;}
   .order-card .oc-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
   .order-card .oc-name{font-weight:800;font-size:15px;color:var(--plum);}
   .order-card .oc-total{font-weight:800;font-size:15px;color:var(--mauve-dark);white-space:nowrap;}
@@ -527,7 +532,28 @@
   <section class="view" id="view-commandes">
     <div id="ordersHome">
       <button class="btn-primary" id="btn-new-order">+ Nouvelle commande</button>
-      <div id="ordersHistory" style="margin-top:18px;"></div>
+
+      <div class="order-filters">
+        <div class="field">
+          <label>Filtrer par employé</label>
+          <select id="of-employee">
+            <option value="">Tous</option>
+          </select>
+        </div>
+        <div class="of-dates">
+          <div class="field">
+            <label>Du</label>
+            <input type="date" id="of-date-from">
+          </div>
+          <div class="field">
+            <label>Au</label>
+            <input type="date" id="of-date-to">
+          </div>
+        </div>
+        <button type="button" class="btn-secondary" id="of-reset">Réinitialiser les filtres</button>
+      </div>
+
+      <div id="ordersHistory" style="margin-top:14px;"></div>
     </div>
 
     <div id="orderBuilder" style="display:none;">
@@ -1700,14 +1726,50 @@ function showOrdersHome(){
   document.getElementById('ordersHome').style.display = 'block';
   document.getElementById('orderBuilder').style.display = 'none';
 }
+function populateOrderEmployeeFilter(){
+  const sel = document.getElementById('of-employee');
+  if(!sel) return;
+  const current = sel.value;
+  const names = Array.from(new Set(orders.map(o=>o.createdBy).filter(Boolean))).sort();
+  sel.innerHTML = '<option value="">Tous</option>' + names.map(n=>`<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+  if(names.includes(current)) sel.value = current;
+}
+function getFilteredOrders(){
+  const employee = document.getElementById('of-employee').value;
+  const dateFrom = document.getElementById('of-date-from').value;
+  const dateTo = document.getElementById('of-date-to').value;
+  return orders.filter(o=>{
+    if(employee && o.createdBy !== employee) return false;
+    const orderDate = o.createdAt.slice(0,10);
+    if(dateFrom && orderDate < dateFrom) return false;
+    if(dateTo && orderDate > dateTo) return false;
+    return true;
+  });
+}
+document.getElementById('of-employee').addEventListener('change', renderOrdersHistory);
+document.getElementById('of-date-from').addEventListener('change', renderOrdersHistory);
+document.getElementById('of-date-to').addEventListener('change', renderOrdersHistory);
+document.getElementById('of-reset').addEventListener('click', ()=>{
+  document.getElementById('of-employee').value = '';
+  document.getElementById('of-date-from').value = '';
+  document.getElementById('of-date-to').value = '';
+  renderOrdersHistory();
+});
+
 function renderOrdersHistory(){
+  populateOrderEmployeeFilter();
   const wrap = document.getElementById('ordersHistory');
+  const filtered = getFilteredOrders();
   if(orders.length === 0){
     wrap.innerHTML = '<div class="empty"><h3>Aucune commande</h3><p>Les commandes enregistrées apparaîtront ici.</p></div>';
     return;
   }
+  if(filtered.length === 0){
+    wrap.innerHTML = '<div class="empty"><h3>Aucun résultat</h3><p>Aucune commande ne correspond à ces filtres.</p></div>';
+    return;
+  }
   const isAdmin = currentUser && currentUser.role === 'admin';
-  const sorted = orders.slice().sort((a,b)=> b.createdAt.localeCompare(a.createdAt));
+  const sorted = filtered.slice().sort((a,b)=> b.createdAt.localeCompare(a.createdAt));
   wrap.innerHTML = sorted.map(o=>{
     const itemsTxt = o.items.map(it=> it.qty+'x '+escapeHtml(it.name)).join(', ');
     const d = new Date(o.createdAt);
