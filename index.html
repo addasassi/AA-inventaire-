@@ -1019,7 +1019,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     if(btn.dataset.tab === 'liste') showCatFolders();
     if(btn.dataset.tab === 'commandes'){
       showOrdersHome();
-      loadOrders().then(renderOrdersHistory);
+      loadUsers().then(()=> loadOrders().then(renderOrdersHistory));
     }
   });
 });
@@ -1730,7 +1730,9 @@ function populateOrderEmployeeFilter(){
   const sel = document.getElementById('of-employee');
   if(!sel) return;
   const current = sel.value;
-  const names = Array.from(new Set(orders.map(o=>o.createdBy).filter(Boolean))).sort();
+  const fromUsers = users.map(u=>u.name).filter(Boolean);
+  const fromOrders = orders.map(o=>o.createdBy).filter(Boolean);
+  const names = Array.from(new Set([...fromUsers, ...fromOrders])).sort();
   sel.innerHTML = '<option value="">Tous</option>' + names.map(n=>`<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
   if(names.includes(current)) sel.value = current;
 }
