@@ -172,6 +172,9 @@
   .order-pick .op-name{font-size:12px;font-weight:800;color:var(--plum);line-height:1.2;
     display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;}
   .order-pick .op-price{font-size:11.5px;color:var(--mauve-dark);font-weight:700;}
+  .order-pick .op-stock{font-size:10.5px;font-weight:800;color:var(--ok);margin-top:2px;}
+  .order-pick .op-stock.low{color:#b45f06;}
+  .order-pick .op-stock.zero{color:var(--danger);}
   .order-pick .op-badge{position:absolute;top:6px;right:6px;background:var(--plum);color:#fff;
     font-size:12px;font-weight:800;min-width:22px;height:22px;border-radius:20px;display:flex;
     align-items:center;justify-content:center;padding:0 6px;}
@@ -2043,6 +2046,9 @@ function renderOrderProducts(cat){
   wrap.innerHTML = '<div class="grid-wrap">' + items.map(p=>{
     const inCart = cart[p.id] || 0;
     const isOut = p.qty <= 0;
+    const isLow = !isOut && p.qty <= 2;
+    const pillClass = isOut ? 'zero' : (isLow ? 'low' : '');
+    const pillText = isOut ? 'Rupture de stock' : (p.qty + ' en stock');
     const colorCount = (p.colors || []).length;
     return `<div class="order-pick ${isOut?'out-pick':''}" onclick="addToCart('${p.id}')">
       <img src="${p.img || placeholderImg()}">
@@ -2050,6 +2056,7 @@ function renderOrderProducts(cat){
       <div class="op-info">
         <div class="op-name">${escapeHtml(p.name)}</div>
         <div class="op-price">${Number(p.price).toFixed(2)} DA</div>
+        <div class="op-stock ${pillClass}">${pillText}</div>
       </div>
       <button class="op-colors" onclick="event.stopPropagation(); openColorsModal('${p.id}','order')">🎨 ${colorCount>0 ? colorCount+' couleur'+(colorCount>1?'s':'') : 'Couleurs'}</button>
     </div>`;
@@ -2550,16 +2557,73 @@ function isNoiseLine(l){
   return false;
 }
 const ADDRESS_KEYWORDS = ['شارع','حي','نهج','طريق','عمارة','زنقة','rue','cite','cité','route','lotissement'];
+function looseArabic(s){
+  return normalizeArabic(s).replace(/و/g,'');
+}
+function extractLabeledValue(lines, labels){
+  for(const l of lines){
+    for(const label of labels){
+      const re = new RegExp('^\\s*' + label + '\\s*[:：]\\s*(.+)$');
+      const m = l.match(re);
+      if(m && m[1].trim()) return m[1].trim();
+    }
+  }
+  return null;
+}
+function matchWilayaInText(text){
+  const nl = normalizeArabic(text);
+  if(nl.includes(normalizeArabic('العاصمة'))) return wilayasList.find(w=>w.name==='Alger') || {name:'Alger'};
+  for(const w of wilayaArList){
+    if(nl.includes(normalizeArabic(w.ar))) return w;
+  }
+  const loose = looseArabic(text);
+  for(const w of wilayaArList){
+    if(loose.includes(looseArabic(w.ar))) return w;
+  }
+  return null;
+}
+function matchCommuneInText(text, wilayaCode){
+  const arList = communeArByCode[String(wilayaCode)] || [];
+  const nl = normalizeArabic(text);
+  let best = null;
+  for(const c of arList){
+    const cAr = normalizeArabic(c.ar);
+    if(nl.includes(cAr) && (!best || cAr.length > best.len)) best = {fr: c.fr, len: cAr.length};
+  }
+  if(best) return best.fr;
+  const loose = looseArabic(text);
+  for(const c of arList){
+    const cAr = looseArabic(c.ar);
+    if(loose.includes(cAr) && (!best || cAr.length > best.len)) best = {fr: c.fr, len: cAr.length};
+  }
+  return best ? best.fr : '';
+}
+
 function parseOrderText(text){
   const lines = text.split('\n').map(l=>l.trim()).filter(Boolean);
   const cleanLines = lines.filter(l=> !isNoiseLine(l));
   const result = {name:'', phone:'', wilaya:'', commune:'', address:'', deliveryType:'domicile', officeOption:null, total:null};
-  if(cleanLines.length > 0) result.name = cleanLines[0];
 
-  for(const l of lines){
-    const cleaned = l.replace(/[^\d]/g,'');
-    const m = cleaned.match(/0[5-7]\d{8}/);
-    if(m){ result.phone = m[0]; break; }
+  const NAME_LABELS = ['الاسم و اللقب','اسم و اللقب','الاسم','إسم','اسم'];
+  const PHONE_LABELS = ['رقم الهاتف','الهاتف','رقم','تليفون','الرقم'];
+  const WILAYA_LABELS = ['الولاية','ولاية'];
+  const COMMUNE_LABELS = ['البلدية','بلدية'];
+  const ADDRESS_LABELS = ['العنوان','عنوان'];
+
+  const labeledName = extractLabeledValue(lines, NAME_LABELS);
+  result.name = labeledName || (cleanLines.length > 0 ? cleanLines[0] : '');
+
+  const labeledPhoneRaw = extractLabeledValue(lines, PHONE_LABELS);
+  if(labeledPhoneRaw){
+    const m = labeledPhoneRaw.replace(/[^\d]/g,'').match(/0[5-7]\d{8}/);
+    if(m) result.phone = m[0];
+  }
+  if(!result.phone){
+    for(const l of lines){
+      const cleaned = l.replace(/[^\d]/g,'');
+      const m = cleaned.match(/0[5-7]\d{8}/);
+      if(m){ result.phone = m[0]; break; }
+    }
   }
 
   let officeLine = '';
@@ -2571,14 +2635,21 @@ function parseOrderText(text){
     }
   }
 
-  for(const l of lines){
-    const nl = normalizeArabic(l);
-    if(nl.includes(normalizeArabic('العاصمة'))){ result.wilaya = 'Alger'; break; }
-    let found = false;
-    for(const w of wilayaArList){
-      if(nl.includes(normalizeArabic(w.ar))){ result.wilaya = w.fr; found = true; break; }
+  const labeledWilaya = extractLabeledValue(lines, WILAYA_LABELS);
+  const labeledCommune = extractLabeledValue(lines, COMMUNE_LABELS);
+
+  if(result.deliveryType !== 'stopdesk'){
+    if(labeledWilaya){
+      const w = matchWilayaInText(labeledWilaya);
+      if(w) result.wilaya = w.name;
     }
-    if(found) break;
+    if(!result.wilaya){
+      // Repli : recherche dans tout le texte (hors lignes "bureau/adresse" déjà traitées)
+      for(const l of lines){
+        const w = matchWilayaInText(l);
+        if(w){ result.wilaya = w.name; break; }
+      }
+    }
   }
 
   if(result.deliveryType === 'stopdesk'){
@@ -2596,27 +2667,37 @@ function parseOrderText(text){
     }
   } else if(result.wilaya){
     const w = wilayasList.find(x=>x.name === result.wilaya);
-    const arList = w ? (communeArByCode[String(w.code)] || []) : [];
-    let bestMatch = null;
-    for(const l of lines){
-      const nl = normalizeArabic(l);
-      for(const c of arList){
-        const cAr = normalizeArabic(c.ar);
-        if(nl.includes(cAr)){
-          if(!bestMatch || cAr.length > bestMatch.len){
+    const code = w ? w.code : null;
+    if(labeledCommune && code){
+      result.commune = matchCommuneInText(labeledCommune, code);
+    }
+    if(!result.commune && code){
+      // Repli : recherche dans tout le texte
+      const arList = communeArByCode[String(code)] || [];
+      let bestMatch = null;
+      for(const l of lines){
+        const nl = normalizeArabic(l);
+        for(const c of arList){
+          const cAr = normalizeArabic(c.ar);
+          if(nl.includes(cAr) && (!bestMatch || cAr.length > bestMatch.len)){
             bestMatch = {fr: c.fr, len: cAr.length};
           }
         }
       }
+      if(bestMatch) result.commune = bestMatch.fr;
     }
-    if(bestMatch) result.commune = bestMatch.fr;
   }
 
-  for(const l of lines){
-    const nl = normalizeArabic(l).toLowerCase();
-    if(ADDRESS_KEYWORDS.some(k=> nl.includes(normalizeArabic(k).toLowerCase()))){
-      result.address = l;
-      break;
+  const labeledAddress = extractLabeledValue(lines, ADDRESS_LABELS);
+  if(labeledAddress){
+    result.address = labeledAddress;
+  } else {
+    for(const l of lines){
+      const nl = normalizeArabic(l).toLowerCase();
+      if(ADDRESS_KEYWORDS.some(k=> nl.includes(normalizeArabic(k).toLowerCase()))){
+        result.address = l;
+        break;
+      }
     }
   }
 
