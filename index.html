@@ -2572,13 +2572,13 @@ function extractLabeledValue(lines, labels){
 }
 function matchWilayaInText(text){
   const nl = normalizeArabic(text);
-  if(nl.includes(normalizeArabic('العاصمة'))) return wilayasList.find(w=>w.name==='Alger') || {name:'Alger'};
+  if(nl.includes(normalizeArabic('العاصمة'))) return {name:'Alger', code: (wilayasList.find(w=>w.name==='Alger')||{}).code};
   for(const w of wilayaArList){
-    if(nl.includes(normalizeArabic(w.ar))) return w;
+    if(nl.includes(normalizeArabic(w.ar))) return {name: w.fr, code: w.code};
   }
   const loose = looseArabic(text);
   for(const w of wilayaArList){
-    if(loose.includes(looseArabic(w.ar))) return w;
+    if(loose.includes(looseArabic(w.ar))) return {name: w.fr, code: w.code};
   }
   return null;
 }
