@@ -2660,6 +2660,11 @@ function parseOrderText(text){
 
   const labeledWilaya = extractLabeledValue(lines, WILAYA_LABELS);
   const labeledCommune = extractLabeledValue(lines, COMMUNE_LABELS);
+  function isLabeledLine(l, labels){
+    return labels.some(label=> new RegExp('^\\s*' + label + '\\s*[:：]').test(l));
+  }
+  const linesForWilayaFallback = lines.filter(l=> !isLabeledLine(l, COMMUNE_LABELS));
+  const linesForCommuneFallback = lines.filter(l=> !isLabeledLine(l, WILAYA_LABELS));
 
   if(result.deliveryType !== 'stopdesk'){
     if(labeledWilaya){
@@ -2667,8 +2672,8 @@ function parseOrderText(text){
       if(w) result.wilaya = w.name;
     }
     if(!result.wilaya){
-      // Repli : recherche dans tout le texte
-      for(const l of lines){
+      // Repli : recherche dans le texte, hors la ligne "bureau/commune" explicite
+      for(const l of linesForWilayaFallback){
         const w = matchWilayaInText(l);
         if(w){ result.wilaya = w.name; break; }
       }
@@ -2694,7 +2699,7 @@ function parseOrderText(text){
     if(code){
       if(labeledCommune) result.commune = matchCommuneInText(labeledCommune, code);
       if(!result.commune){
-        for(const l of lines){
+        for(const l of linesForCommuneFallback){
           const c = matchCommuneInText(l, code);
           if(c){ result.commune = c; break; }
         }
