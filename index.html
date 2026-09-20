@@ -2079,10 +2079,22 @@ function cartLineInfo(key){
   }
   return {name: p.name, price: p.price, img: p.img || '', productId, colorIndex: null};
 }
+function getAvailableStock(productId, colorIndex){
+  const p = products.find(x=>x.id===productId);
+  if(!p) return 0;
+  if(colorIndex !== null && colorIndex !== undefined && p.colors && p.colors[colorIndex]){
+    return p.colors[colorIndex].qty || 0;
+  }
+  return p.qty || 0;
+}
 function addToCart(productId){
   const p = products.find(x=>x.id===productId);
   if(!p) return;
-  cart[productId] = (cart[productId] || 0) + 1;
+  const current = cart[productId] || 0;
+  const stock = getAvailableStock(productId, null);
+  if(stock <= 0){ toast(p.name+' — rupture de stock', true); return; }
+  if(current >= stock){ toast('Stock disponible atteint ('+stock+')', true); return; }
+  cart[productId] = current + 1;
   renderCart();
   const cat = p.cat;
   if(document.getElementById('orderCatProducts').style.display !== 'none') renderOrderProducts(cat);
@@ -2090,19 +2102,27 @@ function addToCart(productId){
 }
 function addColorToCart(productId, colorIndex){
   const p = products.find(x=>x.id===productId);
-  if(!p) return;
+  if(!p || !p.colors || !p.colors[colorIndex]) return;
   const key = makeCartKey(productId, colorIndex);
-  cart[key] = (cart[key] || 0) + 1;
+  const current = cart[key] || 0;
+  const stock = getAvailableStock(productId, colorIndex);
+  if(stock <= 0){ toast(p.name+' (couleur '+(colorIndex+1)+') — rupture de stock', true); return; }
+  if(current >= stock){ toast('Stock disponible atteint ('+stock+')', true); return; }
+  cart[key] = current + 1;
   renderCart();
   if(currentColorsProductId === productId) renderColorsGrid();
   toast(p.name+' (couleur '+(colorIndex+1)+') ajouté à la commande');
 }
 function setCartQty(key, delta){
+  const {productId, colorIndex} = parseCartKey(key);
   const cur = cart[key] || 0;
+  if(delta > 0){
+    const stock = getAvailableStock(productId, colorIndex);
+    if(cur >= stock){ toast('Stock disponible atteint ('+stock+')', true); return; }
+  }
   const next = Math.max(0, cur + delta);
   if(next === 0) delete cart[key]; else cart[key] = next;
   renderCart();
-  const {productId} = parseCartKey(key);
   const p = products.find(x=>x.id===productId);
   if(p && document.getElementById('orderCatProducts').style.display !== 'none') renderOrderProducts(p.cat);
   if(currentColorsProductId === productId) renderColorsGrid();
