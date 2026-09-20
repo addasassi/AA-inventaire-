@@ -2570,15 +2570,25 @@ function extractLabeledValue(lines, labels){
   }
   return null;
 }
+function normalizeFrench(s){
+  return (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'');
+}
 function matchWilayaInText(text){
   const nl = normalizeArabic(text);
   if(nl.includes(normalizeArabic('العاصمة'))) return {name:'Alger', code: (wilayasList.find(w=>w.name==='Alger')||{}).code};
   for(const w of wilayaArList){
-    if(nl.includes(normalizeArabic(w.ar))) return {name: w.fr, code: w.code};
+    if(w.ar && nl.includes(normalizeArabic(w.ar))) return {name: w.fr, code: w.code};
   }
   const loose = looseArabic(text);
   for(const w of wilayaArList){
-    if(loose.includes(looseArabic(w.ar))) return {name: w.fr, code: w.code};
+    if(w.ar && loose.includes(looseArabic(w.ar))) return {name: w.fr, code: w.code};
+  }
+  // Repli : le client a peut-être écrit le nom en français
+  const nf = normalizeFrench(text);
+  if(nf){
+    for(const w of wilayasList){
+      if(nf.includes(normalizeFrench(w.name))) return {name: w.name, code: w.code};
+    }
   }
   return null;
 }
@@ -2588,15 +2598,27 @@ function matchCommuneInText(text, wilayaCode){
   let best = null;
   for(const c of arList){
     const cAr = normalizeArabic(c.ar);
-    if(nl.includes(cAr) && (!best || cAr.length > best.len)) best = {fr: c.fr, len: cAr.length};
+    if(c.ar && nl.includes(cAr) && (!best || cAr.length > best.len)) best = {fr: c.fr, len: cAr.length};
   }
   if(best) return best.fr;
   const loose = looseArabic(text);
   for(const c of arList){
     const cAr = looseArabic(c.ar);
-    if(loose.includes(cAr) && (!best || cAr.length > best.len)) best = {fr: c.fr, len: cAr.length};
+    if(c.ar && loose.includes(cAr) && (!best || cAr.length > best.len)) best = {fr: c.fr, len: cAr.length};
   }
-  return best ? best.fr : '';
+  if(best) return best.fr;
+  // Repli : le client a peut-être écrit le nom en français
+  const nf = normalizeFrench(text);
+  if(nf){
+    const communes = communesByWilaya[String(wilayaCode)] || [];
+    let bestFr = null;
+    for(const c of communes){
+      const cf = normalizeFrench(c);
+      if(nf.includes(cf) && (!bestFr || cf.length > bestFr.len)) bestFr = {fr: c, len: cf.length};
+    }
+    if(bestFr) return bestFr.fr;
+  }
+  return '';
 }
 
 function parseOrderText(text){
@@ -2645,7 +2667,7 @@ function parseOrderText(text){
       if(w) result.wilaya = w.name;
     }
     if(!result.wilaya){
-      // Repli : recherche dans tout le texte (hors lignes "bureau/adresse" déjà traitées)
+      // Repli : recherche dans tout le texte
       for(const l of lines){
         const w = matchWilayaInText(l);
         if(w){ result.wilaya = w.name; break; }
@@ -2669,38 +2691,18 @@ function parseOrderText(text){
   } else if(result.wilaya){
     const w = wilayasList.find(x=>x.name === result.wilaya);
     const code = w ? w.code : null;
-    if(labeledCommune && code){
-      result.commune = matchCommuneInText(labeledCommune, code);
-    }
-    if(!result.commune && code){
-      // Repli : recherche dans tout le texte
-      const arList = communeArByCode[String(code)] || [];
-      let bestMatch = null;
-      for(const l of lines){
-        const nl = normalizeArabic(l);
-        for(const c of arList){
-          const cAr = normalizeArabic(c.ar);
-          if(nl.includes(cAr) && (!bestMatch || cAr.length > bestMatch.len)){
-            bestMatch = {fr: c.fr, len: cAr.length};
-          }
+    if(code){
+      if(labeledCommune) result.commune = matchCommuneInText(labeledCommune, code);
+      if(!result.commune){
+        for(const l of lines){
+          const c = matchCommuneInText(l, code);
+          if(c){ result.commune = c; break; }
         }
       }
-      if(bestMatch) result.commune = bestMatch.fr;
     }
   }
 
-  const labeledAddress = extractLabeledValue(lines, ADDRESS_LABELS);
-  if(labeledAddress){
-    result.address = labeledAddress;
-  } else {
-    for(const l of lines){
-      const nl = normalizeArabic(l).toLowerCase();
-      if(ADDRESS_KEYWORDS.some(k=> nl.includes(normalizeArabic(k).toLowerCase()))){
-        result.address = l;
-        break;
-      }
-    }
-  }
+  result.address = '';
 
   // Convention locale : "365 الف" veut dire 3650 DA (x10, pas x1000)
   for(const l of lines){
@@ -2716,19 +2718,36 @@ function parseOrderText(text){
   }
   return result;
 }
+function setSelectValueOrCustom(selectEl, value, labelSuffix){
+  if(!value) return;
+  const exists = Array.from(selectEl.options).some(o=>o.value === value);
+  if(!exists){
+    const opt = document.createElement('option');
+    opt.value = value;
+    opt.textContent = value + (labelSuffix || ' (texte importé)');
+    selectEl.appendChild(opt);
+  }
+  selectEl.value = value;
+}
 function applyImportedOrder(r){
   document.getElementById('o-name').value = r.name || '';
   document.getElementById('o-phone').value = r.phone || '';
   document.getElementById('o-address').value = r.address || '';
   setDeliveryType(r.deliveryType);
-  if(r.wilaya){
-    document.getElementById('o-wilaya').value = r.wilaya;
+  if(r.deliveryType === 'stopdesk'){
+    if(r.wilaya){
+      document.getElementById('o-wilaya').value = r.wilaya;
+      refreshCommuneOrOfficeOptions();
+      if(r.officeOption) document.getElementById('o-commune').value = r.officeOption;
+    }
+  } else {
+    const wSel = document.getElementById('o-wilaya');
+    if(r.wilaya) setSelectValueOrCustom(wSel, r.wilaya);
     refreshCommuneOrOfficeOptions();
     const communeSel = document.getElementById('o-commune');
-    if(r.deliveryType === 'stopdesk' && r.officeOption){
-      communeSel.value = r.officeOption;
-    } else if(r.commune){
-      communeSel.value = r.commune;
+    if(r.commune){
+      communeSel.disabled = false;
+      setSelectValueOrCustom(communeSel, r.commune);
     }
   }
   if(r.total){
