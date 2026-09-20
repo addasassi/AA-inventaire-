@@ -749,6 +749,10 @@
       <input type="text" id="eo-address">
     </div>
     <div class="field">
+      <label>Articles de la commande</label>
+      <div id="eo-items" class="cart-box" style="padding:0;border:none;background:none;"></div>
+    </div>
+    <div class="field">
       <label>Total (DA)</label>
       <input type="number" id="eo-total" min="0" step="0.01">
     </div>
@@ -1888,6 +1892,7 @@ document.getElementById('od-close').addEventListener('click', ()=>{
 /* ---------- Modifier une commande existante ---------- */
 let currentDetailOrderId = null;
 let editingOrderId = null;
+let editingOrderItems = [];
 let eoDeliveryType = 'domicile';
 
 document.getElementById('od-edit').addEventListener('click', ()=>{
@@ -1949,6 +1954,7 @@ function openEditOrderModal(id){
   const o = orders.find(x=>x.id===id);
   if(!o) return;
   editingOrderId = id;
+  editingOrderItems = JSON.parse(JSON.stringify(o.items));
   document.getElementById('eo-name').value = o.customer.name || '';
   document.getElementById('eo-phone').value = o.customer.phone || '';
   document.getElementById('eo-address').value = o.customer.address || '';
@@ -1960,11 +1966,45 @@ function openEditOrderModal(id){
   document.getElementById('eo-wilaya').value = o.customer.wilaya || '';
   refreshEoCommuneOptions();
   if(o.customer.commune) document.getElementById('eo-commune').value = o.customer.commune;
+  renderEoItems();
   document.getElementById('editOrderModal').classList.add('show');
+}
+function renderEoItems(){
+  const wrap = document.getElementById('eo-items');
+  if(editingOrderItems.length === 0){
+    wrap.innerHTML = '<div class="cart-empty">Aucun article dans cette commande.</div>';
+    return;
+  }
+  wrap.innerHTML = editingOrderItems.map((it, i)=>{
+    const sub = it.price * it.qty;
+    return `<div class="cart-row">
+      <div>
+        <div class="cr-name">${escapeHtml(it.name)}</div>
+        <div class="cr-sub">${Number(it.price).toFixed(2)} DA × ${it.qty} = ${sub.toFixed(2)} DA</div>
+      </div>
+      <div class="cr-qty">
+        <button onclick="adjustEoItemQty(${i},-1)">−</button>
+        <span>${it.qty}</span>
+        <button onclick="adjustEoItemQty(${i},1)">+</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+function adjustEoItemQty(index, delta){
+  const it = editingOrderItems[index];
+  if(!it) return;
+  if(delta > 0){
+    const available = getAvailableStock(it.productId, it.colorIndex ?? null) + it.qty;
+    if(it.qty >= available){ toast('Stock disponible atteint ('+available+')', true); return; }
+  }
+  it.qty = Math.max(0, it.qty + delta);
+  if(it.qty === 0) editingOrderItems.splice(index, 1);
+  renderEoItems();
 }
 document.getElementById('eo-cancel').addEventListener('click', ()=>{
   document.getElementById('editOrderModal').classList.remove('show');
   editingOrderId = null;
+  editingOrderItems = [];
 });
 document.getElementById('eo-save').addEventListener('click', async ()=>{
   const o = orders.find(x=>x.id===editingOrderId);
@@ -1976,18 +2016,64 @@ document.getElementById('eo-save').addEventListener('click', async ()=>{
   const address = document.getElementById('eo-address').value.trim();
   const total = parseFloat(document.getElementById('eo-total').value) || 0;
   if(!name || !phone){ toast('Le nom et le téléphone sont requis', true); return; }
+
+  await loadProducts();
+  // Remet en stock les anciens articles, puis retire les nouveaux
+  o.items.forEach(it=>{
+    const p = products.find(x=>x.id===it.productId);
+    if(!p) return;
+    if(it.colorIndex !== undefined && it.colorIndex !== null && p.colors && p.colors[it.colorIndex]){
+      p.colors[it.colorIndex].qty = (p.colors[it.colorIndex].qty || 0) + it.qty;
+    } else {
+      p.qty = (p.qty || 0) + it.qty;
+    }
+  });
+  editingOrderItems.forEach(it=>{
+    const p = products.find(x=>x.id===it.productId);
+    if(!p) return;
+    if(it.colorIndex !== undefined && it.colorIndex !== null && p.colors && p.colors[it.colorIndex]){
+      p.colors[it.colorIndex].qty = Math.max(0, (p.colors[it.colorIndex].qty || 0) - it.qty);
+    } else {
+      p.qty = Math.max(0, p.qty - it.qty);
+    }
+  });
+  await saveProducts();
+  refreshCurrentInventoryView();
+
   o.customer = Object.assign({}, o.customer, {name, phone, wilaya, commune, address, deliveryType: eoDeliveryType});
+  o.items = editingOrderItems;
   o.total = total;
   await saveOrderDoc(o);
   document.getElementById('editOrderModal').classList.remove('show');
   editingOrderId = null;
-  toast('Commande modifiée');
+  editingOrderItems = [];
+  toast('Commande modifiée — stock mis à jour');
   renderOrdersHistory();
 });
 
 async function deleteOrder(id){
+  const order = orders.find(o=>o.id===id);
+  if(order){
+    await loadProducts();
+    let changed = false;
+    order.items.forEach(it=>{
+      const p = products.find(x=>x.id===it.productId);
+      if(!p) return;
+      if(it.colorIndex !== undefined && it.colorIndex !== null && p.colors && p.colors[it.colorIndex]){
+        p.colors[it.colorIndex].qty = (p.colors[it.colorIndex].qty || 0) + it.qty;
+      } else {
+        p.qty = (p.qty || 0) + it.qty;
+      }
+      changed = true;
+    });
+    if(changed){
+      await saveProducts();
+      refreshCurrentInventoryView();
+    }
+  }
   orders = orders.filter(o=>o.id!==id);
   await deleteOrderDoc(id);
+  toast('Commande supprimée — stock remis à jour');
   renderOrdersHistory();
 }
 
