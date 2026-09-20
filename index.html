@@ -2600,6 +2600,7 @@ function matchCommuneInText(text, wilayaCode){
 }
 
 function parseOrderText(text){
+  text = (text || '').replace(/[\u200B-\u200F\u202A-\u202E\uFEFF]/g, '');
   const lines = text.split('\n').map(l=>l.trim()).filter(Boolean);
   const cleanLines = lines.filter(l=> !isNoiseLine(l));
   const result = {name:'', phone:'', wilaya:'', commune:'', address:'', deliveryType:'domicile', officeOption:null, total:null};
@@ -2741,6 +2742,9 @@ document.getElementById('text-import-btn').addEventListener('click', ()=>{
   if(!text.trim()){
     toast('Collez le texte du client d\'abord', true);
     return;
+  }
+  if(!algeriaDataLoaded){
+    toast("La liste des wilayas n'est pas encore chargée — patientez quelques secondes puis réessayez", true);
   }
   const parsed = parseOrderText(text);
   applyImportedOrder(parsed);
