@@ -2288,7 +2288,8 @@ function renderCart(){
     const sub = info.price * qty;
     total += sub;
     return `<div class="cart-row">
-      <div>
+      <img class="cr-img" src="${info.img || placeholderImg()}">
+      <div class="cr-info">
         <div class="cr-name">${escapeHtml(info.name)}</div>
         <div class="cr-sub">${Number(info.price).toFixed(2)} DA × ${qty} = ${sub.toFixed(2)} DA</div>
       </div>
