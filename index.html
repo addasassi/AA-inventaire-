@@ -1994,6 +1994,7 @@ async function deleteOrder(id){
 document.getElementById('btn-new-order').addEventListener('click', async ()=>{
   cart = {};
   totalManuallyEdited = false;
+  document.getElementById('text-import').value = '';
   document.getElementById('o-name').value = '';
   document.getElementById('o-phone').value = '';
   document.getElementById('o-wilaya').value = '';
@@ -2211,6 +2212,7 @@ document.getElementById('btn-save-order').addEventListener('click', async ()=>{
 
   cart = {};
   totalManuallyEdited = false;
+  document.getElementById('text-import').value = '';
   toast('Commande enregistrée');
   showOrdersHome();
   renderOrdersHistory();
