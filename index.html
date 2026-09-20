@@ -185,6 +185,8 @@
 
   .cart-box{margin-top:18px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;}
   .cart-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);}
+  .cart-row .cr-img{width:42px;height:42px;border-radius:9px;object-fit:cover;flex-shrink:0;background:var(--rose);}
+  .cart-row .cr-info{flex:1;min-width:0;}
   .cart-row:last-of-type{border-bottom:none;}
   .cart-row .cr-name{flex:1;font-size:13.5px;font-weight:700;color:var(--plum);}
   .cart-row .cr-sub{font-size:11.5px;color:var(--mauve-dark);}
@@ -576,6 +578,7 @@
         <div id="orderProductsGrid"></div>
       </div>
 
+    <div id="orderBuilderRest">
       <div class="cart-box" id="cartBox">
         <div class="cat-title">Panier</div>
         <div id="cartItems"></div>
@@ -624,6 +627,7 @@
         <input type="text" id="o-address" placeholder="Adresse complète">
       </div>
       <button class="btn-primary" id="btn-save-order">Enregistrer la commande</button>
+    </div>
     </div>
   </section>
 </div>
@@ -751,6 +755,7 @@
     <div class="field">
       <label>Articles de la commande</label>
       <div id="eo-items" class="cart-box" style="padding:0;border:none;background:none;"></div>
+      <button type="button" class="btn-secondary" id="eo-add-item">+ Ajouter un article</button>
     </div>
     <div class="field">
       <label>Total (DA)</label>
@@ -1761,6 +1766,7 @@ async function removeWorker(id){
 let orders = [];
 let ordersUnsub = null;
 let cart = {}; // { productId: qty }
+let pickerMode = 'newOrder'; // 'newOrder' | 'editOrder'
 let totalManuallyEdited = false;
 
 function startOrdersListener(){
@@ -1978,7 +1984,8 @@ function renderEoItems(){
   wrap.innerHTML = editingOrderItems.map((it, i)=>{
     const sub = it.price * it.qty;
     return `<div class="cart-row">
-      <div>
+      <img class="cr-img" src="${it.img || placeholderImg()}">
+      <div class="cr-info">
         <div class="cr-name">${escapeHtml(it.name)}</div>
         <div class="cr-sub">${Number(it.price).toFixed(2)} DA × ${it.qty} = ${sub.toFixed(2)} DA</div>
       </div>
@@ -2097,6 +2104,15 @@ document.getElementById('btn-new-order').addEventListener('click', async ()=>{
 });
 document.getElementById('o-total').addEventListener('input', ()=>{ totalManuallyEdited = true; });
 document.getElementById('btn-cancel-order').addEventListener('click', ()=>{
+  if(pickerMode === 'editOrder'){
+    pickerMode = 'newOrder';
+    document.getElementById('btn-cancel-order').textContent = '← Annuler la commande';
+    document.getElementById('orderBuilder').style.display = 'none';
+    document.getElementById('orderBuilderRest').style.display = 'block';
+    renderEoItems();
+    document.getElementById('editOrderModal').classList.add('show');
+    return;
+  }
   showOrdersHome();
 });
 document.getElementById('btn-back-order-cats').addEventListener('click', ()=>{
@@ -2184,6 +2200,7 @@ function getAvailableStock(productId, colorIndex){
 function addToCart(productId){
   const p = products.find(x=>x.id===productId);
   if(!p) return;
+  if(pickerMode === 'editOrder'){ addItemToEditingOrder(productId, null); return; }
   const current = cart[productId] || 0;
   const stock = getAvailableStock(productId, null);
   if(stock <= 0){ toast(p.name+' — rupture de stock', true); return; }
@@ -2197,6 +2214,7 @@ function addToCart(productId){
 function addColorToCart(productId, colorIndex){
   const p = products.find(x=>x.id===productId);
   if(!p || !p.colors || !p.colors[colorIndex]) return;
+  if(pickerMode === 'editOrder'){ addItemToEditingOrder(productId, colorIndex); return; }
   const key = makeCartKey(productId, colorIndex);
   const current = cart[key] || 0;
   const stock = getAvailableStock(productId, colorIndex);
@@ -2207,6 +2225,39 @@ function addColorToCart(productId, colorIndex){
   if(currentColorsProductId === productId) renderColorsGrid();
   toast(p.name+' (couleur '+(colorIndex+1)+') ajouté à la commande');
 }
+function addItemToEditingOrder(productId, colorIndex){
+  const p = products.find(x=>x.id===productId);
+  if(!p) return;
+  const existing = editingOrderItems.find(it=> it.productId===productId && (it.colorIndex ?? null) === (colorIndex ?? null));
+  const heldQty = existing ? existing.qty : 0;
+  const stock = getAvailableStock(productId, colorIndex) ;
+  if(heldQty >= stock){ toast('Stock disponible atteint ('+stock+')', true); return; }
+  if(existing){
+    existing.qty += 1;
+  } else if(colorIndex !== null && colorIndex !== undefined && p.colors && p.colors[colorIndex]){
+    const c = p.colors[colorIndex];
+    editingOrderItems.push({productId, colorIndex, name: p.name+' — Couleur '+(colorIndex+1), price: (c.price!=null?c.price:p.price), qty:1, img: c.img||''});
+  } else {
+    editingOrderItems.push({productId, name:p.name, price:p.price, qty:1, img:p.img||''});
+  }
+  toast(p.name+' ajouté à la commande');
+  const cat = p.cat;
+  if(document.getElementById('orderCatProducts').style.display !== 'none') renderOrderProducts(cat);
+  if(currentColorsProductId === productId) renderColorsGrid();
+}
+function openPickerForEdit(){
+  pickerMode = 'editOrder';
+  document.getElementById('editOrderModal').classList.remove('show');
+  document.getElementById('ordersHome').style.display = 'none';
+  document.getElementById('orderBuilder').style.display = 'block';
+  document.getElementById('orderBuilderRest').style.display = 'none';
+  document.getElementById('orderCatFolders').style.display = 'block';
+  document.getElementById('orderCatProducts').style.display = 'none';
+  document.getElementById('btn-cancel-order').textContent = '← Retour à la commande';
+  renderOrderCatFolders();
+}
+document.getElementById('eo-add-item').addEventListener('click', openPickerForEdit);
+
 function setCartQty(key, delta){
   const {productId, colorIndex} = parseCartKey(key);
   const cur = cart[key] || 0;
