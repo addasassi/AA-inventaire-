@@ -1463,23 +1463,27 @@ function pmOpenColors(id){
 
 /* ---------- Couleurs disponibles par modèle ---------- */
 let currentColorsProductId = null;
-function openColorsModal(id){
+let currentColorsContext = 'manage';
+function openColorsModal(id, context){
   currentColorsProductId = id;
+  currentColorsContext = context || 'manage';
   renderColorsGrid();
   document.getElementById('colorsModal').classList.add('show');
 }
 function closeColorsModal(){
   document.getElementById('colorsModal').classList.remove('show');
   currentColorsProductId = null;
+  currentColorsContext = 'manage';
 }
 document.getElementById('cm-back').addEventListener('click', closeColorsModal);
 function renderColorsGrid(){
   const p = products.find(x=>x.id===currentColorsProductId);
   if(!p) return;
   const isAdmin = currentUser && currentUser.role === 'admin';
+  const isOrderContext = currentColorsContext === 'order';
   document.getElementById('cm-name').textContent = p.name;
   const colors = p.colors || [];
-  const addTile = isAdmin ? `<div class="color-add-tile" onclick="openAddColorModal()">
+  const addTile = (isAdmin && !isOrderContext) ? `<div class="color-add-tile" onclick="openAddColorModal()">
       <div class="cap">+</div>
       <div class="cal">Ajouter une couleur</div>
     </div>` : '';
@@ -1495,10 +1499,12 @@ function renderColorsGrid(){
     const isLow = !isOut && qty <= 2;
     const pillClass = isOut ? 'zero' : (isLow ? 'low' : '');
     const pillText = isOut ? 'Rupture' : (qty + ' en stock');
+    const inCart = cart[makeCartKey(p.id, i)] || 0;
     html += `<div class="product ${isOut?'out':''}">
       <div class="img-wrap" onclick="openColorFullscreen(${i})">
         <img src="${c.img}">
         <span class="qty-badge ${pillClass}">${pillText}</span>
+        ${inCart>0 ? `<div class="op-badge">${inCart}</div>` : ''}
       </div>
       <div class="info">
         <div class="name">${escapeHtml(p.name)}</div>
@@ -1506,11 +1512,14 @@ function renderColorsGrid(){
         ${c.code ? `<div class="code">#${c.code}</div>` : ''}
       </div>
       <div class="actions">
+        ${isOrderContext ? `
+        <button class="full" ${isOut?'disabled':''} onclick="addColorToCart('${p.id}',${i})">+ Ajouter à la commande</button>
+        ` : `
         <button class="full" onclick="showColorBarcode('${p.id}',${i})">Code-barres</button>
         ${isAdmin ? `
         <button onclick="modalAdjustColorQty(${i},1)">+1</button>
         <button onclick="modalAdjustColorQty(${i},-1)">-1</button>
-        <button class="del full" onclick="deleteColorPhoto(${i})">Supprimer</button>` : ''}
+        <button class="del full" onclick="deleteColorPhoto(${i})">Supprimer</button>` : ''}`}
       </div>
     </div>`;
   });
@@ -2042,9 +2051,33 @@ function renderOrderProducts(cat){
         <div class="op-name">${escapeHtml(p.name)}</div>
         <div class="op-price">${Number(p.price).toFixed(2)} DA</div>
       </div>
-      <button class="op-colors" onclick="event.stopPropagation(); openColorsModal('${p.id}')">🎨 ${colorCount>0 ? colorCount+' couleur'+(colorCount>1?'s':'') : 'Couleurs'}</button>
+      <button class="op-colors" onclick="event.stopPropagation(); openColorsModal('${p.id}','order')">🎨 ${colorCount>0 ? colorCount+' couleur'+(colorCount>1?'s':'') : 'Couleurs'}</button>
     </div>`;
   }).join('') + '</div>';
+}
+function makeCartKey(productId, colorIndex){
+  return (colorIndex === null || colorIndex === undefined) ? productId : (productId + '::color::' + colorIndex);
+}
+function parseCartKey(key){
+  const marker = '::color::';
+  const idx = key.indexOf(marker);
+  if(idx === -1) return {productId: key, colorIndex: null};
+  return {productId: key.slice(0, idx), colorIndex: parseInt(key.slice(idx + marker.length), 10)};
+}
+function cartLineInfo(key){
+  const {productId, colorIndex} = parseCartKey(key);
+  const p = products.find(x=>x.id===productId);
+  if(!p) return null;
+  if(colorIndex !== null && p.colors && p.colors[colorIndex]){
+    const c = p.colors[colorIndex];
+    return {
+      name: p.name + ' — Couleur ' + (colorIndex+1),
+      price: c.price != null ? c.price : p.price,
+      img: c.img || p.img || '',
+      productId, colorIndex
+    };
+  }
+  return {name: p.name, price: p.price, img: p.img || '', productId, colorIndex: null};
 }
 function addToCart(productId){
   const p = products.find(x=>x.id===productId);
@@ -2055,38 +2088,49 @@ function addToCart(productId){
   if(document.getElementById('orderCatProducts').style.display !== 'none') renderOrderProducts(cat);
   toast(p.name+' ajouté à la commande');
 }
-function setCartQty(productId, delta){
-  const cur = cart[productId] || 0;
-  const next = Math.max(0, cur + delta);
-  if(next === 0) delete cart[productId]; else cart[productId] = next;
+function addColorToCart(productId, colorIndex){
+  const p = products.find(x=>x.id===productId);
+  if(!p) return;
+  const key = makeCartKey(productId, colorIndex);
+  cart[key] = (cart[key] || 0) + 1;
   renderCart();
+  if(currentColorsProductId === productId) renderColorsGrid();
+  toast(p.name+' (couleur '+(colorIndex+1)+') ajouté à la commande');
+}
+function setCartQty(key, delta){
+  const cur = cart[key] || 0;
+  const next = Math.max(0, cur + delta);
+  if(next === 0) delete cart[key]; else cart[key] = next;
+  renderCart();
+  const {productId} = parseCartKey(key);
   const p = products.find(x=>x.id===productId);
   if(p && document.getElementById('orderCatProducts').style.display !== 'none') renderOrderProducts(p.cat);
+  if(currentColorsProductId === productId) renderColorsGrid();
 }
 function renderCart(){
   const wrap = document.getElementById('cartItems');
-  const ids = Object.keys(cart);
-  if(ids.length === 0){
+  const keys = Object.keys(cart);
+  if(keys.length === 0){
     wrap.innerHTML = '<div class="cart-empty">Aucun article sélectionné pour le moment.</div>';
     if(!totalManuallyEdited) document.getElementById('o-total').value = '';
     return;
   }
   let total = 0;
-  wrap.innerHTML = ids.map(id=>{
-    const p = products.find(x=>x.id===id);
-    if(!p) return '';
-    const qty = cart[id];
-    const sub = p.price * qty;
+  wrap.innerHTML = keys.map(key=>{
+    const info = cartLineInfo(key);
+    if(!info) return '';
+    const qty = cart[key];
+    const sub = info.price * qty;
     total += sub;
     return `<div class="cart-row">
       <div>
-        <div class="cr-name">${escapeHtml(p.name)}</div>
-        <div class="cr-sub">${Number(p.price).toFixed(2)} DA × ${qty} = ${sub.toFixed(2)} DA</div>
+        <div class="cr-name">${escapeHtml(info.name)}</div>
+        <div class="cr-sub">${Number(info.price).toFixed(2)} DA × ${qty} = ${sub.toFixed(2)} DA</div>
       </div>
       <div class="cr-qty">
-        <button onclick="setCartQty('${id}',-1)">−</button>
+        <button onclick="setCartQty('${key}',-1)">−</button>
         <span>${qty}</span>
-        <button onclick="setCartQty('${id}',1)">+</button>
+        <button onclick="setCartQty('${key}',1)">+</button>
       </div>
     </div>`;
   }).join('');
@@ -2100,20 +2144,29 @@ document.getElementById('btn-save-order').addEventListener('click', async ()=>{
   const commune = document.getElementById('o-commune').value.trim();
   const address = document.getElementById('o-address').value.trim();
   const totalInput = document.getElementById('o-total').value.trim();
-  const ids = Object.keys(cart);
-  if(ids.length === 0){ toast('Ajoutez au moins un article à la commande', true); return; }
+  const keys = Object.keys(cart);
+  if(keys.length === 0){ toast('Ajoutez au moins un article à la commande', true); return; }
   if(!name || !phone){ toast('Le nom et le téléphone du client sont requis', true); return; }
 
   await loadProducts();
   const items = [];
   let computedTotal = 0;
-  ids.forEach(id=>{
-    const p = products.find(x=>x.id===id);
+  keys.forEach(key=>{
+    const {productId, colorIndex} = parseCartKey(key);
+    const p = products.find(x=>x.id===productId);
     if(!p) return;
-    const qty = cart[id];
-    items.push({productId:id, name:p.name, price:p.price, qty, img:p.img||''});
-    computedTotal += p.price * qty;
-    p.qty = Math.max(0, p.qty - qty);
+    const qty = cart[key];
+    if(colorIndex !== null && p.colors && p.colors[colorIndex]){
+      const c = p.colors[colorIndex];
+      const price = c.price != null ? c.price : p.price;
+      items.push({productId, colorIndex, name: p.name+' — Couleur '+(colorIndex+1), price, qty, img: c.img||''});
+      computedTotal += price * qty;
+      c.qty = Math.max(0, (c.qty||0) - qty);
+    } else {
+      items.push({productId, name:p.name, price:p.price, qty, img:p.img||''});
+      computedTotal += p.price * qty;
+      p.qty = Math.max(0, p.qty - qty);
+    }
   });
   const total = totalInput !== '' ? parseFloat(totalInput) : computedTotal;
   await saveProducts();
