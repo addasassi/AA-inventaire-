@@ -2590,6 +2590,52 @@ function matchWilayaInText(text){
       if(nf.includes(normalizeFrench(w.name))) return {name: w.name, code: w.code};
     }
   }
+  // Dernier repli : la wilaya la plus ressemblante (tolère fautes de frappe)
+  const fuzzy = fuzzyFindClosest(text, wilayaArList, w=>w.ar, 0.65);
+  if(fuzzy) return {name: fuzzy.fr, code: fuzzy.code};
+  return null;
+}
+function levenshtein(a, b){
+  const m = a.length, n = b.length;
+  if(m === 0) return n;
+  if(n === 0) return m;
+  const dp = new Array(n+1);
+  for(let j=0;j<=n;j++) dp[j] = j;
+  for(let i=1;i<=m;i++){
+    let prev = dp[0];
+    dp[0] = i;
+    for(let j=1;j<=n;j++){
+      const tmp = dp[j];
+      dp[j] = a[i-1] === b[j-1] ? prev : 1 + Math.min(prev, dp[j], dp[j-1]);
+      prev = tmp;
+    }
+  }
+  return dp[n];
+}
+function similarityRatio(a, b){
+  if(!a.length && !b.length) return 1;
+  return 1 - levenshtein(a, b) / Math.max(a.length, b.length);
+}
+function fuzzyFindClosest(text, candidates, getAr, threshold){
+  const nl = normalizeArabic(text);
+  const words = nl.split(' ').filter(Boolean);
+  const windows = new Set();
+  for(let i=0;i<words.length;i++){
+    windows.add(words[i]);
+    if(i+1<words.length) windows.add(words[i]+' '+words[i+1]);
+  }
+  windows.add(nl);
+  let best = null;
+  for(const cand of candidates){
+    const ar = getAr(cand);
+    if(!ar) continue;
+    const arNorm = normalizeArabic(ar);
+    for(const w of windows){
+      const ratio = similarityRatio(w, arNorm);
+      if(!best || ratio > best.ratio) best = {cand, ratio};
+    }
+  }
+  if(best && best.ratio >= threshold) return best.cand;
   return null;
 }
 function matchCommuneInText(text, wilayaCode){
@@ -2618,6 +2664,9 @@ function matchCommuneInText(text, wilayaCode){
     }
     if(bestFr) return bestFr.fr;
   }
+  // Dernier repli : la commune la plus ressemblante (tolère fautes de frappe et mots en trop)
+  const fuzzy = fuzzyFindClosest(text, arList, c=>c.ar, 0.6);
+  if(fuzzy) return fuzzy.fr;
   return '';
 }
 
