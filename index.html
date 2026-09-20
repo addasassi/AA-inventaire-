@@ -2563,9 +2563,9 @@ function looseArabic(s){
 function extractLabeledValue(lines, labels){
   for(const l of lines){
     for(const label of labels){
-      const re = new RegExp('^\\s*' + label + '\\s*[:：]\\s*(.+)$');
+      const re = new RegExp('^\\s*' + label + '[\\s:：]+(.+)$');
       const m = l.match(re);
-      if(m && m[1].trim()) return m[1].trim();
+      if(m && m[1].trim()) return {value: m[1].trim(), line: l};
     }
   }
   return null;
@@ -2633,12 +2633,12 @@ function parseOrderText(text){
   const COMMUNE_LABELS = ['البلدية','بلدية'];
   const ADDRESS_LABELS = ['العنوان','عنوان'];
 
-  const labeledName = extractLabeledValue(lines, NAME_LABELS);
-  result.name = labeledName || (cleanLines.length > 0 ? cleanLines[0] : '');
+  const labeledNameR = extractLabeledValue(lines, NAME_LABELS);
+  result.name = (labeledNameR ? labeledNameR.value : '') || (cleanLines.length > 0 ? cleanLines[0] : '');
 
-  const labeledPhoneRaw = extractLabeledValue(lines, PHONE_LABELS);
-  if(labeledPhoneRaw){
-    const m = labeledPhoneRaw.replace(/[^\d]/g,'').match(/0[5-7]\d{8}/);
+  const labeledPhoneR = extractLabeledValue(lines, PHONE_LABELS);
+  if(labeledPhoneR){
+    const m = labeledPhoneR.value.replace(/[^\d]/g,'').match(/0[5-7]\d{8}/);
     if(m) result.phone = m[0];
   }
   if(!result.phone){
@@ -2658,24 +2658,34 @@ function parseOrderText(text){
     }
   }
 
-  const labeledWilaya = extractLabeledValue(lines, WILAYA_LABELS);
-  const labeledCommune = extractLabeledValue(lines, COMMUNE_LABELS);
+  const labeledWilayaR = extractLabeledValue(lines, WILAYA_LABELS);
+  const labeledCommuneR = extractLabeledValue(lines, COMMUNE_LABELS);
   function isLabeledLine(l, labels){
-    return labels.some(label=> new RegExp('^\\s*' + label + '\\s*[:：]').test(l));
+    return labels.some(label=> new RegExp('^\\s*' + label + '[\\s:：]+').test(l));
   }
-  const linesForWilayaFallback = lines.filter(l=> !isLabeledLine(l, COMMUNE_LABELS));
-  const linesForCommuneFallback = lines.filter(l=> !isLabeledLine(l, WILAYA_LABELS));
+  // Lignes à ne jamais utiliser pour deviner la wilaya/commune : les lignes labellisées
+  // pour l'AUTRE champ, plus la ligne "mot de passe/téléphone/total" déjà identifiée.
+  const reservedLines = new Set();
+  if(labeledNameR) reservedLines.add(labeledNameR.line);
+  if(labeledPhoneR) reservedLines.add(labeledPhoneR.line);
+  for(const l of lines){ if(l.includes('مكتب')){ reservedLines.add(l); } }
+  for(const l of lines){ if(l.includes('المجموع') || l.includes('مجموع')){ reservedLines.add(l); } }
+
+  let wilayaSourceLine = labeledWilayaR ? labeledWilayaR.line : null;
 
   if(result.deliveryType !== 'stopdesk'){
-    if(labeledWilaya){
-      const w = matchWilayaInText(labeledWilaya);
+    if(labeledWilayaR){
+      const w = matchWilayaInText(labeledWilayaR.value);
       if(w) result.wilaya = w.name;
     }
     if(!result.wilaya){
-      // Repli : recherche dans le texte, hors la ligne "bureau/commune" explicite
-      for(const l of linesForWilayaFallback){
+      // Repli : recherche dans le texte, hors lignes réservées et hors ligne "commune" explicite
+      for(const l of lines){
+        if(reservedLines.has(l)) continue;
+        if(labeledCommuneR && l === labeledCommuneR.line) continue;
+        if(isLabeledLine(l, COMMUNE_LABELS)) continue;
         const w = matchWilayaInText(l);
-        if(w){ result.wilaya = w.name; break; }
+        if(w){ result.wilaya = w.name; wilayaSourceLine = l; break; }
       }
     }
   }
@@ -2697,9 +2707,12 @@ function parseOrderText(text){
     const w = wilayasList.find(x=>x.name === result.wilaya);
     const code = w ? w.code : null;
     if(code){
-      if(labeledCommune) result.commune = matchCommuneInText(labeledCommune, code);
+      if(labeledCommuneR) result.commune = matchCommuneInText(labeledCommuneR.value, code);
       if(!result.commune){
-        for(const l of linesForCommuneFallback){
+        for(const l of lines){
+          if(reservedLines.has(l)) continue;
+          if(l === wilayaSourceLine) continue;
+          if(isLabeledLine(l, WILAYA_LABELS)) continue;
           const c = matchCommuneInText(l, code);
           if(c){ result.commune = c; break; }
         }
