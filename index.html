@@ -175,6 +175,9 @@
   .order-pick .op-badge{position:absolute;top:6px;right:6px;background:var(--plum);color:#fff;
     font-size:12px;font-weight:800;min-width:22px;height:22px;border-radius:20px;display:flex;
     align-items:center;justify-content:center;padding:0 6px;}
+  .order-pick .op-colors{position:absolute;top:6px;left:6px;background:rgba(255,255,255,0.92);
+    color:var(--mauve-dark);border:none;border-radius:20px;font-size:10px;font-weight:800;
+    padding:4px 8px;cursor:pointer;}
   .order-pick.out-pick{opacity:0.5;pointer-events:none;}
 
   .cart-box{margin-top:18px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;}
@@ -2031,6 +2034,7 @@ function renderOrderProducts(cat){
   wrap.innerHTML = '<div class="grid-wrap">' + items.map(p=>{
     const inCart = cart[p.id] || 0;
     const isOut = p.qty <= 0;
+    const colorCount = (p.colors || []).length;
     return `<div class="order-pick ${isOut?'out-pick':''}" onclick="addToCart('${p.id}')">
       <img src="${p.img || placeholderImg()}">
       ${inCart>0 ? `<div class="op-badge">${inCart}</div>` : ''}
@@ -2038,6 +2042,7 @@ function renderOrderProducts(cat){
         <div class="op-name">${escapeHtml(p.name)}</div>
         <div class="op-price">${Number(p.price).toFixed(2)} DA</div>
       </div>
+      <button class="op-colors" onclick="event.stopPropagation(); openColorsModal('${p.id}')">🎨 ${colorCount>0 ? colorCount+' couleur'+(colorCount>1?'s':'') : 'Couleurs'}</button>
     </div>`;
   }).join('') + '</div>';
 }
