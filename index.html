@@ -531,6 +531,24 @@
   </section>
 
   <section class="view" id="view-equipe">
+    <div class="cat-title">Administrateurs</div>
+    <div class="note">Un admin a accès à toutes les fonctions (produits, équipe, suppression...).</div>
+    <div class="field">
+      <label>Nom du nouvel admin</label>
+      <input type="text" id="adm-name" placeholder="Ex : Karim">
+    </div>
+    <div class="field">
+      <label>Email</label>
+      <input type="email" id="adm-email" placeholder="admin2@boutique.com">
+    </div>
+    <div class="field">
+      <label>Mot de passe</label>
+      <input type="password" id="adm-pass" placeholder="••••••••">
+    </div>
+    <button class="btn-primary" id="btn-add-admin">Ajouter l'administrateur</button>
+    <div style="margin-top:16px;" id="adminList"></div>
+
+    <div class="cat-title" style="margin-top:26px;">Employés</div>
     <div class="note">Ajoutez vos employés ici. Chacun se connecte avec son nom + son code PIN à 4 chiffres, depuis l'écran de connexion.</div>
     <div class="field">
       <label>Nom de l'employé</label>
@@ -1060,11 +1078,11 @@ function enterApp(){
   startProductsListener();
   startOrdersListener();
   loadProducts();
-  if(currentUser.role === 'admin') renderTeam();
+  if(currentUser.role === 'admin'){ renderTeam(); renderAdminList(); }
   if(equipeTimer) clearInterval(equipeTimer);
   equipeTimer = setInterval(async ()=>{
     if(currentUser && currentUser.role==='admin' && document.getElementById('view-equipe').classList.contains('active')){
-      await loadUsers(); renderTeam();
+      await loadUsers(); renderTeam(); renderAdminList();
     }
   }, 5000);
 }
@@ -1091,7 +1109,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     btn.classList.add('active');
     document.getElementById('view-'+btn.dataset.tab).classList.add('active');
     if(btn.dataset.tab === 'scan') setTimeout(()=>document.getElementById('manualCode').focus(), 60);
-    if(btn.dataset.tab === 'equipe') renderTeam();
+    if(btn.dataset.tab === 'equipe'){ renderTeam(); renderAdminList(); }
     if(btn.dataset.tab === 'liste') showCatFolders();
     if(btn.dataset.tab === 'commandes'){
       showOrdersHome();
@@ -1762,6 +1780,49 @@ async function handleScannedCode(code){
 }
 
 /* ---------- Équipe ---------- */
+document.getElementById('btn-add-admin').addEventListener('click', async ()=>{
+  const name = document.getElementById('adm-name').value.trim();
+  const email = document.getElementById('adm-email').value.trim().toLowerCase();
+  const pass = document.getElementById('adm-pass').value;
+  if(!name || !email || !pass){ toast('Merci de remplir tous les champs', true); return; }
+  await loadUsers();
+  if(users.some(u=>u.role==='admin' && u.email===email)){
+    toast('Cet email est déjà utilisé par un admin', true); return;
+  }
+  users.push({id:'u'+Date.now(), role:'admin', name, email, password:obf(pass)});
+  await saveUsers();
+  toast('Administrateur ajouté');
+  document.getElementById('adm-name').value='';
+  document.getElementById('adm-email').value='';
+  document.getElementById('adm-pass').value='';
+  renderAdminList();
+});
+function renderAdminList(){
+  const wrap = document.getElementById('adminList');
+  const admins = users.filter(u=>u.role==='admin');
+  wrap.innerHTML = '<div class="cat-title">Administrateurs (' + admins.length + ')</div>' + admins.map(a=>`
+    <div class="team-item">
+      <div><div class="n">${escapeHtml(a.name)}</div><div class="p">${escapeHtml(a.email)}</div></div>
+      ${admins.length > 1 ? `<button onclick="removeAdmin('${a.id}')">Retirer</button>` : ''}
+    </div>`).join('');
+}
+async function removeAdmin(id){
+  await loadUsers();
+  const admins = users.filter(u=>u.role==='admin');
+  if(admins.length <= 1){ toast('Impossible de retirer le dernier administrateur', true); return; }
+  if(currentUser && currentUser.id === id){
+    if(!confirm('Vous allez retirer votre propre accès admin et être déconnecté. Continuer ?')) return;
+  }
+  users = users.filter(u=>u.id!==id);
+  if(FIREBASE_OK){
+    try{ await withTimeout(db.collection('users').doc(id).delete(), 8000); }
+    catch(e){ warnStorage(); }
+  }
+  renderAdminList();
+  if(currentUser && currentUser.id === id){
+    document.getElementById('btn-logout').click();
+  }
+}
 document.getElementById('btn-add-worker').addEventListener('click', async ()=>{
   const name = document.getElementById('w-name').value.trim();
   const pin = document.getElementById('w-pin').value.trim();
