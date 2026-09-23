@@ -260,6 +260,13 @@
   .pm-actions button.del{color:var(--danger);}
   .pm-actions button:disabled{opacity:0.35;cursor:default;}
   .pm-scan-wrap{margin-top:14px;padding-top:14px;border-top:1px solid var(--line);text-align:left;}
+  .color-extra{text-align:left;}
+  .color-extra label{display:block;font-size:10px;color:var(--mauve-dark);margin-bottom:4px;font-weight:700;}
+  .color-extra .manual-row{gap:4px;}
+  .color-extra .manual-row input{width:100%;padding:6px 7px;font-size:11px;border:1px solid var(--line);
+    border-radius:7px;background:var(--card);color:var(--plum);min-width:0;}
+  .color-extra .manual-row button{padding:0 8px;font-size:11px;border-radius:7px;white-space:nowrap;
+    background:var(--plum);color:var(--cream);border:none;font-weight:700;}
   .pm-scan-wrap label{display:block;font-size:12.5px;color:var(--mauve-dark);margin-bottom:6px;font-weight:700;}
 
   #colorsModal{position:fixed;inset:0;background:var(--cream);display:none;flex-direction:column;
@@ -1568,7 +1575,7 @@ function renderColorsGrid(){
         <button class="del full" onclick="deleteColorPhoto(${i})">Supprimer</button>` : ''}`}
       </div>
       ${(isAdmin && !isOrderContext) ? `
-      <div class="pm-scan-wrap" style="margin-top:0;padding:10px;border-top:1px solid var(--line);">
+      <div class="color-extra" style="margin-top:0;padding:10px;border-top:1px solid var(--line);">
         <label>Modifier la quantité</label>
         <div class="manual-row">
           <input type="number" min="0" step="1" id="color-setqty-${i}" value="${qty}">
