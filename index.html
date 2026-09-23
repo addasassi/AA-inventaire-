@@ -513,13 +513,22 @@
   <section class="view" id="view-scan">
     <div class="note">Cliquez dans le champ ci-dessous puis scannez le code-barres avec votre douchette. Le produit sera reconnu automatiquement.</div>
     <div class="field">
-      <label>Code scanné</label>
+      <label>Code scanné (retire 1 du stock)</label>
       <div class="manual-row">
         <input type="text" id="manualCode" placeholder="En attente du scan…" autocomplete="off">
         <button id="btn-manual">Valider</button>
       </div>
     </div>
     <div id="scanHistory"></div>
+
+    <div class="field admin-only" id="scanAddField" style="margin-top:26px;padding-top:18px;border-top:1px solid var(--line);">
+      <label>Scanner pour ajouter +1 (réapprovisionnement)</label>
+      <div class="manual-row">
+        <input type="text" id="manualCodeAdd" placeholder="En attente du scan…" autocomplete="off">
+        <button id="btn-manual-add">+1</button>
+      </div>
+    </div>
+    <div id="scanAddHistory"></div>
   </section>
 
   <section class="view" id="view-recherche">
@@ -1788,6 +1797,17 @@ document.getElementById('btn-manual').addEventListener('click', async ()=>{
 document.getElementById('manualCode').addEventListener('keydown', (e)=>{
   if(e.key === 'Enter'){ e.preventDefault(); document.getElementById('btn-manual').click(); }
 });
+document.getElementById('btn-manual-add').addEventListener('click', async ()=>{
+  const val = document.getElementById('manualCodeAdd').value.trim();
+  if(val){
+    await handleScannedCodeAdd(val);
+    document.getElementById('manualCodeAdd').value = '';
+    document.getElementById('manualCodeAdd').focus();
+  }
+});
+document.getElementById('manualCodeAdd').addEventListener('keydown', (e)=>{
+  if(e.key === 'Enter'){ e.preventDefault(); document.getElementById('btn-manual-add').click(); }
+});
 
 let scanHistoryData = [];
 function renderScanHistory(){
@@ -1852,6 +1872,51 @@ async function handleScannedCode(rawCode){
   toast('Code inconnu : '+code, true);
   scanHistoryData.unshift({name:code, ok:false, msg:'Code non reconnu'});
   renderScanHistory();
+}
+
+let scanAddHistoryData = [];
+function renderScanAddHistory(){
+  const wrap = document.getElementById('scanAddHistory');
+  if(scanAddHistoryData.length === 0){ wrap.innerHTML=''; return; }
+  wrap.innerHTML = '<div class="cat-title">Derniers ajouts</div>' + scanAddHistoryData.slice(0,6).map(h=>`
+    <div class="product" style="padding:9px 12px;">
+      <div class="info"><div class="name">${escapeHtml(h.name)}</div>
+      <div class="meta">${h.ok ? 'Stock : '+h.qty+' • par '+escapeHtml(h.by) : h.msg}</div></div>
+    </div>`).join('');
+}
+async function handleScannedCodeAdd(rawCode){
+  const code = normalizeScannedCode(rawCode);
+  await loadProducts();
+  const p = products.find(x=>x.code===code);
+  if(p){
+    p.qty = (p.qty||0) + 1;
+    await saveProducts();
+    refreshCurrentInventoryView();
+    toast(p.name+' — 1 unité ajoutée ('+p.qty+' en stock)');
+    scanAddHistoryData.unshift({name:p.name, ok:true, qty:p.qty, by: currentUser ? currentUser.name : ''});
+    renderScanAddHistory();
+    return;
+  }
+
+  for(const prod of products){
+    if(!prod.colors) continue;
+    const ci = prod.colors.findIndex(c=>c.code===code);
+    if(ci !== -1){
+      const c = prod.colors[ci];
+      const label = prod.name + ' — Couleur ' + (ci+1);
+      c.qty = (c.qty||0) + 1;
+      await saveProducts();
+      refreshCurrentInventoryView();
+      toast(label+' — 1 unité ajoutée ('+c.qty+' en stock)');
+      scanAddHistoryData.unshift({name:label, ok:true, qty:c.qty, by: currentUser ? currentUser.name : ''});
+      renderScanAddHistory();
+      return;
+    }
+  }
+
+  toast('Code inconnu : '+code, true);
+  scanAddHistoryData.unshift({name:code, ok:false, msg:'Code non reconnu'});
+  renderScanAddHistory();
 }
 
 /* ---------- Équipe ---------- */
