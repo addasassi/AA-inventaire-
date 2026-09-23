@@ -1567,10 +1567,68 @@ function renderColorsGrid(){
         <button onclick="modalAdjustColorQty(${i},-1)">-1</button>
         <button class="del full" onclick="deleteColorPhoto(${i})">Supprimer</button>` : ''}`}
       </div>
+      ${(isAdmin && !isOrderContext) ? `
+      <div class="pm-scan-wrap" style="margin-top:0;padding:10px;border-top:1px solid var(--line);">
+        <label>Modifier la quantité</label>
+        <div class="manual-row">
+          <input type="number" min="0" step="1" id="color-setqty-${i}" value="${qty}">
+          <button onclick="setColorQtyDirect(${i})">Valider</button>
+        </div>
+        <label style="margin-top:10px;">Scanner pour ajouter +1</label>
+        <div class="manual-row">
+          <input type="text" id="color-scan-${i}" placeholder="Scannez le code-barres…" autocomplete="off">
+          <button onclick="scanColorAddQty(${i})">+1</button>
+        </div>
+      </div>` : ''}
     </div>`;
   });
   html += addTile + '</div>';
   document.getElementById('cm-grid').innerHTML = html;
+  if(isAdmin && !isOrderContext){
+    colors.forEach((c, i)=>{
+      const input = document.getElementById('color-scan-'+i);
+      if(input){
+        input.addEventListener('keydown', (e)=>{
+          if(e.key === 'Enter'){ e.preventDefault(); scanColorAddQty(i); }
+        });
+      }
+    });
+  }
+}
+function setColorQtyDirect(index){
+  const input = document.getElementById('color-setqty-'+index);
+  const newQty = parseInt(input.value, 10);
+  if(isNaN(newQty) || newQty < 0){ toast('Entrez une quantité valide', true); return; }
+  const p = products.find(x=>x.id===currentColorsProductId);
+  if(!p || !p.colors || !p.colors[index]) return;
+  p.colors[index].qty = newQty;
+  saveProducts().then(()=>{
+    refreshCurrentInventoryView();
+    renderColorsGrid();
+    toast('Quantité mise à jour');
+  });
+}
+function scanColorAddQty(index){
+  const input = document.getElementById('color-scan-'+index);
+  const raw = input.value.trim();
+  input.value = '';
+  if(!raw) return;
+  const code = normalizeScannedCode(raw);
+  const p = products.find(x=>x.id===currentColorsProductId);
+  if(!p || !p.colors || !p.colors[index]) return;
+  if(code !== p.colors[index].code){
+    toast('Ce code ne correspond pas à cette couleur', true);
+    input.focus();
+    return;
+  }
+  p.colors[index].qty = (p.colors[index].qty || 0) + 1;
+  saveProducts().then(()=>{
+    refreshCurrentInventoryView();
+    renderColorsGrid();
+    toast('+1 ajouté');
+    const newInput = document.getElementById('color-scan-'+index);
+    if(newInput) newInput.focus();
+  });
 }
 function openColorFullscreen(index){
   const p = products.find(x=>x.id===currentColorsProductId);
