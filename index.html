@@ -1652,7 +1652,7 @@ async function handlePmScan(){
   const wrap = document.getElementById('pm-scan-wrap');
   const id = wrap.dataset.productId;
   const input = document.getElementById('pm-scan-input');
-  const code = input.value.trim();
+  const code = normalizeScannedCode(input.value.trim());
   input.value = '';
   if(!code) return;
   await loadProducts();
@@ -1734,7 +1734,14 @@ function renderScanHistory(){
       <div class="meta">${h.ok ? 'Stock restant : '+h.qty+' • par '+escapeHtml(h.by) : h.msg}</div></div>
     </div>`).join('');
 }
-async function handleScannedCode(code){
+// Corrige les scans lus avec un clavier AZERTY alors que la douchette envoie un clavier US :
+// sur AZERTY, la rangée de chiffres (sans Shift) produit ces symboles à la place des chiffres.
+const AZERTY_TO_DIGIT = {'&':'1','é':'2','"':'3',"'":'4','(':'5','-':'6','è':'7','_':'8','ç':'9','à':'0'};
+function normalizeScannedCode(raw){
+  return (raw||'').split('').map(ch => AZERTY_TO_DIGIT[ch] !== undefined ? AZERTY_TO_DIGIT[ch] : ch).join('');
+}
+async function handleScannedCode(rawCode){
+  const code = normalizeScannedCode(rawCode);
   await loadProducts();
   const p = products.find(x=>x.code===code);
   if(p){
