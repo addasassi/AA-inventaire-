@@ -1736,7 +1736,10 @@ function renderScanHistory(){
 }
 // Corrige les scans lus avec un clavier AZERTY alors que la douchette envoie un clavier US :
 // sur AZERTY, la rangée de chiffres (sans Shift) produit ces symboles à la place des chiffres.
-const AZERTY_TO_DIGIT = {'&':'1','é':'2','"':'3',"'":'4','(':'5','-':'6','è':'7','_':'8','ç':'9','à':'0'};
+const AZERTY_TO_DIGIT = {'&':'1','é':'2','"':'3',"'":'4','(':'5','-':'6','è':'7','_':'8','ç':'9','à':'0',
+  // Chiffres arabes-indiens et persans, au cas où le clavier actif les utilise
+  '٠':'0','١':'1','٢':'2','٣':'3','٤':'4','٥':'5','٦':'6','٧':'7','٨':'8','٩':'9',
+  '۰':'0','۱':'1','۲':'2','۳':'3','۴':'4','۵':'5','۶':'6','۷':'7','۸':'8','۹':'9'};
 function normalizeScannedCode(raw){
   return (raw||'').split('').map(ch => AZERTY_TO_DIGIT[ch] !== undefined ? AZERTY_TO_DIGIT[ch] : ch).join('');
 }
