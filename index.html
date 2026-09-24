@@ -162,6 +162,10 @@
   .product.add-product{flex-direction:column;min-height:180px;gap:6px;}
   .back-btn{background:none;border:none;color:var(--mauve-dark);font-weight:700;font-size:14px;
     cursor:pointer;padding:0;margin-bottom:14px;text-decoration:underline;}
+  .cat-header-row{display:flex;align-items:center;justify-content:space-between;gap:10px;
+    flex-wrap:wrap;margin-bottom:4px;}
+  .cat-header-row .back-btn{margin-bottom:0;}
+  .cat-header-row .btn-secondary{width:auto;padding:8px 12px;font-size:12.5px;white-space:nowrap;}
 
   /* Constructeur de commande */
   .order-pick{position:relative;border-radius:12px;overflow:hidden;border:1px solid var(--line);
@@ -470,7 +474,10 @@
   <section class="view active" id="view-liste">
     <div id="catFolders"></div>
     <div id="catProducts" style="display:none;">
-      <button class="back-btn" id="btn-back-cats">← Retour aux catégories</button>
+      <div class="cat-header-row">
+        <button class="back-btn" id="btn-back-cats">← Retour aux catégories</button>
+        <button class="btn-secondary" id="btn-print-cat-barcodes">🖨️ Imprimer codes-barres</button>
+      </div>
       <div class="cat-title" id="catProductsTitle"></div>
       <div id="listWrap"></div>
     </div>
@@ -882,6 +889,9 @@ function warnStorage(){
 }
 function escapeHtml(s){
   return (s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function colorLabel(name, index){
+  return name + '#' + (index+1);
 }
 function placeholderImg(){
   return "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23e3c9c2'/%3E%3C/svg%3E";
@@ -1461,12 +1471,12 @@ function showColorBarcode(productId, colorIndex){
   const c = p.colors[colorIndex];
   if(!c.code){ toast('Aucun code-barres pour cette couleur', true); return; }
   const price = c.price != null ? c.price : p.price;
-  document.getElementById('bm-name').textContent = p.name + ' — Couleur ' + (colorIndex+1);
+  document.getElementById('bm-name').textContent = colorLabel(p.name, colorIndex);
   document.getElementById('bm-price').textContent = Number(price).toFixed(2) + ' DA';
   const canvas = document.getElementById('bm-canvas');
   JsBarcode(canvas, c.code, {format:"CODE128", displayValue:true, height:60, width:2, fontSize:14, margin:8});
   document.getElementById('barcodeModal').classList.add('show');
-  document.getElementById('bm-print').onclick = ()=> printLabel({name: p.name + ' - Couleur ' + (colorIndex+1), price, code: c.code});
+  document.getElementById('bm-print').onclick = ()=> printLabel({name: colorLabel(p.name, colorIndex), price, code: c.code});
 }
 document.getElementById('bm-close').addEventListener('click', ()=>{
   document.getElementById('barcodeModal').classList.remove('show');
@@ -1578,7 +1588,7 @@ function renderColorsGrid(){
         ${inCart>0 ? `<div class="op-badge">${inCart}</div>` : ''}
       </div>
       <div class="info">
-        <div class="name">${escapeHtml(p.name)}</div>
+        <div class="name">${escapeHtml(colorLabel(p.name, i))}</div>
         <div class="meta">${Number(price).toFixed(2)} DA</div>
         ${c.code ? `<div class="code">#${c.code}</div>` : ''}
       </div>
@@ -1839,6 +1849,34 @@ function printLabel(p){
       <img src="${tmp.toDataURL()}"></div></body></html>`);
   w.document.close();
 }
+function printLabelsBatch(items){
+  if(items.length === 0){ toast('Aucun code-barres à imprimer', true); return; }
+  const w = window.open('', '_blank', 'width=500,height=600');
+  const labelsHtml = items.map(it=>{
+    const tmp = document.createElement('canvas');
+    JsBarcode(tmp, it.code, {format:"CODE128", displayValue:true, height:50, width:2, fontSize:12, margin:4});
+    return `<div class="label"><h4>${escapeHtml(it.name)}</h4><div class="p">${Number(it.price).toFixed(2)} DA</div>
+      <img src="${tmp.toDataURL()}"></div>`;
+  }).join('');
+  w.document.write(`<html><head><title>Étiquettes</title>
+    <style>body{font-family:sans-serif;text-align:center;margin:0;padding:10px;}
+    .label{border:1px dashed #999;display:inline-block;padding:8px 12px;margin:6px;break-inside:avoid;}
+    h4{margin:0 0 2px;font-size:13px;} .p{font-size:12px;margin-bottom:6px;font-weight:bold;} img{max-width:100%;}</style>
+    </head><body onload="window.print();window.close();">${labelsHtml}</body></html>`);
+  w.document.close();
+}
+document.getElementById('btn-print-cat-barcodes').addEventListener('click', async ()=>{
+  const cat = document.getElementById('catProductsTitle').textContent;
+  await loadProducts();
+  const items = [];
+  products.filter(p=>p.cat===cat).forEach(p=>{
+    items.push({name: p.name, price: p.price, code: p.code});
+    (p.colors||[]).forEach((c, i)=>{
+      items.push({name: colorLabel(p.name, i), price: (c.price!=null?c.price:p.price), code: c.code});
+    });
+  });
+  printLabelsBatch(items);
+});
 
 /* ---------- Scanner ---------- */
 document.getElementById('btn-manual').addEventListener('click', async ()=>{
@@ -1908,7 +1946,7 @@ async function handleScannedCode(rawCode){
     const ci = prod.colors.findIndex(c=>c.code===code);
     if(ci !== -1){
       const c = prod.colors[ci];
-      const label = prod.name + ' — Couleur ' + (ci+1);
+      const label = colorLabel(prod.name, ci);
       if((c.qty||0) <= 0){
         toast(label+' — stock déjà à 0', true);
         scanHistoryData.unshift({name:label, ok:false, msg:'Stock déjà à 0'});
@@ -1958,7 +1996,7 @@ async function handleScannedCodeAdd(rawCode){
     const ci = prod.colors.findIndex(c=>c.code===code);
     if(ci !== -1){
       const c = prod.colors[ci];
-      const label = prod.name + ' — Couleur ' + (ci+1);
+      const label = colorLabel(prod.name, ci);
       c.qty = (c.qty||0) + 1;
       await saveProducts();
       refreshCurrentInventoryView();
@@ -2477,7 +2515,7 @@ function cartLineInfo(key){
   if(colorIndex !== null && p.colors && p.colors[colorIndex]){
     const c = p.colors[colorIndex];
     return {
-      name: p.name + ' — Couleur ' + (colorIndex+1),
+      name: colorLabel(p.name, colorIndex),
       price: c.price != null ? c.price : p.price,
       img: c.img || p.img || '',
       productId, colorIndex
@@ -2514,12 +2552,12 @@ function addColorToCart(productId, colorIndex){
   const key = makeCartKey(productId, colorIndex);
   const current = cart[key] || 0;
   const stock = getAvailableStock(productId, colorIndex);
-  if(stock <= 0){ toast(p.name+' (couleur '+(colorIndex+1)+') — rupture de stock', true); return; }
+  if(stock <= 0){ toast(colorLabel(p.name, colorIndex)+' — rupture de stock', true); return; }
   if(current >= stock){ toast('Stock disponible atteint ('+stock+')', true); return; }
   cart[key] = current + 1;
   renderCart();
   if(currentColorsProductId === productId) renderColorsGrid();
-  toast(p.name+' (couleur '+(colorIndex+1)+') ajouté à la commande');
+  toast(colorLabel(p.name, colorIndex)+' ajouté à la commande');
 }
 function addItemToEditingOrder(productId, colorIndex){
   const p = products.find(x=>x.id===productId);
@@ -2532,7 +2570,7 @@ function addItemToEditingOrder(productId, colorIndex){
     existing.qty += 1;
   } else if(colorIndex !== null && colorIndex !== undefined && p.colors && p.colors[colorIndex]){
     const c = p.colors[colorIndex];
-    editingOrderItems.push({productId, colorIndex, name: p.name+' — Couleur '+(colorIndex+1), price: (c.price!=null?c.price:p.price), qty:1, img: c.img||''});
+    editingOrderItems.push({productId, colorIndex, name: colorLabel(p.name, colorIndex), price: (c.price!=null?c.price:p.price), qty:1, img: c.img||''});
   } else {
     editingOrderItems.push({productId, name:p.name, price:p.price, qty:1, img:p.img||''});
   }
@@ -2621,7 +2659,7 @@ document.getElementById('btn-save-order').addEventListener('click', async ()=>{
     if(colorIndex !== null && p.colors && p.colors[colorIndex]){
       const c = p.colors[colorIndex];
       const price = c.price != null ? c.price : p.price;
-      items.push({productId, colorIndex, name: p.name+' — Couleur '+(colorIndex+1), price, qty, img: c.img||''});
+      items.push({productId, colorIndex, name: colorLabel(p.name, colorIndex), price, qty, img: c.img||''});
       computedTotal += price * qty;
       c.qty = Math.max(0, (c.qty||0) - qty);
     } else {
