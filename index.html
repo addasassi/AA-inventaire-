@@ -1133,8 +1133,10 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     }
   });
 });
-window.addEventListener('click', ()=>{
+window.addEventListener('click', (e)=>{
   if(document.getElementById('view-scan')?.classList.contains('active')){
+    const addField = document.getElementById('scanAddField');
+    if(addField && addField.contains(e.target)) return;
     setTimeout(()=>document.getElementById('manualCode')?.focus(), 30);
   }
 });
