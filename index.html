@@ -1598,6 +1598,11 @@ function renderColorsGrid(){
           <input type="number" min="0" step="1" id="color-setqty-${i}" value="${qty}">
           <button onclick="setColorQtyDirect(${i})">Valider</button>
         </div>
+        <label style="margin-top:10px;">Modifier le prix (DA)</label>
+        <div class="manual-row">
+          <input type="number" min="0" step="0.01" id="color-setprice-${i}" value="${price}">
+          <button onclick="setColorPriceDirect(${i})">Valider</button>
+        </div>
         <label style="margin-top:10px;">Scanner pour ajouter +1</label>
         <div class="manual-row">
           <input type="text" id="color-scan-${i}" placeholder="Scannez le code-barres…" autocomplete="off">
@@ -1630,6 +1635,19 @@ function setColorQtyDirect(index){
     refreshCurrentInventoryView();
     renderColorsGrid();
     toast('Quantité mise à jour');
+  });
+}
+function setColorPriceDirect(index){
+  const input = document.getElementById('color-setprice-'+index);
+  const newPrice = parseFloat(input.value);
+  if(isNaN(newPrice) || newPrice < 0){ toast('Entrez un prix valide', true); return; }
+  const p = products.find(x=>x.id===currentColorsProductId);
+  if(!p || !p.colors || !p.colors[index]) return;
+  p.colors[index].price = newPrice;
+  saveProducts().then(()=>{
+    refreshCurrentInventoryView();
+    renderColorsGrid();
+    toast('Prix mis à jour');
   });
 }
 function scanColorAddQty(index){
