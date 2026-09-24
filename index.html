@@ -729,21 +729,23 @@
 
 <div id="addColorModal">
   <div class="modal-card" style="text-align:left;">
-    <h3 style="margin-bottom:14px;text-align:center;">Ajouter une couleur</h3>
+    <h3 style="margin-bottom:4px;text-align:center;">Ajouter une couleur</h3>
+    <div class="note" style="margin-top:10px;">Vous pouvez choisir plusieurs photos à la fois : une couleur sera créée automatiquement pour chacune, avec le même prix et la même quantité.</div>
     <div class="field">
-      <label>Photo de la couleur</label>
+      <label>Photo(s) de la couleur</label>
       <div class="imgpick">
         <img class="preview" id="ac-color-preview" src="" style="display:none;">
-        <label class="btn" for="ac-color-image">Choisir une image</label>
-        <input type="file" id="ac-color-image" accept="image/*" style="display:none;">
+        <label class="btn" for="ac-color-image">Choisir une ou plusieurs images</label>
+        <input type="file" id="ac-color-image" accept="image/*" multiple style="display:none;">
       </div>
+      <div id="ac-color-count" class="note" style="display:none;margin-top:8px;"></div>
     </div>
     <div class="field">
       <label>Prix (DA)</label>
       <input type="number" id="ac-color-price" min="0" step="0.01">
     </div>
     <div class="field">
-      <label>Quantité disponible</label>
+      <label>Quantité disponible (pour chaque photo)</label>
       <input type="number" id="ac-color-qty" min="0" step="1" placeholder="0">
     </div>
     <div class="modal-actions">
@@ -1441,7 +1443,6 @@ document.getElementById('btn-save').addEventListener('click', async ()=>{
   document.getElementById('f-image').value = '';
   document.getElementById('f-preview').src = placeholderImg();
   showBarcode(product.id);
-  document.querySelector('.tab-btn[data-tab="liste"]').click();
 });
 
 function showBarcode(id){
@@ -1683,11 +1684,14 @@ function closeColorFullscreen(){
 }
 document.getElementById('colorViewModal').addEventListener('click', closeColorFullscreen);
 
+let pendingColorImages = [];
 function openAddColorModal(){
   const p = products.find(x=>x.id===currentColorsProductId);
+  pendingColorImages = [];
   document.getElementById('ac-color-preview').src = '';
   document.getElementById('ac-color-preview').style.display = 'none';
   document.getElementById('ac-color-image').value = '';
+  document.getElementById('ac-color-count').style.display = 'none';
   document.getElementById('ac-color-price').value = p ? p.price : '';
   document.getElementById('ac-color-qty').value = '';
   document.getElementById('addColorModal').classList.add('show');
@@ -1696,20 +1700,27 @@ document.getElementById('ac-color-cancel').addEventListener('click', ()=>{
   document.getElementById('addColorModal').classList.remove('show');
 });
 document.getElementById('ac-color-image').addEventListener('change', async (e)=>{
-  const file = e.target.files[0];
-  if(!file) return;
+  const files = Array.from(e.target.files || []);
+  if(files.length === 0) return;
+  const countEl = document.getElementById('ac-color-count');
+  countEl.style.display = 'block';
+  countEl.textContent = 'Traitement de ' + files.length + ' image' + (files.length>1?'s':'') + '…';
+  pendingColorImages = [];
   try{
-    const dataUrl = await compressImage(file);
+    for(const file of files){
+      const dataUrl = await compressImage(file);
+      pendingColorImages.push(dataUrl);
+    }
     const prev = document.getElementById('ac-color-preview');
-    prev.src = dataUrl;
+    prev.src = pendingColorImages[0];
     prev.style.display = 'block';
+    countEl.textContent = pendingColorImages.length + ' image' + (pendingColorImages.length>1?'s':'') + ' prête' + (pendingColorImages.length>1?'s':'') + ' — ' + pendingColorImages.length + ' couleur' + (pendingColorImages.length>1?'s':'') + ' seront créées';
   }catch(err){
     toast("Erreur de traitement de l'image", true);
   }
 });
 document.getElementById('ac-color-save').addEventListener('click', async ()=>{
-  const preview = document.getElementById('ac-color-preview');
-  if(!preview.src || preview.style.display === 'none'){
+  if(pendingColorImages.length === 0){
     toast("Choisissez une image d'abord", true);
     return;
   }
@@ -1719,12 +1730,15 @@ document.getElementById('ac-color-save').addEventListener('click', async ()=>{
   const p = products.find(x=>x.id===currentColorsProductId);
   if(!p) return;
   if(!p.colors) p.colors = [];
-  p.colors.push({img: preview.src, price, qty, code: genBarcode()});
+  pendingColorImages.forEach(img=>{
+    p.colors.push({img, price, qty, code: genBarcode()});
+  });
   await saveProducts();
   refreshCurrentInventoryView();
   renderColorsGrid();
   document.getElementById('addColorModal').classList.remove('show');
-  toast('Couleur ajoutée');
+  toast(pendingColorImages.length > 1 ? pendingColorImages.length+' couleurs ajoutées' : 'Couleur ajoutée');
+  pendingColorImages = [];
 });
 async function modalAdjustColorQty(index, delta){
   await loadProducts();
