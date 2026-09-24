@@ -493,7 +493,7 @@
     </div>
     <div class="field">
       <label>Prix (DA)</label>
-      <input type="number" id="f-price" placeholder="0" min="0" step="0.01">
+      <input type="number" id="f-price" placeholder="0" min="0" step="0.01" value="1000">
     </div>
     <div class="field">
       <label>Quantité disponible</label>
@@ -695,6 +695,11 @@
       <div class="manual-row">
         <input type="number" id="pm-setqty-input" min="0" step="1">
         <button id="pm-setqty-btn">Valider</button>
+      </div>
+      <label style="margin-top:10px;">Modifier le prix (DA)</label>
+      <div class="manual-row">
+        <input type="number" id="pm-setprice-input" min="0" step="0.01">
+        <button id="pm-setprice-btn">Valider</button>
       </div>
     </div>
     <div id="pm-scan-wrap" class="pm-scan-wrap" style="display:none;">
@@ -1431,7 +1436,7 @@ document.getElementById('btn-save').addEventListener('click', async ()=>{
   refreshCurrentInventoryView();
   toast('Produit enregistré');
   document.getElementById('f-name').value = '';
-  document.getElementById('f-price').value = '';
+  document.getElementById('f-price').value = '1000';
   document.getElementById('f-qty').value = '';
   document.getElementById('f-image').value = '';
   document.getElementById('f-preview').src = placeholderImg();
@@ -1506,6 +1511,7 @@ function openProductModal(id){
     setQtyWrap.style.display = 'block';
     setQtyWrap.dataset.productId = p.id;
     document.getElementById('pm-setqty-input').value = p.qty;
+    document.getElementById('pm-setprice-input').value = p.price;
   } else {
     scanWrap.style.display = 'none';
     setQtyWrap.style.display = 'none';
@@ -1760,6 +1766,21 @@ document.getElementById('pm-setqty-btn').addEventListener('click', async ()=>{
   refreshCurrentInventoryView();
   openProductModal(id);
   toast('Quantité mise à jour');
+});
+document.getElementById('pm-setprice-btn').addEventListener('click', async ()=>{
+  const wrap = document.getElementById('pm-setqty-wrap');
+  const id = wrap.dataset.productId;
+  const input = document.getElementById('pm-setprice-input');
+  const newPrice = parseFloat(input.value);
+  if(isNaN(newPrice) || newPrice < 0){ toast('Entrez un prix valide', true); return; }
+  await loadProducts();
+  const p = products.find(x=>x.id===id);
+  if(!p) return;
+  p.price = newPrice;
+  await saveProducts();
+  refreshCurrentInventoryView();
+  openProductModal(id);
+  toast('Prix mis à jour');
 });
 async function modalAdjustQty(id, delta){
   await adjustQty(id, delta);
