@@ -697,6 +697,13 @@
     <div class="pm-code" id="pm-code"></div>
     <div class="pm-badge" id="pm-badge"></div>
     <div class="pm-actions" id="pm-actions"></div>
+    <div id="pm-photo-wrap" class="pm-scan-wrap" style="display:none;">
+      <label>Photo du produit</label>
+      <div class="imgpick">
+        <label class="btn" for="pm-photo-input">📷 Changer la photo</label>
+        <input type="file" id="pm-photo-input" accept="image/*" style="display:none;">
+      </div>
+    </div>
     <div id="pm-setqty-wrap" class="pm-scan-wrap" style="display:none;">
       <label>Modifier la quantité directement</label>
       <div class="manual-row">
@@ -730,6 +737,7 @@
   </header>
   <div class="colors-body">
     <div class="cm-sub">الألوان المتوفرة</div>
+    <button class="btn-secondary" id="btn-print-color-barcodes" style="margin-bottom:14px;">🖨️ Imprimer les codes-barres</button>
     <div id="cm-grid"></div>
   </div>
 </div>
@@ -1514,6 +1522,7 @@ function openProductModal(id){
 
   const scanWrap = document.getElementById('pm-scan-wrap');
   const setQtyWrap = document.getElementById('pm-setqty-wrap');
+  const photoWrap = document.getElementById('pm-photo-wrap');
   if(isAdmin){
     scanWrap.style.display = 'block';
     scanWrap.dataset.productId = p.id;
@@ -1523,9 +1532,13 @@ function openProductModal(id){
     setQtyWrap.dataset.productId = p.id;
     document.getElementById('pm-setqty-input').value = p.qty;
     document.getElementById('pm-setprice-input').value = p.price;
+    photoWrap.style.display = 'block';
+    photoWrap.dataset.productId = p.id;
+    document.getElementById('pm-photo-input').value = '';
   } else {
     scanWrap.style.display = 'none';
     setQtyWrap.style.display = 'none';
+    photoWrap.style.display = 'none';
   }
 
   document.getElementById('productModal').classList.add('show');
@@ -1824,6 +1837,25 @@ document.getElementById('pm-setprice-btn').addEventListener('click', async ()=>{
   openProductModal(id);
   toast('Prix mis à jour');
 });
+document.getElementById('pm-photo-input').addEventListener('change', async (e)=>{
+  const file = e.target.files[0];
+  const wrap = document.getElementById('pm-photo-wrap');
+  const id = wrap.dataset.productId;
+  if(!file || !id) return;
+  try{
+    const dataUrl = await compressImage(file);
+    await loadProducts();
+    const p = products.find(x=>x.id===id);
+    if(!p) return;
+    p.img = dataUrl;
+    await saveProducts();
+    refreshCurrentInventoryView();
+    openProductModal(id);
+    toast('Photo mise à jour');
+  }catch(err){
+    toast("Erreur de traitement de l'image", true);
+  }
+});
 async function modalAdjustQty(id, delta){
   await adjustQty(id, delta);
   openProductModal(id);
@@ -1855,13 +1887,18 @@ function printLabelsBatch(items){
   const labelsHtml = items.map(it=>{
     const tmp = document.createElement('canvas');
     JsBarcode(tmp, it.code, {format:"CODE128", displayValue:true, height:50, width:2, fontSize:12, margin:4});
-    return `<div class="label"><h4>${escapeHtml(it.name)}</h4><div class="p">${Number(it.price).toFixed(2)} DA</div>
-      <img src="${tmp.toDataURL()}"></div>`;
+    return `<div class="page"><div class="label"><h4>${escapeHtml(it.name)}</h4><div class="p">${Number(it.price).toFixed(2)} DA</div>
+      <img src="${tmp.toDataURL()}"></div></div>`;
   }).join('');
   w.document.write(`<html><head><title>Étiquettes</title>
-    <style>body{font-family:sans-serif;text-align:center;margin:0;padding:10px;}
-    .label{border:1px dashed #999;display:inline-block;padding:8px 12px;margin:6px;break-inside:avoid;}
-    h4{margin:0 0 2px;font-size:13px;} .p{font-size:12px;margin-bottom:6px;font-weight:bold;} img{max-width:100%;}</style>
+    <style>
+    body{font-family:sans-serif;text-align:center;margin:0;padding:0;}
+    .page{page-break-after:always;break-after:page;display:flex;align-items:center;justify-content:center;
+      min-height:100vh;padding:10px;box-sizing:border-box;}
+    .page:last-child{page-break-after:auto;break-after:auto;}
+    .label{border:1px dashed #999;display:inline-block;padding:10px 16px;}
+    h4{margin:0 0 4px;font-size:15px;} .p{font-size:13px;margin-bottom:8px;font-weight:bold;} img{max-width:100%;}
+    </style>
     </head><body onload="window.print();window.close();">${labelsHtml}</body></html>`);
   w.document.close();
 }
@@ -1875,6 +1912,17 @@ document.getElementById('btn-print-cat-barcodes').addEventListener('click', asyn
       items.push({name: colorLabel(p.name, i), price: (c.price!=null?c.price:p.price), code: c.code});
     });
   });
+  printLabelsBatch(items);
+});
+document.getElementById('btn-print-color-barcodes').addEventListener('click', async ()=>{
+  await loadProducts();
+  const p = products.find(x=>x.id===currentColorsProductId);
+  if(!p) return;
+  const items = (p.colors||[]).map((c, i)=> ({
+    name: colorLabel(p.name, i),
+    price: (c.price!=null ? c.price : p.price),
+    code: c.code
+  }));
   printLabelsBatch(items);
 });
 
