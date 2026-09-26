@@ -203,6 +203,23 @@
 
   .order-card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px;cursor:pointer;}
   .order-filters{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-top:16px;}
+
+  /* Accueil / Dashboard */
+  .dash-section-title{font-size:12.5px;font-weight:700;color:var(--mauve-dark);margin:18px 0 10px;}
+  .dash-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .dash-card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;cursor:pointer;}
+  .dash-card .dash-label{font-size:11.5px;color:var(--mauve-dark);}
+  .dash-card .dash-value{font-size:22px;font-weight:800;color:var(--plum);margin-top:4px;}
+  .dash-card.dash-out{border-color:#f0997b;}
+  .dash-card.dash-out .dash-label{color:#993c1d;}
+  .dash-card.dash-out .dash-value{color:#712b13;}
+  .dash-card.dash-low{border-color:#fac775;}
+  .dash-card.dash-low .dash-label{color:#854f0b;}
+  .dash-card.dash-low .dash-value{color:#633806;}
+  .dash-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .dash-action{border-radius:10px;padding:14px 8px;font-size:13.5px;font-weight:700;cursor:pointer;
+    background:var(--card);color:var(--plum);border:1px solid var(--line);}
+  .dash-action.primary{background:var(--plum);color:var(--cream);border:none;}
   .order-filters .field{margin-bottom:10px;}
   .order-filters .field:last-child{margin-bottom:0;}
   .orders-summary{margin-top:14px;background:var(--rose);border-radius:12px;padding:12px 16px;
@@ -463,7 +480,8 @@
   </header>
 
   <nav class="tabs">
-    <button class="tab-btn active" data-tab="liste">Inventaire</button>
+    <button class="tab-btn active" data-tab="accueil">Accueil</button>
+    <button class="tab-btn" data-tab="liste">Inventaire</button>
     <button class="tab-btn admin-only" data-tab="ajout">Ajouter</button>
     <button class="tab-btn" data-tab="scan">Scanner</button>
     <button class="tab-btn" data-tab="recherche">Recherche</button>
@@ -471,7 +489,35 @@
     <button class="tab-btn admin-only" data-tab="equipe">Équipe</button>
   </nav>
 
-  <section class="view active" id="view-liste">
+  <section class="view active" id="view-accueil">
+    <div class="note" id="dash-date"></div>
+    <div class="dash-section-title">Aujourd'hui</div>
+    <div class="dash-grid">
+      <div class="dash-card" onclick="document.querySelector('.tab-btn[data-tab=&quot;commandes&quot;]').click();">
+        <div class="dash-label">Commandes</div>
+        <div class="dash-value" id="dash-orders">0</div>
+      </div>
+      <div class="dash-card dash-out" id="dash-out-card" onclick="openStockFilter('out')">
+        <div class="dash-label">Rupture de stock</div>
+        <div class="dash-value" id="dash-out">0</div>
+      </div>
+      <div class="dash-card dash-low" id="dash-low-card" onclick="openStockFilter('low')">
+        <div class="dash-label">Stock faible</div>
+        <div class="dash-value" id="dash-low">0</div>
+      </div>
+      <div class="dash-card">
+        <div class="dash-label">Total articles</div>
+        <div class="dash-value" id="dash-total">0</div>
+      </div>
+    </div>
+    <div class="dash-section-title">Actions rapides</div>
+    <div class="dash-actions">
+      <button class="dash-action primary" id="dash-btn-order">+ Nouvelle commande</button>
+      <button class="dash-action" id="dash-btn-scan">🔍 Scanner</button>
+    </div>
+  </section>
+
+  <section class="view" id="view-liste">
     <div id="catFolders"></div>
     <div id="catProducts" style="display:none;">
       <div class="cat-header-row">
@@ -1119,6 +1165,7 @@ function enterApp(){
   startProductsListener();
   startOrdersListener();
   loadProducts();
+  loadOrders().then(renderDashboard);
   if(currentUser.role === 'admin'){ renderTeam(); renderAdminList(); }
   if(equipeTimer) clearInterval(equipeTimer);
   equipeTimer = setInterval(async ()=>{
@@ -1152,6 +1199,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     if(btn.dataset.tab === 'scan') setTimeout(()=>document.getElementById('manualCode').focus(), 60);
     if(btn.dataset.tab === 'equipe'){ renderTeam(); renderAdminList(); }
     if(btn.dataset.tab === 'liste') showCatFolders();
+    if(btn.dataset.tab === 'accueil'){ loadProducts().then(renderDashboard); loadOrders().then(renderDashboard); }
     if(btn.dataset.tab === 'commandes'){
       showOrdersHome();
       loadUsers().then(()=> loadOrders().then(renderOrdersHistory));
@@ -1305,7 +1353,9 @@ function catEmojiBg(){
   return "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23e3c9c2'/%3E%3C/svg%3E";
 }
 
+let currentStockFilterType = null;
 function showCatFolders(){
+  currentStockFilterType = null;
   document.getElementById('catFolders').style.display = 'block';
   document.getElementById('catProducts').style.display = 'none';
   renderCatFolders();
@@ -1335,10 +1385,53 @@ function renderCatFolders(){
     </div>` : '') + '</div>';
 }
 function openCategory(cat){
+  currentStockFilterType = null;
   document.getElementById('catFolders').style.display = 'none';
   document.getElementById('catProducts').style.display = 'block';
   document.getElementById('catProductsTitle').textContent = cat;
   renderList(cat);
+}
+function openStockFilter(type){
+  currentStockFilterType = type;
+  document.getElementById('catFolders').style.display = 'none';
+  document.getElementById('catProducts').style.display = 'block';
+  document.getElementById('catProductsTitle').textContent = type === 'out' ? 'Rupture de stock' : 'Stock faible';
+  document.querySelector('.tab-btn[data-tab="liste"]').classList.add('active');
+  document.querySelectorAll('.tab-btn').forEach(b=>{ if(b.dataset.tab!=='liste') b.classList.remove('active'); });
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById('view-liste').classList.add('active');
+  renderFilteredStockList(type);
+}
+function renderFilteredStockList(type){
+  const wrap = document.getElementById('listWrap');
+  const items = products.filter(p=> type === 'out' ? p.qty <= 0 : (p.qty > 0 && p.qty <= 2));
+  if(items.length === 0){
+    wrap.innerHTML = `<div class="empty"><h3>Aucun résultat</h3><p>${type==='out' ? 'Aucun produit en rupture de stock.' : 'Aucun produit en stock faible.'}</p></div>`;
+    return;
+  }
+  let html = '<div class="grid-wrap">';
+  items.forEach((p)=>{
+    const isOut = p.qty <= 0;
+    const isLow = !isOut && p.qty <= 2;
+    const pillClass = isOut ? 'zero' : (isLow ? 'low' : '');
+    const pillText = isOut ? 'Rupture' : (p.qty + ' en stock');
+    const colorCount = (p.colors || []).length;
+    html += `<div class="product ${isOut?'out':''}" onclick="openProductModal('${p.id}')">
+      <div class="img-wrap">
+        <img src="${p.img || placeholderImg()}">
+        <span class="qty-badge ${pillClass}">${pillText}</span>
+      </div>
+      <div class="info">
+        <div class="name">${escapeHtml(p.name)}</div>
+        <div class="meta">${Number(p.price).toFixed(2)} DA</div>
+        <div class="code">#${p.code}</div>
+        <div class="code" style="color:var(--mauve-dark);">${escapeHtml(p.cat)}</div>
+        <button class="colors-link" onclick="event.stopPropagation(); openColorsModal('${p.id}')">🎨 ${colorCount>0 ? colorCount+' couleur'+(colorCount>1?'s':'') : 'Voir les couleurs'}</button>
+      </div>
+    </div>`;
+  });
+  html += '</div>';
+  wrap.innerHTML = html;
 }
 document.getElementById('btn-back-cats').addEventListener('click', showCatFolders);
 
@@ -1379,13 +1472,40 @@ function renderList(cat){
   html += addTile + '</div>';
   wrap.innerHTML = html;
 }
+function renderDashboard(){
+  const dateEl = document.getElementById('dash-date');
+  if(!dateEl) return;
+  const now = new Date();
+  dateEl.textContent = now.toLocaleDateString('fr-FR', {weekday:'long', day:'numeric', month:'long'});
+  const todayStr = now.toDateString();
+  const ordersToday = orders.filter(o=> new Date(o.createdAt).toDateString() === todayStr).length;
+  const outCount = products.filter(p=> p.qty <= 0).length;
+  const lowCount = products.filter(p=> p.qty > 0 && p.qty <= 2).length;
+  document.getElementById('dash-orders').textContent = ordersToday;
+  document.getElementById('dash-out').textContent = outCount;
+  document.getElementById('dash-low').textContent = lowCount;
+  document.getElementById('dash-total').textContent = products.length;
+}
+document.getElementById('dash-btn-order').addEventListener('click', ()=>{
+  document.querySelector('.tab-btn[data-tab="commandes"]').click();
+  setTimeout(()=> document.getElementById('btn-new-order')?.click(), 50);
+});
+document.getElementById('dash-btn-scan').addEventListener('click', ()=>{
+  document.querySelector('.tab-btn[data-tab="scan"]').click();
+});
+
 function refreshCurrentInventoryView(){
   if(document.getElementById('catProducts').style.display !== 'none'){
-    const cat = document.getElementById('catProductsTitle').textContent;
-    renderList(cat);
+    if(currentStockFilterType){
+      renderFilteredStockList(currentStockFilterType);
+    } else {
+      const cat = document.getElementById('catProductsTitle').textContent;
+      renderList(cat);
+    }
   } else {
     renderCatFolders();
   }
+  if(typeof renderDashboard === 'function') renderDashboard();
 }
 
 async function adjustQty(id, delta){
@@ -1617,6 +1737,11 @@ function renderColorsGrid(){
       </div>
       ${(isAdmin && !isOrderContext) ? `
       <div class="color-extra" style="margin-top:0;padding:10px;border-top:1px solid var(--line);">
+        <label>Photo de la couleur</label>
+        <div class="imgpick" style="margin-bottom:10px;">
+          <label class="btn" for="color-photo-${i}" style="font-size:11px;padding:6px 10px;">📷 Changer la photo</label>
+          <input type="file" id="color-photo-${i}" accept="image/*" style="display:none;">
+        </div>
         <label>Modifier la quantité</label>
         <div class="manual-row">
           <input type="number" min="0" step="1" id="color-setqty-${i}" value="${qty}">
@@ -1639,6 +1764,25 @@ function renderColorsGrid(){
   document.getElementById('cm-grid').innerHTML = html;
   if(isAdmin && !isOrderContext){
     colors.forEach((c, i)=>{
+      const photoInput = document.getElementById('color-photo-'+i);
+      if(photoInput){
+        photoInput.addEventListener('change', async (e)=>{
+          const file = e.target.files[0];
+          if(!file) return;
+          try{
+            const dataUrl = await compressImage(file);
+            const pp = products.find(x=>x.id===currentColorsProductId);
+            if(!pp || !pp.colors || !pp.colors[i]) return;
+            pp.colors[i].img = dataUrl;
+            await saveProducts();
+            refreshCurrentInventoryView();
+            renderColorsGrid();
+            toast('Photo mise à jour');
+          }catch(err){
+            toast("Erreur de traitement de l'image", true);
+          }
+        });
+      }
       const input = document.getElementById('color-scan-'+i);
       if(input){
         input.addEventListener('keydown', (e)=>{
@@ -2150,6 +2294,7 @@ function startOrdersListener(){
        document.getElementById('ordersHome').style.display !== 'none'){
       renderOrdersHistory();
     }
+    if(typeof renderDashboard === 'function') renderDashboard();
   }, ()=> warnStorage());
 }
 async function loadOrders(){
