@@ -915,6 +915,15 @@
       </div>
     </div>
 
+    <div class="cat-title" style="margin-top:18px;">Notifications</div>
+    <div class="account-box" style="padding:14px;">
+      <div class="account-row" style="cursor:default;">
+        <span>🔔 Nouvelles commandes de l'équipe</span>
+        <label class="switch"><input type="checkbox" id="notif-toggle"><span class="switch-slider"></span></label>
+      </div>
+      <div class="note" style="margin-top:8px;">Un signal sonore + une notification s'affichent quand un membre de l'équipe ajoute une commande, tant que l'application reste ouverte (même en arrière-plan).</div>
+    </div>
+
     <div class="cat-title" style="margin-top:18px;">Apparence</div>
     <div class="account-box" style="padding:14px;">
       <div class="account-row" style="cursor:default;">
@@ -1471,6 +1480,7 @@ document.getElementById('btn-open-account').addEventListener('click', async ()=>
   renderAccountInfo();
   document.getElementById('edit-name-form').style.display = 'none';
   document.getElementById('edit-pass-form').style.display = 'none';
+  if(typeof notifPrefEnabled === 'function') document.getElementById('notif-toggle').checked = notifPrefEnabled();
   await loadOrders();
   setActivityPreset('today');
   document.getElementById('accountModal').classList.add('show');
@@ -1577,6 +1587,78 @@ document.getElementById('btn-export-orders').addEventListener('click', async ()=
   });
   downloadCsv('commandes_'+new Date().toISOString().slice(0,10)+'.csv', rows);
   toast('Export commandes prêt');
+});
+
+/* ---------- Notifications (nouvelles commandes) ---------- */
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  });
+}
+function notifPrefEnabled(){
+  try{
+    return localStorage.getItem('notifPref') === 'on' && 'Notification' in window && Notification.permission === 'granted';
+  }catch(e){ return false; }
+}
+function playNotifTone(){
+  try{
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [0, 0.16].forEach((delay, i)=>{
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = i === 0 ? 880 : 1175;
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime + delay);
+      gain.gain.exponentialRampToValueAtTime(0.28, ctx.currentTime + delay + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + delay + 0.28);
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start(ctx.currentTime + delay);
+      osc.stop(ctx.currentTime + delay + 0.3);
+    });
+    setTimeout(()=> ctx.close && ctx.close(), 900);
+  }catch(e){}
+}
+async function notifyNewOrder(o){
+  if(!notifPrefEnabled()) return;
+  playNotifTone();
+  const title = '🛍️ Nouvelle commande';
+  const who = o.createdBy || 'Un membre de l\'équipe';
+  const body = who + ' a ajouté une commande — ' + (o.customer && o.customer.name ? o.customer.name + ' — ' : '') + Number(o.total||0).toFixed(0) + ' DA';
+  try{
+    if('serviceWorker' in navigator && navigator.serviceWorker.ready){
+      const reg = await navigator.serviceWorker.ready;
+      reg.showNotification(title, {
+        body, icon:'icon-192.png', badge:'icon-192.png',
+        vibrate:[200,100,200], tag:'order-'+o.id
+      });
+    } else if('Notification' in window){
+      new Notification(title, {body, icon:'icon-192.png'});
+    }
+  }catch(e){}
+}
+const notifToggle = document.getElementById('notif-toggle');
+notifToggle.checked = notifPrefEnabled();
+notifToggle.addEventListener('change', async ()=>{
+  if(notifToggle.checked){
+    if(!('Notification' in window)){
+      toast("Les notifications ne sont pas prises en charge sur cet appareil", true);
+      notifToggle.checked = false;
+      return;
+    }
+    let perm = Notification.permission;
+    if(perm === 'default'){ perm = await Notification.requestPermission(); }
+    if(perm !== 'granted'){
+      toast("Autorisation refusée — activez les notifications pour cette app dans les réglages du téléphone", true);
+      notifToggle.checked = false;
+      try{ localStorage.setItem('notifPref','off'); }catch(e){}
+      return;
+    }
+    try{ localStorage.setItem('notifPref','on'); }catch(e){}
+    playNotifTone();
+    toast('Notifications activées');
+  } else {
+    try{ localStorage.setItem('notifPref','off'); }catch(e){}
+  }
 });
 
 /* ---------- Mode sombre ---------- */
@@ -2862,10 +2944,24 @@ let cart = {}; // { productId: qty }
 let pickerMode = 'newOrder'; // 'newOrder' | 'editOrder'
 let totalManuallyEdited = false;
 
+let ordersListenerInitialized = false;
 function startOrdersListener(){
   if(!FIREBASE_OK || ordersUnsub) return;
+  ordersListenerInitialized = false;
   ordersUnsub = db.collection('orders').onSnapshot(snap=>{
     orders = snap.docs.map(d=>d.data());
+    if(ordersListenerInitialized){
+      snap.docChanges().forEach(change=>{
+        if(change.type === 'added'){
+          const o = change.doc.data();
+          if(currentUser && o.createdBy && o.createdBy !== currentUser.name){
+            notifyNewOrder(o);
+          }
+        }
+      });
+    } else {
+      ordersListenerInitialized = true;
+    }
     if(document.getElementById('view-commandes').classList.contains('active') &&
        document.getElementById('ordersHome').style.display !== 'none'){
       renderOrdersHistory();
