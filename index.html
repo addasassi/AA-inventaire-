@@ -26,7 +26,6 @@
 </script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <style>
   :root{
     --cream:#f6efe9;
@@ -1281,32 +1280,10 @@ function downloadColorImage(index){
   const c = p.colors[index];
   downloadDataUrl(c.img, 'couleur-'+slugForFilename(p.name)+'-'+(c.code || (index+1))+'.jpg');
 }
-async function downloadImagesAsZip(images, zipFilename){
+async function downloadImagesAsZip(images){
+  // Téléchargement groupé: chaque photo est enregistrée séparément (pas de zip)
   if(!images || images.length === 0){ alert('Aucune photo à télécharger.'); return; }
-  if(images.length === 1){ downloadDataUrl(images[0].dataUrl, images[0].name); return; }
-  if(typeof JSZip === 'undefined'){
-    // Repli si JSZip indisponible: téléchargements séquentiels
-    images.forEach((im, idx)=> setTimeout(()=> downloadDataUrl(im.dataUrl, im.name), idx*350));
-    return;
-  }
-  try{
-    const zip = new JSZip();
-    images.forEach(im=>{
-      const m = /^data:image\/(\w+);base64,(.*)$/.exec(im.dataUrl || '');
-      if(m) zip.file(im.name, m[2], {base64:true});
-    });
-    const blob = await zip.generateAsync({type:'blob'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = zipFilename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(()=> URL.revokeObjectURL(url), 5000);
-  }catch(e){
-    images.forEach((im, idx)=> setTimeout(()=> downloadDataUrl(im.dataUrl, im.name), idx*350));
-  }
+  images.forEach((im, idx)=> setTimeout(()=> downloadDataUrl(im.dataUrl, im.name), idx*400));
 }
 function obf(s){ return btoa(unescape(encodeURIComponent(s))); }
 
@@ -2981,7 +2958,7 @@ document.getElementById('btn-download-cat-photos').addEventListener('click', asy
     name: 'produit-'+slugForFilename(p.code || p.name)+'.jpg',
     dataUrl: p.img
   }));
-  await downloadImagesAsZip(images, 'photos-'+slugForFilename(cat || 'produits')+'.zip');
+  await downloadImagesAsZip(images);
 });
 document.getElementById('btn-download-color-photos').addEventListener('click', async ()=>{
   const p = products.find(x=>x.id===currentColorsProductId);
@@ -2990,7 +2967,7 @@ document.getElementById('btn-download-color-photos').addEventListener('click', a
     name: 'couleur-'+slugForFilename(p.name)+'-'+(c.code || (i+1))+'.jpg',
     dataUrl: c.img
   }));
-  await downloadImagesAsZip(images, 'couleurs-'+slugForFilename(p.name)+'.zip');
+  await downloadImagesAsZip(images);
 });
 
 /* ---------- Scanner ---------- */
