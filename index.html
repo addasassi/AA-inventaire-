@@ -26,6 +26,7 @@
 </script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <style>
   :root{
     --cream:#f6efe9;
@@ -302,6 +303,13 @@
     border-radius:20px;background:rgba(255,255,255,0.95);color:var(--plum);box-shadow:0 1px 5px rgba(0,0,0,0.18);}
   .qty-badge.low{background:#f1d6d2;color:var(--danger);}
   .qty-badge.zero{background:var(--danger);color:#fff;}
+  .img-dl-btn{position:absolute;top:6px;left:6px;width:27px;height:27px;border-radius:50%;
+    background:rgba(58,38,50,0.72);border:none;color:#fff;display:flex;align-items:center;
+    justify-content:center;z-index:5;padding:0;cursor:pointer;box-shadow:0 1px 5px rgba(0,0,0,0.22);}
+  .img-dl-btn svg{width:14px;height:14px;}
+  .img-dl-btn:active{background:rgba(58,38,50,0.9);}
+  .img-dl-btn.lg{top:10px;left:10px;width:34px;height:34px;}
+  .img-dl-btn.lg svg{width:17px;height:17px;}
   .product .info{padding:10px 10px 2px;}
   .product .info .name{font-weight:800;font-size:14.5px;color:var(--plum);line-height:1.25;
     display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
@@ -660,6 +668,7 @@
     <div id="catProducts" style="display:none;">
       <div class="cat-header-row">
         <button class="back-btn" id="btn-back-cats">← Retour aux catégories</button>
+        <button class="btn-secondary" id="btn-download-cat-photos">⬇️ Télécharger les photos</button>
         <button class="btn-secondary" id="btn-print-cat-barcodes">🖨️ Imprimer codes-barres</button>
       </div>
       <div class="cat-title" id="catProductsTitle"></div>
@@ -1009,7 +1018,10 @@
 
 <div id="productModal">
   <div class="modal-card pm-card">
-    <img class="pm-img" id="pm-img" src="">
+    <div style="position:relative;">
+      <img class="pm-img" id="pm-img" src="">
+      <button class="img-dl-btn lg" id="pm-dl-btn" onclick="event.stopPropagation(); downloadCurrentProductImage()" title="Télécharger la photo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg></button>
+    </div>
     <h3 id="pm-name"></h3>
     <div class="pm-price" id="pm-price"></div>
     <div class="pm-code" id="pm-code"></div>
@@ -1051,6 +1063,7 @@
 
 <div id="colorViewModal">
   <img id="cv-img" src="">
+  <button class="img-dl-btn lg" style="position:fixed;top:14px;left:14px;" onclick="event.stopPropagation(); downloadCurrentColorFullscreen()" title="Télécharger la photo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg></button>
 </div>
 
 <div id="colorsModal">
@@ -1060,7 +1073,10 @@
   </header>
   <div class="colors-body">
     <div class="cm-sub">الألوان المتوفرة</div>
-    <button class="btn-secondary" id="btn-print-color-barcodes" style="margin-bottom:14px;">🖨️ Imprimer les codes-barres</button>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+      <button class="btn-secondary" id="btn-print-color-barcodes" style="margin:0;width:auto;flex:1 1 150px;">🖨️ Imprimer les codes-barres</button>
+      <button class="btn-secondary" id="btn-download-color-photos" style="margin:0;width:auto;flex:1 1 150px;">⬇️ Télécharger les photos</button>
+    </div>
     <div id="cm-grid"></div>
   </div>
 </div>
@@ -1232,6 +1248,66 @@ function placeholderImg(){
   return "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23e3c9c2'/%3E%3C/svg%3E";
 }
 document.getElementById('f-preview').src = placeholderImg();
+
+/* ---------- Téléchargement des photos (produits & couleurs) ---------- */
+function dlIconSvg(){
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>';
+}
+function slugForFilename(s){
+  return (s||'photo').toString().trim().replace(/[^\w\-]+/g,'_').replace(/_+/g,'_').slice(0,40) || 'photo';
+}
+function downloadDataUrl(dataUrl, filename){
+  if(!dataUrl) return;
+  try{
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = filename || ('photo_'+Date.now()+'.jpg');
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }catch(e){}
+}
+function downloadProductImage(id){
+  const p = products.find(x=>x.id===id);
+  if(!p || !p.img) return;
+  downloadDataUrl(p.img, 'produit-'+slugForFilename(p.code || p.name)+'.jpg');
+}
+function downloadCurrentProductImage(){
+  if(currentProductModalId) downloadProductImage(currentProductModalId);
+}
+function downloadColorImage(index){
+  const p = products.find(x=>x.id===currentColorsProductId);
+  if(!p || !p.colors || !p.colors[index] || !p.colors[index].img) return;
+  const c = p.colors[index];
+  downloadDataUrl(c.img, 'couleur-'+slugForFilename(p.name)+'-'+(c.code || (index+1))+'.jpg');
+}
+async function downloadImagesAsZip(images, zipFilename){
+  if(!images || images.length === 0){ alert('Aucune photo à télécharger.'); return; }
+  if(images.length === 1){ downloadDataUrl(images[0].dataUrl, images[0].name); return; }
+  if(typeof JSZip === 'undefined'){
+    // Repli si JSZip indisponible: téléchargements séquentiels
+    images.forEach((im, idx)=> setTimeout(()=> downloadDataUrl(im.dataUrl, im.name), idx*350));
+    return;
+  }
+  try{
+    const zip = new JSZip();
+    images.forEach(im=>{
+      const m = /^data:image\/(\w+);base64,(.*)$/.exec(im.dataUrl || '');
+      if(m) zip.file(im.name, m[2], {base64:true});
+    });
+    const blob = await zip.generateAsync({type:'blob'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = zipFilename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(()=> URL.revokeObjectURL(url), 5000);
+  }catch(e){
+    images.forEach((im, idx)=> setTimeout(()=> downloadDataUrl(im.dataUrl, im.name), idx*350));
+  }
+}
 function obf(s){ return btoa(unescape(encodeURIComponent(s))); }
 
 // Redimensionne/compresse une image avant de la stocker (Firestore limite chaque document à ~1 Mo)
@@ -2132,6 +2208,7 @@ function renderFilteredStockList(type){
     html += `<div class="product ${isOut?'out':''}" onclick="openProductModal('${p.id}')">
       <div class="img-wrap">
         <img src="${p.img || placeholderImg()}">
+        ${p.img ? `<button class="img-dl-btn" onclick="event.stopPropagation(); downloadProductImage('${p.id}')" title="Télécharger la photo">${dlIconSvg()}</button>` : ''}
         <span class="qty-badge ${pillClass}">${pillText}</span>
       </div>
       <div class="info">
@@ -2172,6 +2249,7 @@ function renderList(cat){
     html += `<div class="product ${isOut?'out':''}" onclick="openProductModal('${p.id}')">
       <div class="img-wrap">
         <img src="${p.img || placeholderImg()}">
+        ${p.img ? `<button class="img-dl-btn" onclick="event.stopPropagation(); downloadProductImage('${p.id}')" title="Télécharger la photo">${dlIconSvg()}</button>` : ''}
         <span class="qty-badge ${pillClass}">${pillText}</span>
       </div>
       <div class="info">
@@ -2389,9 +2467,11 @@ document.getElementById('bm-close').addEventListener('click', ()=>{
   document.getElementById('barcodeModal').classList.remove('show');
 });
 
+let currentProductModalId = null;
 function openProductModal(id){
   const p = products.find(x=>x.id===id);
   if(!p) return;
+  currentProductModalId = id;
   const isAdmin = currentUser && currentUser.role === 'admin';
   const items = products.filter(x=>x.cat===p.cat);
   const idx = items.findIndex(x=>x.id===id);
@@ -2401,6 +2481,8 @@ function openProductModal(id){
   const badgeText = isOut ? 'Rupture de stock' : (p.qty + ' en stock');
 
   document.getElementById('pm-img').src = p.img || placeholderImg();
+  const pmDlBtn = document.getElementById('pm-dl-btn');
+  if(pmDlBtn) pmDlBtn.style.display = p.img ? 'flex' : 'none';
   document.getElementById('pm-name').textContent = p.name;
   document.getElementById('pm-price').textContent = Number(p.price).toFixed(2) + ' DA';
   document.getElementById('pm-code').textContent = '#' + p.code;
@@ -2497,6 +2579,7 @@ function renderColorsGrid(){
     html += `<div class="product ${isOut?'out':''}">
       <div class="img-wrap" onclick="openColorFullscreen(${i})">
         <img src="${c.img}">
+        ${c.img ? `<button class="img-dl-btn" onclick="event.stopPropagation(); downloadColorImage(${i})" title="Télécharger la photo">${dlIconSvg()}</button>` : ''}
         <span class="qty-badge ${pillClass}">${pillText}</span>
         ${inCart>0 ? `<div class="op-badge">${inCart}</div>` : ''}
       </div>
@@ -2638,11 +2721,16 @@ function scanColorAddQty(index){
     if(newInput) newInput.focus();
   });
 }
+let colorFullscreenIndex = null;
 function openColorFullscreen(index){
   const p = products.find(x=>x.id===currentColorsProductId);
   if(!p || !p.colors || !p.colors[index]) return;
+  colorFullscreenIndex = index;
   document.getElementById('cv-img').src = p.colors[index].img;
   document.getElementById('colorViewModal').classList.add('show');
+}
+function downloadCurrentColorFullscreen(){
+  if(colorFullscreenIndex != null) downloadColorImage(colorFullscreenIndex);
 }
 function closeColorFullscreen(){
   document.getElementById('colorViewModal').classList.remove('show');
@@ -2883,6 +2971,26 @@ document.getElementById('btn-print-color-barcodes').addEventListener('click', as
     code: c.code
   }));
   printLabelsBatch(items);
+});
+document.getElementById('btn-download-cat-photos').addEventListener('click', async ()=>{
+  const cat = document.getElementById('catProductsTitle').textContent;
+  const items = currentStockFilterType
+    ? products.filter(p=> currentStockFilterType === 'out' ? p.qty <= 0 : (p.qty > 0 && p.qty <= 2))
+    : products.filter(p=>p.cat===cat);
+  const images = items.filter(p=>p.img).map(p=> ({
+    name: 'produit-'+slugForFilename(p.code || p.name)+'.jpg',
+    dataUrl: p.img
+  }));
+  await downloadImagesAsZip(images, 'photos-'+slugForFilename(cat || 'produits')+'.zip');
+});
+document.getElementById('btn-download-color-photos').addEventListener('click', async ()=>{
+  const p = products.find(x=>x.id===currentColorsProductId);
+  if(!p) return;
+  const images = (p.colors||[]).filter(c=>c.img).map((c, i)=> ({
+    name: 'couleur-'+slugForFilename(p.name)+'-'+(c.code || (i+1))+'.jpg',
+    dataUrl: c.img
+  }));
+  await downloadImagesAsZip(images, 'couleurs-'+slugForFilename(p.name)+'.zip');
 });
 
 /* ---------- Scanner ---------- */
@@ -4133,6 +4241,7 @@ function renderVisualSearchResults(results){
       return `<div class="product ${isOut?'out':''}" onclick="openProductModal('${p.id}')">
         <div class="img-wrap">
           <img src="${p.img}">
+          ${p.img ? `<button class="img-dl-btn" onclick="event.stopPropagation(); downloadProductImage('${p.id}')" title="Télécharger la photo">${dlIconSvg()}</button>` : ''}
           <span class="qty-badge ${pillClass}">${pillText}</span>
         </div>
         <div class="info">
