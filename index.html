@@ -40,19 +40,16 @@
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;}
   /* Retour visuel de pression: un feedback propre à nous, sans le flash bleu par défaut du navigateur.
-     Placé tôt dans la feuille de style pour que les styles :active plus spécifiques définis plus bas
-     (ex: .btn-primary:active) restent prioritaires. */
+     On évite le pseudo-classe :active car il se propage à TOUS les parents de l'élément touché
+     (ce qui assombrissait toute la carte/l'écran au lieu de juste l'élément touché) — le retour
+     visuel est donc géré en JS (classe .press-fx) et posé sur un seul élément à la fois. */
   button, [onclick], .tab-btn, .chip, a, .switch, .product, .cat-folder, .order-card, .client-row,
   .dash-card, .dash-action, .account-row, .top-product-row, .colors-link, .img-dl-btn, .contact-fab,
-  .cfm-item, .back-btn, .cat-folder-actions button{
+  .cfm-item, .back-btn, .cat-folder-actions button, .img-wrap{
     -webkit-tap-highlight-color:transparent;
   }
-  button:active, [onclick]:active, .tab-btn:active, .chip:active, a:active, .switch:active,
-  .product:active, .cat-folder:active, .order-card:active, .client-row:active, .dash-card:active,
-  .dash-action:active, .account-row:active, .top-product-row:active, .colors-link:active,
-  .img-dl-btn:active, .contact-fab:active, .cfm-item:active, .back-btn:active,
-  .cat-folder-actions button:active{
-    opacity:0.6;
+  .press-fx{
+    opacity:0.6 !important;
     transition:opacity 0.05s ease;
   }
   body{
@@ -1782,11 +1779,24 @@ function playClickTick(){
     osc.stop(ctx.currentTime + 0.08);
   }catch(e){}
 }
+const INTERACTIVE_SELECTOR = 'button, [onclick], .tab-btn, .chip, a, .switch, .product, .cat-folder, .order-card, .client-row, .dash-card, .dash-action, .account-row, .top-product-row, .colors-link, .img-dl-btn, .contact-fab, .cfm-item, .back-btn, .cat-folder-actions button, .img-wrap';
 document.addEventListener('click', (e)=>{
   if(e.target.closest('#btn-sound-toggle')) return;
-  const el = e.target.closest('button, [onclick], .tab-btn, .chip, a, .switch, .product, .cat-folder, .order-card, .client-row, .dash-card, .dash-action, .account-row, .top-product-row');
+  const el = e.target.closest(INTERACTIVE_SELECTOR);
   if(el) playClickTick();
 }, true);
+/* Retour visuel de pression: un seul élément à la fois (le plus proche touché), jamais ses parents */
+let pressFxEl = null;
+function clearPressFx(){
+  if(pressFxEl){ pressFxEl.classList.remove('press-fx'); pressFxEl = null; }
+}
+document.addEventListener('pointerdown', (e)=>{
+  const el = e.target.closest(INTERACTIVE_SELECTOR);
+  clearPressFx();
+  if(el){ el.classList.add('press-fx'); pressFxEl = el; }
+}, true);
+['pointerup','pointercancel'].forEach(evt=> document.addEventListener(evt, clearPressFx, true));
+window.addEventListener('blur', clearPressFx);
 document.getElementById('btn-sound-toggle').addEventListener('click', ()=>{
   soundMuted = !soundMuted;
   try{ localStorage.setItem('clickSoundMuted', soundMuted ? 'on' : 'off'); }catch(e){}
