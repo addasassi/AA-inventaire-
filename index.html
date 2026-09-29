@@ -38,7 +38,23 @@
     --danger:#a4483f;
     --card:#fffdfb;
   }
-  *{box-sizing:border-box;}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;}
+  /* Retour visuel de pression: un feedback propre à nous, sans le flash bleu par défaut du navigateur.
+     Placé tôt dans la feuille de style pour que les styles :active plus spécifiques définis plus bas
+     (ex: .btn-primary:active) restent prioritaires. */
+  button, [onclick], .tab-btn, .chip, a, .switch, .product, .cat-folder, .order-card, .client-row,
+  .dash-card, .dash-action, .account-row, .top-product-row, .colors-link, .img-dl-btn, .contact-fab,
+  .cfm-item, .back-btn, .cat-folder-actions button{
+    -webkit-tap-highlight-color:transparent;
+  }
+  button:active, [onclick]:active, .tab-btn:active, .chip:active, a:active, .switch:active,
+  .product:active, .cat-folder:active, .order-card:active, .client-row:active, .dash-card:active,
+  .dash-action:active, .account-row:active, .top-product-row:active, .colors-link:active,
+  .img-dl-btn:active, .contact-fab:active, .cfm-item:active, .back-btn:active,
+  .cat-folder-actions button:active{
+    opacity:0.6;
+    transition:opacity 0.05s ease;
+  }
   body{
     margin:0;
     background:var(--cream);
