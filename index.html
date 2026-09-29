@@ -37,6 +37,7 @@
     --ok:#5c7a5e;
     --danger:#a4483f;
     --card:#fffdfb;
+    --warn:#c98a3e;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;}
   /* Retour visuel de pression: un feedback propre à nous, sans le flash bleu par défaut du navigateur.
@@ -133,6 +134,12 @@
   .contact-fab-menu .cfm-item:last-child{border-bottom:none;}
   .stock-alert-badge{
     position:absolute;top:-4px;right:-4px;background:var(--danger);color:#fff;
+    font-size:10.5px;font-weight:800;min-width:17px;height:17px;border-radius:20px;
+    display:flex;align-items:center;justify-content:center;padding:0 4px;
+    box-shadow:0 0 0 2px var(--cream);
+  }
+  .deferred-alert-badge{
+    position:absolute;top:-4px;left:-4px;background:var(--warn);color:#fff;
     font-size:10.5px;font-weight:800;min-width:17px;height:17px;border-radius:20px;
     display:flex;align-items:center;justify-content:center;padding:0 4px;
     box-shadow:0 0 0 2px var(--cream);
@@ -249,10 +256,24 @@
   .cart-total{margin-top:10px;font-weight:800;font-size:16px;color:var(--plum);text-align:right;}
 
   .order-card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px;cursor:pointer;}
+  .order-card.deferred{border-color:var(--warn);}
+  .deferred-badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:800;
+    padding:4px 9px;border-radius:20px;margin-bottom:8px;}
+  .deferred-badge.today,.deferred-badge.future{background:#fbe9d3;color:#8a5a1f;}
+  .deferred-badge.late{background:var(--danger);color:#fff;}
   .order-filters{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-top:16px;}
 
   /* Accueil / Dashboard */
   .dash-section-title{font-size:12.5px;font-weight:700;color:var(--mauve-dark);margin:18px 0 10px;}
+  .deferred-reminder-card{background:#fdf1e0;border:1px solid var(--warn);border-radius:14px;padding:6px 14px;}
+  .dr-row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 0;
+    border-top:1px solid rgba(201,138,62,0.25);cursor:pointer;}
+  .dr-row:first-child{border-top:none;}
+  .dr-row .dr-n{font-weight:700;color:var(--plum);font-size:13px;}
+  .dr-row .dr-d{font-size:11.5px;color:var(--mauve-dark);margin-top:2px;}
+  .dr-row .dr-badge{font-size:11px;font-weight:800;padding:3px 9px;border-radius:12px;white-space:nowrap;}
+  .dr-row .dr-badge.today{background:var(--warn);color:#fff;}
+  .dr-row .dr-badge.late{background:var(--danger);color:#fff;}
   .dash-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
   .dash-card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;cursor:pointer;}
   .dash-card .dash-label{font-size:11.5px;color:var(--mauve-dark);}
@@ -589,6 +610,7 @@
   <button class="menu-toggle" id="btn-menu-toggle" aria-label="Menu">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
     <span class="stock-alert-badge" id="stockAlertBadge" style="display:none;">0</span>
+    <span class="deferred-alert-badge" id="deferredAlertBadge" style="display:none;">0</span>
   </button>
   <button class="sound-toggle" id="btn-sound-toggle" aria-label="Son">
     <svg id="sound-icon-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M17 8.5a5 5 0 0 1 0 7"/><path d="M19.5 6a8.5 8.5 0 0 1 0 12"/></svg>
@@ -656,6 +678,11 @@
         <div class="dash-value" id="dash-total">0</div>
       </div>
     </div>
+    <div id="deferredRemindersWrap" style="display:none;">
+      <div class="dash-section-title">🕓 Commandes différées à envoyer</div>
+      <div class="deferred-reminder-card" id="deferredRemindersList"></div>
+    </div>
+
     <div class="dash-section-title">Actions rapides</div>
     <div class="dash-actions">
       <button class="dash-action primary" id="dash-btn-order">+ Nouvelle commande</button>
@@ -807,6 +834,10 @@
       <button class="btn-primary" id="btn-new-order">+ Nouvelle commande</button>
 
       <div class="order-filters">
+        <div class="stats-presets" style="margin-bottom:12px;">
+          <button type="button" class="chip active" id="of-filter-all">Toutes</button>
+          <button type="button" class="chip" id="of-filter-deferred">🕓 Différées</button>
+        </div>
         <div class="field">
           <label>Filtrer par employé</label>
           <select id="of-employee">
@@ -887,6 +918,16 @@
       <div class="field" id="o-address-field">
         <label>Adresse (facultatif)</label>
         <input type="text" id="o-address" placeholder="Adresse complète">
+      </div>
+      <div class="account-row" style="cursor:default;background:var(--cream);border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-bottom:14px;">
+        <span>Commande différée
+          <span class="note" style="margin-top:1px;">À préparer/envoyer plus tard</span>
+        </span>
+        <label class="switch"><input type="checkbox" id="o-deferred-toggle"><span class="switch-slider"></span></label>
+      </div>
+      <div class="field" id="o-deferred-date-field" style="display:none;">
+        <label>📅 Date d'envoi prévue</label>
+        <input type="date" id="o-deferred-date">
       </div>
       <button class="btn-primary" id="btn-save-order">Enregistrer la commande</button>
     </div>
@@ -1136,6 +1177,7 @@
 <div id="orderDetailModal">
 
   <div class="modal-card order-detail-card">
+    <div id="od-deferred-badge"></div>
     <h3 id="od-name"></h3>
     <div class="od-sub oc-phone-row" id="od-sub"></div>
     <div class="od-sub" id="od-address"></div>
@@ -1186,6 +1228,16 @@
       <label>Articles de la commande</label>
       <div id="eo-items" class="cart-box" style="padding:0;border:none;background:none;"></div>
       <button type="button" class="btn-secondary" id="eo-add-item">+ Ajouter un article</button>
+    </div>
+    <div class="account-row" style="cursor:default;background:var(--cream);border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-bottom:14px;">
+      <span>Commande différée
+        <span class="note" style="margin-top:1px;">À préparer/envoyer plus tard</span>
+      </span>
+      <label class="switch"><input type="checkbox" id="eo-deferred-toggle"><span class="switch-slider"></span></label>
+    </div>
+    <div class="field" id="eo-deferred-date-field" style="display:none;">
+      <label>📅 Date d'envoi prévue</label>
+      <input type="date" id="eo-deferred-date">
     </div>
     <div class="field">
       <label>Total (DA)</label>
@@ -1883,6 +1935,64 @@ function updateStockAlertBadge(){
     badge.style.display = 'none';
   }
 }
+function updateDeferredBadge(){
+  const badge = document.getElementById('deferredAlertBadge');
+  if(!badge) return;
+  const count = orders.filter(isOrderInBadgeWindow).length;
+  if(count > 0){
+    badge.textContent = count > 99 ? '99+' : count;
+    badge.style.display = 'flex';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+async function checkDeferredNotification(){
+  if(!notifPrefEnabled()) return;
+  const due = orders.filter(isOrderInBadgeWindow);
+  if(due.length === 0) return;
+  const today = getTodayIsoDate();
+  let lastNotified = '';
+  try{ lastNotified = localStorage.getItem('lastDeferredNotifyDate') || ''; }catch(e){}
+  if(lastNotified === today) return;
+  try{ localStorage.setItem('lastDeferredNotifyDate', today); }catch(e){}
+  if(!soundMuted) playNotifTone();
+  const title = '📦 Commandes à envoyer';
+  const names = due.slice(0,3).map(o=> (o.customer && o.customer.name) ? o.customer.name : 'Client').join(', ');
+  const body = due.length + ' commande' + (due.length>1?'s':'') + ' différée' + (due.length>1?'s':'') + ' arrive' + (due.length>1?'nt':'') + ' à échéance : ' + names + (due.length>3 ? '…' : '');
+  try{
+    if('serviceWorker' in navigator && navigator.serviceWorker.ready){
+      const reg = await navigator.serviceWorker.ready;
+      reg.showNotification(title, {
+        body, icon:'icon-192.png', badge:'icon-192.png',
+        vibrate:[200,100,200], tag:'deferred-orders'
+      });
+    } else if('Notification' in window){
+      new Notification(title, {body, icon:'icon-192.png'});
+    }
+  }catch(e){}
+}
+function renderDeferredReminders(){
+  const wrap = document.getElementById('deferredRemindersWrap');
+  const list = document.getElementById('deferredRemindersList');
+  if(!wrap || !list) return;
+  // Toutes les commandes dues aujourd'hui ou en retard (pas de limite de 2 jours ici, contrairement au badge)
+  const due = orders.filter(isOrderDueOrLate).sort((a,b)=> a.deferredDate.localeCompare(b.deferredDate));
+  if(due.length === 0){ wrap.style.display = 'none'; list.innerHTML = ''; return; }
+  wrap.style.display = 'block';
+  list.innerHTML = due.map(o=>{
+    const late = daysLate(o.deferredDate);
+    const dLabel = new Date(o.deferredDate+'T00:00:00').toLocaleDateString('fr-FR');
+    const badgeCls = late > 0 ? 'late' : 'today';
+    const badgeTxt = late > 0 ? 'En retard' : 'Aujourd\'hui';
+    return `<div class="dr-row" onclick="showOrderDetail('${o.id}')">
+      <div>
+        <div class="dr-n">${escapeHtml(o.customer.name || 'Client')} — ${Number(o.total).toFixed(2)} DA</div>
+        <div class="dr-d">${escapeHtml(o.customer.wilaya||'')} • prévue le ${dLabel}</div>
+      </div>
+      <div class="dr-badge ${badgeCls}">${badgeTxt}</div>
+    </div>`;
+  }).join('');
+}
 function closeSidebar(){
   document.getElementById('appSidebar').classList.remove('open');
   document.getElementById('sidebarBackdrop').classList.remove('open');
@@ -1891,6 +2001,11 @@ document.getElementById('btn-menu-toggle').addEventListener('click', (e)=>{
   if(e.target.closest('#stockAlertBadge')){
     document.querySelector('.tab-btn[data-tab="liste"]').click();
     setTimeout(()=> openStockFilter('out'), 60);
+    return;
+  }
+  if(e.target.closest('#deferredAlertBadge')){
+    document.querySelector('.tab-btn[data-tab="commandes"]').click();
+    setTimeout(()=> document.getElementById('of-filter-deferred').click(), 60);
     return;
   }
   document.getElementById('appSidebar').classList.toggle('open');
@@ -2414,6 +2529,9 @@ function renderDashboard(){
   renderProfitStats();
   renderTopProducts();
   updateStockAlertBadge();
+  updateDeferredBadge();
+  renderDeferredReminders();
+  checkDeferredNotification();
 }
 document.getElementById('dash-btn-order').addEventListener('click', ()=>{
   document.querySelector('.tab-btn[data-tab="commandes"]').click();
@@ -3442,11 +3560,33 @@ function populateOrderEmployeeFilter(){
   sel.innerHTML = '<option value="">Tous</option>' + names.map(n=>`<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
   if(names.includes(current)) sel.value = current;
 }
+/* ---------- Commandes différées ---------- */
+let ordersFilterDeferredOnly = false;
+function getTodayIsoDate(){
+  const d = new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function daysLate(deferredDate){
+  // >0 si en retard, 0 si aujourd'hui, <0 si dans le futur
+  const today = new Date(getTodayIsoDate()+'T00:00:00');
+  const due = new Date(deferredDate+'T00:00:00');
+  return Math.round((today - due) / 86400000);
+}
+function isOrderDueOrLate(o){
+  return o.deferred && o.deferredDate && daysLate(o.deferredDate) >= 0;
+}
+// La commande compte dans le badge seulement si elle est due aujourd'hui ou en retard de 2 jours max
+function isOrderInBadgeWindow(o){
+  if(!o.deferred || !o.deferredDate) return false;
+  const late = daysLate(o.deferredDate);
+  return late >= 0 && late <= 2;
+}
 function getFilteredOrders(){
   const employee = document.getElementById('of-employee').value;
   const dateFrom = document.getElementById('of-date-from').value;
   const dateTo = document.getElementById('of-date-to').value;
   return orders.filter(o=>{
+    if(ordersFilterDeferredOnly && !o.deferred) return false;
     if(employee && o.createdBy !== employee) return false;
     const orderDate = o.createdAt.slice(0,10);
     if(dateFrom && orderDate < dateFrom) return false;
@@ -3461,6 +3601,21 @@ document.getElementById('of-reset').addEventListener('click', ()=>{
   document.getElementById('of-employee').value = '';
   document.getElementById('of-date-from').value = '';
   document.getElementById('of-date-to').value = '';
+  ordersFilterDeferredOnly = false;
+  document.getElementById('of-filter-all').classList.add('active');
+  document.getElementById('of-filter-deferred').classList.remove('active');
+  renderOrdersHistory();
+});
+document.getElementById('of-filter-all').addEventListener('click', ()=>{
+  ordersFilterDeferredOnly = false;
+  document.getElementById('of-filter-all').classList.add('active');
+  document.getElementById('of-filter-deferred').classList.remove('active');
+  renderOrdersHistory();
+});
+document.getElementById('of-filter-deferred').addEventListener('click', ()=>{
+  ordersFilterDeferredOnly = true;
+  document.getElementById('of-filter-deferred').classList.add('active');
+  document.getElementById('of-filter-all').classList.remove('active');
   renderOrdersHistory();
 });
 
@@ -3474,7 +3629,7 @@ function renderOrdersHistory(){
     summaryEl.innerHTML = '';
     return;
   }
-  const filterActive = document.getElementById('of-employee').value || document.getElementById('of-date-from').value || document.getElementById('of-date-to').value;
+  const filterActive = ordersFilterDeferredOnly || document.getElementById('of-employee').value || document.getElementById('of-date-from').value || document.getElementById('of-date-to').value;
   const filteredTotal = filtered.reduce((sum,o)=> sum + Number(o.total || 0), 0);
   summaryEl.innerHTML = filterActive
     ? `${filtered.length} commande${filtered.length>1?'s':''} correspondante${filtered.length>1?'s':''}
@@ -3492,7 +3647,15 @@ function renderOrdersHistory(){
     const d = new Date(o.createdAt);
     const dateTxt = d.toLocaleDateString('fr-FR') + ' ' + d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
     const dtLabel = o.customer.deliveryType === 'stopdesk' ? 'Stop Desk' : 'Livraison à domicile';
-    return `<div class="order-card" onclick="showOrderDetail('${o.id}')">
+    const deferredBadge = o.deferred && o.deferredDate ? (()=>{
+      const late = daysLate(o.deferredDate);
+      const dLabel = new Date(o.deferredDate+'T00:00:00').toLocaleDateString('fr-FR');
+      const cls = late > 0 ? 'late' : (late === 0 ? 'today' : 'future');
+      const txt = late > 0 ? `En retard · envoi prévu le ${dLabel}` : `🕓 Différée · envoi le ${dLabel}`;
+      return `<div class="deferred-badge ${cls}">${escapeHtml(txt)}</div>`;
+    })() : '';
+    return `<div class="order-card ${o.deferred ? 'deferred' : ''}" onclick="showOrderDetail('${o.id}')">
+      ${deferredBadge}
       <div class="oc-top">
         <div class="oc-name">${escapeHtml(o.customer.name || 'Client')}</div>
         <div class="oc-total">${Number(o.total).toFixed(2)} DA</div>
@@ -3514,6 +3677,16 @@ function showOrderDetail(id){
   if(!o) return;
   currentDetailOrderId = id;
   const dtLabel = o.customer.deliveryType === 'stopdesk' ? 'Stop Desk' : 'Livraison à domicile';
+  const odBadgeEl = document.getElementById('od-deferred-badge');
+  if(o.deferred && o.deferredDate){
+    const late = daysLate(o.deferredDate);
+    const dLabel = new Date(o.deferredDate+'T00:00:00').toLocaleDateString('fr-FR');
+    const cls = late > 0 ? 'late' : (late === 0 ? 'today' : 'future');
+    const txt = late > 0 ? `En retard · envoi prévu le ${dLabel}` : `🕓 Différée · envoi le ${dLabel}`;
+    odBadgeEl.innerHTML = `<div class="deferred-badge ${cls}">${escapeHtml(txt)}</div>`;
+  } else {
+    odBadgeEl.innerHTML = '';
+  }
   document.getElementById('od-name').textContent = o.customer.name || 'Client';
   const odSubTxt = [o.customer.phone, dtLabel, o.customer.wilaya, o.customer.commune].filter(Boolean).join(' • ');
   document.getElementById('od-sub').innerHTML = escapeHtml(odSubTxt) + (o.customer.phone ? phoneActionButtons(o.customer.phone) : '');
@@ -3599,6 +3772,9 @@ function setEoDeliveryType(type){
 document.getElementById('eo-dt-domicile').addEventListener('click', ()=> setEoDeliveryType('domicile'));
 document.getElementById('eo-dt-stopdesk').addEventListener('click', ()=> setEoDeliveryType('stopdesk'));
 document.getElementById('eo-wilaya').addEventListener('change', refreshEoCommuneOptions);
+document.getElementById('eo-deferred-toggle').addEventListener('change', (e)=>{
+  document.getElementById('eo-deferred-date-field').style.display = e.target.checked ? 'block' : 'none';
+});
 
 function openEditOrderModal(id){
   const o = orders.find(x=>x.id===id);
@@ -3609,6 +3785,9 @@ function openEditOrderModal(id){
   document.getElementById('eo-phone').value = o.customer.phone || '';
   document.getElementById('eo-address').value = o.customer.address || '';
   document.getElementById('eo-total').value = Number(o.total).toFixed(2);
+  document.getElementById('eo-deferred-toggle').checked = !!o.deferred;
+  document.getElementById('eo-deferred-date').value = o.deferredDate || '';
+  document.getElementById('eo-deferred-date-field').style.display = o.deferred ? 'block' : 'none';
   populateEoWilayaSelect();
   eoDeliveryType = o.customer.deliveryType === 'stopdesk' ? 'stopdesk' : 'domicile';
   document.getElementById('eo-dt-domicile').classList.toggle('active', eoDeliveryType==='domicile');
@@ -3667,6 +3846,9 @@ document.getElementById('eo-save').addEventListener('click', async ()=>{
   const address = document.getElementById('eo-address').value.trim();
   const total = parseFloat(document.getElementById('eo-total').value) || 0;
   if(!name || !phone){ toast('Le nom et le téléphone sont requis', true); return; }
+  const eoIsDeferred = document.getElementById('eo-deferred-toggle').checked;
+  const eoDeferredDate = document.getElementById('eo-deferred-date').value;
+  if(eoIsDeferred && !eoDeferredDate){ toast('Choisissez la date d\'envoi prévue', true); return; }
 
   await loadProducts();
   // Remet en stock les anciens articles, puis retire les nouveaux
@@ -3696,8 +3878,11 @@ document.getElementById('eo-save').addEventListener('click', async ()=>{
   o.total = total;
   o.costTotal = editingOrderItems.reduce((s,it)=> s + (it.cost||0) * it.qty, 0);
   o.profit = total - o.costTotal;
+  o.deferred = eoIsDeferred;
+  o.deferredDate = eoIsDeferred ? eoDeferredDate : '';
   await saveOrderDoc(o);
   await upsertCustomer(o);
+  updateDeferredBadge();
   document.getElementById('editOrderModal').classList.remove('show');
   editingOrderId = null;
   editingOrderItems = [];
@@ -3741,6 +3926,9 @@ document.getElementById('btn-new-order').addEventListener('click', async ()=>{
   setDeliveryType('domicile');
   document.getElementById('o-address').value = '';
   document.getElementById('o-total').value = '';
+  document.getElementById('o-deferred-toggle').checked = false;
+  document.getElementById('o-deferred-date').value = '';
+  document.getElementById('o-deferred-date-field').style.display = 'none';
   await loadProducts();
   document.getElementById('ordersHome').style.display = 'none';
   document.getElementById('orderBuilder').style.display = 'block';
@@ -3950,6 +4138,9 @@ function renderCart(){
   if(!totalManuallyEdited) document.getElementById('o-total').value = total.toFixed(2);
 }
 
+document.getElementById('o-deferred-toggle').addEventListener('change', (e)=>{
+  document.getElementById('o-deferred-date-field').style.display = e.target.checked ? 'block' : 'none';
+});
 document.getElementById('btn-save-order').addEventListener('click', async ()=>{
   const name = document.getElementById('o-name').value.trim();
   const phone = document.getElementById('o-phone').value.trim();
@@ -3960,6 +4151,9 @@ document.getElementById('btn-save-order').addEventListener('click', async ()=>{
   const keys = Object.keys(cart);
   if(keys.length === 0){ toast('Ajoutez au moins un article à la commande', true); return; }
   if(!name || !phone){ toast('Le nom et le téléphone du client sont requis', true); return; }
+  const isDeferred = document.getElementById('o-deferred-toggle').checked;
+  const deferredDate = document.getElementById('o-deferred-date').value;
+  if(isDeferred && !deferredDate){ toast('Choisissez la date d\'envoi prévue', true); return; }
 
   await loadProducts();
   const items = [];
@@ -3995,11 +4189,14 @@ document.getElementById('btn-save-order').addEventListener('click', async ()=>{
     customer:{name, phone, wilaya, commune, address, deliveryType},
     items, total, costTotal, profit: total - costTotal,
     createdAt: new Date().toISOString(),
-    createdBy: currentUser ? currentUser.name : ''
+    createdBy: currentUser ? currentUser.name : '',
+    deferred: isDeferred,
+    deferredDate: isDeferred ? deferredDate : ''
   };
   orders.push(newOrder);
   await saveOrderDoc(newOrder);
   await upsertCustomer(newOrder);
+  updateDeferredBadge();
 
   cart = {};
   totalManuallyEdited = false;
