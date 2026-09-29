@@ -49,8 +49,8 @@
     -webkit-tap-highlight-color:transparent;
   }
   .press-fx{
-    box-shadow:inset 0 0 0 999px rgba(255,255,255,0.45) !important;
-    transition:box-shadow 0.05s ease;
+    box-shadow:inset 0 0 0 999px rgba(107,65,82,0.32) !important;
+    transition:box-shadow 0.08s ease;
   }
   body{
     margin:0;
@@ -1787,16 +1787,29 @@ document.addEventListener('click', (e)=>{
 }, true);
 /* Retour visuel de pression: un seul élément à la fois (le plus proche touché), jamais ses parents */
 let pressFxEl = null;
-function clearPressFx(){
+let pressFxTimer = null;
+const PRESS_FX_MIN_MS = 130; // durée minimale d'affichage pour que ça reste visible même sur un tap rapide
+function clearPressFxNow(){
+  clearTimeout(pressFxTimer);
   if(pressFxEl){ pressFxEl.classList.remove('press-fx'); pressFxEl = null; }
 }
-document.addEventListener('pointerdown', (e)=>{
-  const el = e.target.closest(INTERACTIVE_SELECTOR);
-  clearPressFx();
+function releasePressFx(){
+  clearTimeout(pressFxTimer);
+  pressFxTimer = setTimeout(clearPressFxNow, PRESS_FX_MIN_MS);
+}
+function startPressFx(target){
+  const el = target.closest(INTERACTIVE_SELECTOR);
+  clearPressFxNow();
   if(el){ el.classList.add('press-fx'); pressFxEl = el; }
-}, true);
-['pointerup','pointercancel'].forEach(evt=> document.addEventListener(evt, clearPressFx, true));
-window.addEventListener('blur', clearPressFx);
+}
+document.addEventListener('pointerdown', (e)=> startPressFx(e.target), true);
+['pointerup','pointercancel'].forEach(evt=> document.addEventListener(evt, releasePressFx, true));
+window.addEventListener('blur', clearPressFxNow);
+// Repli pour les navigateurs/webviews sans support fiable des Pointer Events
+document.addEventListener('touchstart', (e)=> startPressFx(e.target), {capture:true, passive:true});
+['touchend','touchcancel'].forEach(evt=> document.addEventListener(evt, releasePressFx, {capture:true, passive:true}));
+document.addEventListener('mousedown', (e)=> startPressFx(e.target), true);
+document.addEventListener('mouseup', releasePressFx, true);
 document.getElementById('btn-sound-toggle').addEventListener('click', ()=>{
   soundMuted = !soundMuted;
   try{ localStorage.setItem('clickSoundMuted', soundMuted ? 'on' : 'off'); }catch(e){}
