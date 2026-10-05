@@ -117,6 +117,8 @@
       const d = await gql(`query P($after:String){
         products(first:50, after:$after){ pageInfo{ hasNextPage endCursor }
           nodes{ id title status productType tags handle
+            cover: metafield(namespace:"atelier", key:"cover"){ value }
+            coverMedia: metafield(namespace:"atelier", key:"cover_media"){ value }
             options{ name }
             media(first:50){ nodes{ id } }
             variants(first:100){ nodes{ id sku price title inventoryQuantity inventoryItem{ id tracked } media(first:5){ nodes{ id } } } } } }
@@ -257,6 +259,16 @@
         continue;
       }
 
+      // Photo de vitrine (couverture) des produits avec couleurs
+      if(cols.length && !isDefault && p.img){
+        const want = hashStr(p.img);
+        const have = sp.cover && sp.cover.value;
+        if(want !== have){
+          log('🖼️ Photo de vitrine : ' + p.name);
+          await setCover(sp.id, p, want, sp.coverMedia && sp.coverMedia.value);
+          stats.photos++;
+        }
+      }
       const priceUpdates = [];
       const newVariants = [];
       const existingNames = new Set(spVariants.map(v=>v.title));
@@ -341,10 +353,35 @@
     return stats;
   }
 
+  async function saveCoverMeta(productId, hash, mediaId){
+    const metafields = [{namespace:'atelier', key:'cover', type:'single_line_text_field', value:String(hash)}];
+    if(mediaId) metafields.push({namespace:'atelier', key:'cover_media', type:'single_line_text_field', value:String(mediaId)});
+    userErr(await gql(`mutation PU($product:ProductUpdateInput!){ productUpdate(product:$product){ userErrors{ field message } } }`, {product:{id:productId, metafields}}));
+  }
+  async function setCover(productId, p, hash, oldMediaId){
+    const src = await uploadImage(p.img, 'cover'+p.code);
+    if(!src) return;
+    const res = userErr(await gql(`mutation PM($productId:ID!,$media:[CreateMediaInput!]!){ productCreateMedia(productId:$productId, media:$media){ media{ id } mediaUserErrors{ field message } } }`,
+      {productId, media:[{originalSource:src, mediaContentType:'IMAGE', alt:p.name}]}));
+    const newId = res.productCreateMedia.media[0] && res.productCreateMedia.media[0].id;
+    if(newId){
+      // mettre la photo en premier (si le relais l'autorise)
+      try{ await gql(`mutation R($id:ID!,$moves:[MoveInput!]!){ productReorderMedia(id:$id, moves:$moves){ mediaUserErrors{ field message } } }`, {id:productId, moves:[{id:newId, newPosition:'0'}]}); }catch(e){}
+    }
+    if(oldMediaId && oldMediaId !== newId){
+      try{ await gql(`mutation DM($productId:ID!,$mediaIds:[ID!]!){ productDeleteMedia(productId:$productId, mediaIds:$mediaIds){ deletedMediaIds mediaUserErrors{ field message } } }`, {productId, mediaIds:[oldMediaId]}); }catch(e){}
+    }
+    await saveCoverMeta(productId, hash, newId);
+  }
   async function createProduct(p, shop, imgHash, existingId){
     const cols = colorsOf(p);
     const info = CAT_INFO[p.cat] || ['produit',''];
     const files = []; const variants = [];
+    let coverHash = null;
+    if(cols.length && p.img){
+      const csrc = await uploadImage(p.img, 'cover'+p.code);
+      if(csrc){ files.push({originalSource:csrc, contentType:'IMAGE', alt:p.name}); coverHash = hashStr(p.img); }
+    }
     if(cols.length){
       const names = cols.map((c,i)=> 'لون ' + (i+1));
       for(let i=0;i<cols.length;i++){
@@ -381,9 +418,13 @@
       input.handle = info[0] + '-' + (num || p.code) + (num ? '-' + String(p.code).slice(-4) : '');
       input.descriptionHtml = (info[1] ? '<p>'+info[1]+'</p>' : '') + DELIVERY;
     }
-    const res = userErr(await gql(`mutation PS($input:ProductSetInput!,$identifier:ProductSetIdentifiers){ productSet(input:$input, identifier:$identifier, synchronous:true){ product{ id } userErrors{ field message } } }`,
+    const res = userErr(await gql(`mutation PS($input:ProductSetInput!,$identifier:ProductSetIdentifiers){ productSet(input:$input, identifier:$identifier, synchronous:true){ product{ id media(first:1){ nodes{ id } } } userErrors{ field message } } }`,
       {input, identifier: existingId ? {id: existingId} : null}));
     const id = res.productSet.product && res.productSet.product.id;
+    if(id && coverHash){
+      const m = res.productSet.product.media && res.productSet.product.media.nodes[0];
+      try{ await saveCoverMeta(id, coverHash, m && m.id); }catch(e){}
+    }
     if(id && !existingId && shop.onlineStore){
       userErr(await gql(`mutation PP($id:ID!,$input:[PublicationInput!]!){ publishablePublish(id:$id, input:$input){ userErrors{ field message } } }`,
         {id, input:[{publicationId: shop.onlineStore}]}));
@@ -503,7 +544,7 @@
     logEl.style.display = ''; logEl.textContent = '';
     const log = (s)=>{ logEl.textContent += s + '\n'; logEl.scrollTop = logEl.scrollHeight; };
     try{
-      log('v3 · 1/2 · Commandes du site → stock...');
+      log('v4 · 1/2 · Commandes du site → stock...');
       const n = await pullOrders(true);
       log(n ? '   ' + n + ' article(s) mis à jour' : '   aucune nouvelle commande');
       await new Promise(r=>setTimeout(r, 800)); // laisse le stock local se rafraîchir
