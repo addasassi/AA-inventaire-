@@ -46,7 +46,7 @@
     let j; try{ j = JSON.parse(txt); }catch(e){ throw new Error('Relais: réponse invalide ('+r.status+')'); }
     if(r.status === 401) throw new Error('Clé du relais incorrecte');
     if(j.error) throw new Error(j.error);
-    if(j.errors) throw new Error(j.errors.map(e=>e.message).join(' | '));
+    if(j.errors){ const op=(String(query).match(/\{\s*(\w+)/)||[])[1]||''; throw new Error((op?op+' : ':'')+j.errors.map(e=>e.message).join(' | ')); }
     return j.data;
   }
   function userErr(res){
@@ -503,7 +503,7 @@
     logEl.style.display = ''; logEl.textContent = '';
     const log = (s)=>{ logEl.textContent += s + '\n'; logEl.scrollTop = logEl.scrollHeight; };
     try{
-      log('1/2 · Commandes du site → stock...');
+      log('v3 · 1/2 · Commandes du site → stock...');
       const n = await pullOrders(true);
       log(n ? '   ' + n + ' article(s) mis à jour' : '   aucune nouvelle commande');
       await new Promise(r=>setTimeout(r, 800)); // laisse le stock local se rafraîchir
