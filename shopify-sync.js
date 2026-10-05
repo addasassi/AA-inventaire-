@@ -263,7 +263,7 @@
         if(hit && hit.product.id === sp.id){
           const v = hit.variant;
           if(money(v.price) !== u.price) priceUpdates.push({id:v.id, price:u.price});
-          if((v.inventoryQuantity||0) !== u.qty) qtyUpdates.push({inventoryItemId:v.inventoryItem.id, locationId:shop.locationId, quantity:u.qty, changeFromQuantity:null});
+          if((v.inventoryQuantity||0) !== u.qty) qtyUpdates.push({productId:sp.id, variantId:v.id, delta:u.qty-(v.inventoryQuantity||0)});
           // Photo modifiée ?
           const h = hashStr(u.img);
           if(firstRun || !imgHash[u.code]){ imgHash[u.code] = h; }
@@ -306,17 +306,19 @@
       // Couleurs supprimées dans Atelier → stock 0 sur Shopify
       spVariants.forEach(v=>{
         if(v.sku && !codes.includes(String(v.sku)) && !(isDefault && cols.length) && (v.inventoryQuantity||0) !== 0){
-          qtyUpdates.push({inventoryItemId:v.inventoryItem.id, locationId:shop.locationId, quantity:0, changeFromQuantity:null});
+          qtyUpdates.push({productId:sp.id, variantId:v.id, delta:-(v.inventoryQuantity||0)});
         }
       });
     }
 
-    // Quantités (par lots de 100)
-    for(let i=0;i<qtyUpdates.length;i+=100){
-      const chunk = qtyUpdates.slice(i, i+100);
-      userErr(await gql(`mutation S($input:InventorySetQuantitiesInput!){ inventorySetQuantities(input:$input){ userErrors{ field message code } } }`,
-        {input:{name:'available', reason:'correction', referenceDocumentUri:'gid://atelier-stock/Sync/'+Date.now(), quantities:chunk}}));
-      stats.qty += chunk.length;
+    // Quantités (ajustements par produit)
+    const byProduct = {};
+    qtyUpdates.forEach(q=>{ (byProduct[q.productId] = byProduct[q.productId] || []).push(q); });
+    for(const pid of Object.keys(byProduct)){
+      const variants = byProduct[pid].map(q=>({id:q.variantId, quantityAdjustments:[{locationId:shop.locationId, adjustment:q.delta}]}));
+      userErr(await gql(`mutation U($productId:ID!,$variants:[ProductVariantsBulkInput!]!){ productVariantsBulkUpdate(productId:$productId, variants:$variants){ userErrors{ field message } } }`,
+        {productId: pid, variants}));
+      stats.qty += variants.length;
     }
 
     // Produits supprimés dans Atelier → masqués (brouillon) sur Shopify
