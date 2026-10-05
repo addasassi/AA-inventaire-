@@ -475,7 +475,7 @@
     }
     const meta = await getMeta();
     const f = (iso)=> iso ? new Date(iso).toLocaleString('fr-FR',{dateStyle:'short',timeStyle:'short'}) : '—';
-    el.textContent = 'Dernière synchro : ' + f(meta.lastPush) + ' · Commandes du site vérifiées : ' + f(meta.lastOrdersPull);
+    el.textContent = 'Dernière synchro : ' + f(meta.lastPush) + ' · Commandes du site vérifiées : ' + f(meta.lastOrdersPull || meta.since);
   }
   function openModal(){
     if(!isAdmin()){ toast('Réservé à l\'admin', true); return; }
@@ -505,11 +505,11 @@
       await new Promise(r=>setTimeout(r, 800)); // laisse le stock local se rafraîchir
       log('2/2 · Atelier Stock → Shopify...');
       const s = await pushAll(log);
-      log('✅ Terminé : ' + [
+      log('✅ Terminé : ' + ([
         s.qty && (s.qty + ' quantité(s)'), s.price && (s.price + ' prix'), s.created && (s.created + ' nouveau(x) produit(s)'),
         s.newColors && (s.newColors + ' couleur(s)'), s.photos && (s.photos + ' photo(s)'), s.titles && (s.titles + ' nom(s)/catégorie(s)'),
         s.drafted && (s.drafted + ' retiré(s)')
-      ].filter(Boolean).join(', ') || 'tout était déjà à jour');
+      ].filter(Boolean).join(', ') || 'tout était déjà à jour'));
       toast('✅ Shopify synchronisé');
     }catch(e){
       log('❌ Erreur : ' + (e.message || e));
