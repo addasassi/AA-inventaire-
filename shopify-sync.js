@@ -65,6 +65,10 @@
     for(let i=0;i<s.length;i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
     return (h>>>0).toString(36) + s.length.toString(36);
   }
+  function uuid(){
+    try{ if(crypto.randomUUID) return crypto.randomUUID(); }catch(e){}
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c=>{ const r=Math.random()*16|0; return (c==='x'?r:(r&3|8)).toString(16); });
+  }
   function money(v){ const n = Number(v); return isFinite(n) ? String(Math.round(n)) : '0'; }
   function int(v){ const n = parseInt(v,10); return isFinite(n) && n > 0 ? n : 0; }
   function colorsOf(p){ return Array.isArray(p.colors) ? p.colors.filter(c=>c && c.code) : []; }
@@ -263,7 +267,7 @@
         if(hit && hit.product.id === sp.id){
           const v = hit.variant;
           if(money(v.price) !== u.price) priceUpdates.push({id:v.id, price:u.price});
-          if((v.inventoryQuantity||0) !== u.qty) qtyUpdates.push({productId:sp.id, variantId:v.id, delta:u.qty-(v.inventoryQuantity||0)});
+          if((v.inventoryQuantity||0) !== u.qty) qtyUpdates.push({inventoryItemId:v.inventoryItem.id, locationId:shop.locationId, quantity:u.qty, changeFromQuantity:null});
           // Photo modifiée ?
           const h = hashStr(u.img);
           if(firstRun || !imgHash[u.code]){ imgHash[u.code] = h; }
@@ -306,19 +310,17 @@
       // Couleurs supprimées dans Atelier → stock 0 sur Shopify
       spVariants.forEach(v=>{
         if(v.sku && !codes.includes(String(v.sku)) && !(isDefault && cols.length) && (v.inventoryQuantity||0) !== 0){
-          qtyUpdates.push({productId:sp.id, variantId:v.id, delta:-(v.inventoryQuantity||0)});
+          qtyUpdates.push({inventoryItemId:v.inventoryItem.id, locationId:shop.locationId, quantity:0, changeFromQuantity:null});
         }
       });
     }
 
-    // Quantités (ajustements par produit)
-    const byProduct = {};
-    qtyUpdates.forEach(q=>{ (byProduct[q.productId] = byProduct[q.productId] || []).push(q); });
-    for(const pid of Object.keys(byProduct)){
-      const variants = byProduct[pid].map(q=>({id:q.variantId, quantityAdjustments:[{locationId:shop.locationId, adjustment:q.delta}]}));
-      userErr(await gql(`mutation U($productId:ID!,$variants:[ProductVariantsBulkInput!]!){ productVariantsBulkUpdate(productId:$productId, variants:$variants){ userErrors{ field message } } }`,
-        {productId: pid, variants}));
-      stats.qty += variants.length;
+    // Quantités (par lots de 100)
+    for(let i=0;i<qtyUpdates.length;i+=100){
+      const chunk = qtyUpdates.slice(i, i+100);
+      userErr(await gql(`mutation S($input:InventorySetQuantitiesInput!,$key:String!){ inventorySetQuantities(input:$input) @idempotent(key:$key){ userErrors{ field message code } } }`,
+        {key: uuid(), input:{name:'available', reason:'correction', referenceDocumentUri:'gid://atelier-stock/Sync/'+Date.now(), quantities:chunk}}));
+      stats.qty += chunk.length;
     }
 
     // Produits supprimés dans Atelier → masqués (brouillon) sur Shopify
