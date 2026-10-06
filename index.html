@@ -3708,10 +3708,13 @@ document.getElementById('btn-download-cat-photos').addEventListener('click', asy
 document.getElementById('btn-download-color-photos').addEventListener('click', async ()=>{
   const p = products.find(x=>x.id===currentColorsProductId);
   if(!p) return;
-  const images = (p.colors||[]).filter(c=>c.img).map((c, i)=> ({
-    name: 'couleur-'+slugForFilename(p.name)+'-'+(c.code || (i+1))+'.jpg',
-    dataUrl: c.img
-  }));
+  // seulement les photos en stock (> 0), y compris la photo du produit (vitrine)
+  const images = [], seen = new Set();
+  if(p.img && (Number(p.qty)||0) > 0){ seen.add(p.img); images.push({name: 'produit-'+slugForFilename(p.name)+'-'+(p.code||'0')+'.jpg', dataUrl: p.img}); }
+  (p.colors||[]).forEach((c, i)=>{
+    if(c.img && (Number(c.qty)||0) > 0 && !seen.has(c.img)){ seen.add(c.img); images.push({name: 'couleur-'+slugForFilename(p.name)+'-'+(c.code || (i+1))+'.jpg', dataUrl: c.img}); }
+  });
+  if(!images.length){ toast('Aucune photo en stock pour ce produit', true); return; }
   await downloadImagesAsZip(images);
 });
 
