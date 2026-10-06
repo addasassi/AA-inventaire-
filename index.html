@@ -3562,14 +3562,14 @@ document.getElementById('btn-print-color-barcodes').addEventListener('click', as
   printLabelsBatch(items);
 });
 /* ---------- 📤 Envoyer les photos disponibles (avec le prix) ---------- */
-const SHARE_BATCH = 30;
+const SHARE_BATCH = 10; // Chrome accepte au maximum 10 fichiers par partage
 let shareQueue = [];
 function loadImg(src){
   return new Promise((res, rej)=>{ const im = new Image(); im.onload = ()=>res(im); im.onerror = rej; im.src = src; });
 }
 async function priceImageFile(src, price, name){
   const im = await loadImg(src);
-  const max = 1280, k = Math.min(1, max / Math.max(im.width, im.height));
+  const max = 1080, k = Math.min(1, max / Math.max(im.width, im.height));
   const w = Math.round(im.width * k), h = Math.round(im.height * k);
   const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
   const g = cv.getContext('2d');
@@ -3625,7 +3625,7 @@ async function shareBatch(){
     shareStarted = true;
   }catch(e){
     shareQueue = batch.concat(shareQueue);
-    if(!(e && (e.name === 'AbortError' || e.name === 'NotAllowedError'))) toast('Partage impossible : ' + (e && e.message || e), true);
+    if(!(e && e.name === 'AbortError')) toast('Partage impossible : ' + (e && (e.name + ' ' + e.message) || e), true);
   }
   showShareNext();
 }
