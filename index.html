@@ -133,6 +133,7 @@
   }
   .contact-fab-menu .cfm-item:last-child{border-bottom:none;}
   .stock-alert-badge{
+    pointer-events:none;
     position:absolute;top:-4px;right:-4px;background:var(--danger);color:#fff;
     font-size:10.5px;font-weight:800;min-width:17px;height:17px;border-radius:20px;
     display:flex;align-items:center;justify-content:center;padding:0 4px;
@@ -550,6 +551,12 @@
 #ruptureBanner .rb-ico{font-size:28px;line-height:1;}
 #ruptureBanner .rb-txt{display:flex;flex-direction:column;gap:2px;font-size:14px;}
 #ruptureBanner .rb-txt b{font-size:15px;}
+
+.out-shortcut{display:flex;align-items:center;gap:10px;background:#fffdfb;border:1.5px solid #e3c9c2;border-radius:14px;padding:13px 16px;margin:0 0 14px;cursor:pointer;font-weight:600;color:#6b4152;}
+.out-shortcut.has{border-color:#b3261e;background:#fdeceb;color:#b3261e;}
+.out-shortcut .os-txt{flex:1;}
+.out-shortcut .os-count{background:#b3261e;color:#fff;border-radius:999px;min-width:28px;padding:2px 9px;text-align:center;font-size:14px;}
+.out-shortcut:not(.has) .os-count{background:#c9b3b0;}
 </style>
 </head>
 <body>
@@ -2144,11 +2151,6 @@ function closeSidebar(){
   document.getElementById('sidebarBackdrop').classList.remove('open');
 }
 document.getElementById('btn-menu-toggle').addEventListener('click', (e)=>{
-  if(e.target.closest('#stockAlertBadge')){
-    document.querySelector('.tab-btn[data-tab="liste"]').click();
-    setTimeout(()=> openStockFilter('out'), 60);
-    return;
-  }
   if(e.target.closest('#deferredAlertBadge')){
     document.querySelector('.tab-btn[data-tab="commandes"]').click();
     setTimeout(()=> document.getElementById('of-filter-deferred').click(), 60);
@@ -2488,7 +2490,13 @@ function showCatFolders(){
 function renderCatFolders(){
   const wrap = document.getElementById('catFolders');
   const isAdmin = currentUser && currentUser.role === 'admin';
-  wrap.innerHTML = '<div class="folder-grid">' + CATS.map(cat=>{
+  const outTotal = countOutItems();
+  const outBar = `<div class="out-shortcut ${outTotal>0?'has':''}" onclick="openStockFilter('out')">
+      <span class="os-ico">⚠️</span>
+      <span class="os-txt">Rupture de stock</span>
+      <span class="os-count">${outTotal}</span>
+    </div>`;
+  wrap.innerHTML = outBar + '<div class="folder-grid">' + CATS.map(cat=>{
     const items = products.filter(p=>p.cat===cat);
     const thumb = catThumb(cat) || catEmojiBg();
     return `<div class="cat-folder ${items.length===0?'empty-cat':''}" onclick="openCategory('${cat}')">
