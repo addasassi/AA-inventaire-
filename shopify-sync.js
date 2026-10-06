@@ -13,6 +13,7 @@
   const OPTION = 'اللون';
   const SIZE_OPT = 'المقاس';
   const SIZES = ['S','M','L','XL'];
+  const MAIN_NAME = 'كيما في الصورة'; // la pièce de la photo de vitrine = une couleur au choix
   const VENDOR = 'A&A';
   const CAT_INFO = {
     'فوندغوب':['fond-de-robe','فوند غوب ناعم ومريح، قماش خفيف يبان شباب عليك.'],
@@ -77,15 +78,9 @@
   function colorPrice(p, c){ return (c.price != null && c.price !== '') ? c.price : p.price; }
   function codesOf(p){
     const cols = colorsOf(p);
-    return cols.length ? cols.map(c=>String(c.code)) : (p.code ? [String(p.code)] : []);
-  }
-  // couleur affichée sur la photo de vitrine : choisie (⭐) ou même photo que la couleur
-  function vitrineCode(p){
-    const cols = colorsOf(p);
-    if(!cols.length || !p.img) return '';
-    if(p.vitrine && cols.some(c=> String(c.code) === String(p.vitrine))) return String(p.vitrine);
-    const same = cols.find(c=> c.img && c.img === p.img);
-    return same ? String(same.code) : '';
+    const out = cols.map(c=>String(c.code));
+    if(p.code && !out.includes(String(p.code))) out.unshift(String(p.code));
+    return out;
   }
   function mimeOf(dataUrl){ const m = String(dataUrl||'').match(/^data:([^;]+);base64,/); return m ? m[1] : null; }
 
@@ -129,7 +124,6 @@
           nodes{ id title status productType tags handle
             cover: metafield(namespace:"atelier", key:"cover"){ value }
             coverMedia: metafield(namespace:"atelier", key:"cover_media"){ value }
-            vitrine: metafield(namespace:"atelier", key:"vitrine"){ value }
             options{ name optionValues{ name } }
             media(first:50){ nodes{ id } }
             variants(first:250){ nodes{ id sku price title inventoryQuantity selectedOptions{ name value } inventoryItem{ id tracked } media(first:5){ nodes{ id } } } } } }
@@ -205,7 +199,7 @@
           const dl = delta[String(c.code)];
           if(dl){ c.qty = Math.max(0, (Number(c.qty)||0) + dl); changed = true; log.push((doc.name||'')+' '+(dl>0?'+':'')+dl); }
         });
-        if(!cols.length && doc.code && delta[String(doc.code)]){
+        if(doc.code && delta[String(doc.code)] && !cols.some(c=> String(c.code) === String(doc.code))){
           const dl = delta[String(doc.code)];
           doc.qty = Math.max(0, (Number(doc.qty)||0) + dl); changed = true; log.push((doc.name||'')+' '+(dl>0?'+':'')+dl);
         }
@@ -291,18 +285,18 @@
           stats.photos++;
         }
       }
-      // La photo de vitrine = une couleur qu'on peut choisir
-      const vCode = (!isDefault && cols.length) ? vitrineCode(p) : '';
-      if(!isDefault && cols.length){
-        try{ if(await syncVitrine(sp, p, shop, coverId, oldCoverId, coverChanged, vCode)){ log('⭐ Vitrine liée à sa couleur : ' + p.name); stats.photos++; } }
-        catch(e){ log('⚠️ Vitrine ' + p.name + ' : ' + (e.message||e)); }
-      }
+      const mainFill = [];
+      let mainCreated = false;
       const priceUpdates = [];
       const newVariants = [];
       const colorOf = (v)=>{ const o = (v.selectedOptions||[]).find(x=>x.name===OPTION); return o ? o.value : v.title; };
       const existingNames = new Set(spVariants.map(colorOf));
       const units = cols.length ? cols.map((c,i)=>({code:String(c.code), qty:int(c.qty), price:money(colorPrice(p,c)), img:c.img, idx:i}))
                                 : [{code:String(p.code), qty:int(p.qty), price:money(p.price), img:p.img, idx:-1}];
+      // la pièce de la photo de vitrine devient une couleur (son stock = quantité du produit)
+      if(cols.length && !isDefault && p.code && !cols.some(c=> String(c.code) === String(p.code))){
+        units.unshift({code:String(p.code), qty:int(p.qty), price:money(p.price), img:p.img, idx:-2, main:true});
+      }
       for(const u of units){
         const hit = shop.bySku[u.code];
         if(hit && hit.product.id === sp.id){
@@ -312,26 +306,38 @@
             if(money(x.price) !== u.price) priceUpdates.push({id:x.id, price:u.price});
             if((x.inventoryQuantity||0) !== u.qty) qtyUpdates.push({inventoryItemId:x.inventoryItem.id, locationId:shop.locationId, quantity:u.qty, changeFromQuantity:null});
           });
+          if(u.main){
+            // ses tailles montrent la photo de vitrine
+            if(coverId) vs.forEach(x=>{
+              const ids = x.media.nodes.map(m=>m.id);
+              if(!ids.includes(coverId) && (!ids.length || (coverChanged && ids.every(id=> id === oldCoverId)))) mainFill.push({variantId:x.id, mediaIds:[coverId]});
+            });
+            continue;
+          }
           // toutes les tailles d'une couleur gardent la photo de la couleur
-          if(!isDefault && u.code !== vCode){
+          if(!isDefault){
             const withMedia = vs.find(x=> x.media.nodes.length);
             if(withMedia) vs.forEach(x=>{ if(!x.media.nodes.length) mediaFill.push({variantId:x.id, mediaIds:[withMedia.media.nodes[0].id]}); });
           }
           // Photo modifiée ?
           const h = hashStr(u.img);
           if(firstRun || !imgHash[u.code]){ imgHash[u.code] = h; }
-          else if(u.img && imgHash[u.code] !== h && u.code === vCode){ imgHash[u.code] = h; }
           else if(u.img && imgHash[u.code] !== h){
             log('📷 Photo : ' + p.name + (u.idx>=0 ? ' #'+(u.idx+1) : ''));
             await replacePhoto(sp, vs, u, isDefault);
             imgHash[u.code] = h; stats.photos++;
           }
+        } else if(!hit && u.main){
+          newVariants.push({u, name: MAIN_NAME});
         } else if(!hit){
           let name = 'لون ' + (u.idx+1); let k = u.idx+1;
           while(existingNames.has(name)){ k++; name = 'لون ' + k; }
           existingNames.add(name);
           newVariants.push({u, name});
         }
+      }
+      if(mainFill.length){
+        try{ await appendRetry(sp.id, mainFill); }catch(e){ log('⚠️ Photo vitrine (couleur) : ' + (e.message||e)); }
       }
       if(mediaFill.length){
         try{ userErr(await gql(`mutation VM($productId:ID!,$variantMedia:[ProductVariantAppendMediaInput!]!){ productVariantAppendMedia(productId:$productId, variantMedia:$variantMedia){ userErrors{ field message } } }`,
@@ -346,8 +352,12 @@
         log('🎨 Nouvelle couleur : ' + p.name + ' (' + newVariants.length + ')');
         const variants = [], media = [];
         for(const nv of newVariants){
-          const src = nv.u.img ? await uploadImage(nv.u.img, 'c'+nv.u.code) : null;
-          if(src) media.push({originalSource:src, mediaContentType:'IMAGE', alt: p.name + ' - ' + nv.name});
+          let src = null, mediaId = null;
+          if(nv.u.main){ mediaId = coverId || null; mainCreated = true; }
+          else{
+            src = nv.u.img ? await uploadImage(nv.u.img, 'c'+nv.u.code) : null;
+            if(src) media.push({originalSource:src, mediaContentType:'IMAGE', alt: p.name + ' - ' + nv.name});
+          }
           (hasSizes ? SIZES : [null]).forEach(sz=>{
             const optionValues = [{optionName: OPTION, name: nv.name}];
             if(sz) optionValues.push({optionName: SIZE_OPT, name: sz});
@@ -357,6 +367,7 @@
               inventoryQuantities:[{locationId: shop.locationId, availableQuantity: nv.u.qty}]
             };
             if(src) item.mediaSrc = [src];
+            if(mediaId) item.mediaId = mediaId;
             variants.push(item);
           });
           imgHash[nv.u.code] = hashStr(nv.u.img);
@@ -364,6 +375,13 @@
         userErr(await gql(`mutation C($productId:ID!,$variants:[ProductVariantsBulkInput!]!,$media:[CreateMediaInput!]){ productVariantsBulkCreate(productId:$productId, variants:$variants, media:$media){ productVariants{ id } userErrors{ field message } } }`,
           {productId: sp.id, variants, media: media.length ? media : null}));
         stats.newColors += newVariants.length;
+        // « كيما في الصورة » en premier dans les couleurs
+        if(mainCreated){
+          const o = (sp.options||[]).find(x=> x.name === OPTION);
+          const names = [MAIN_NAME, ...((o && o.optionValues) || []).map(x=>x.name).filter(n=> n !== MAIN_NAME)];
+          const options = (sp.options||[]).map(x=> x.name === OPTION ? {name:OPTION, values:names.map(n=>({name:n}))} : {name:x.name, values:(x.optionValues||[]).map(v=>({name:v.name}))});
+          try{ await gql(`mutation OR($productId:ID!,$options:[OptionReorderInput!]!){ productOptionsReorder(productId:$productId, options:$options){ userErrors{ field message } } }`, {productId: sp.id, options}); }catch(e){}
+        }
       }
       // Couleurs supprimées dans Atelier → stock 0 sur Shopify
       spVariants.forEach(v=>{
@@ -420,99 +438,41 @@
     await saveCoverMeta(productId, hash, newId);
     return newId;
   }
-  const Q_APPEND = `mutation VM($productId:ID!,$variantMedia:[ProductVariantAppendMediaInput!]!){ productVariantAppendMedia(productId:$productId, variantMedia:$variantMedia){ userErrors{ field message } } }`;
-  const Q_DELETE = `mutation DM($productId:ID!,$mediaIds:[ID!]!){ productDeleteMedia(productId:$productId, mediaIds:$mediaIds){ deletedMediaIds mediaUserErrors{ field message } } }`;
   async function appendRetry(productId, variantMedia){
     for(let i=0;i<8;i++){
-      try{ userErr(await gql(Q_APPEND, {productId, variantMedia})); return; }
+      try{ userErr(await gql(`mutation VM($productId:ID!,$variantMedia:[ProductVariantAppendMediaInput!]!){ productVariantAppendMedia(productId:$productId, variantMedia:$variantMedia){ userErrors{ field message } } }`, {productId, variantMedia})); return; }
       catch(e){ if(i===7) throw e; await new Promise(r=>setTimeout(r, 2000)); }
     }
-  }
-  async function syncVitrine(sp, p, shop, coverId, oldCoverId, coverChanged, V){
-    const had = (sp.vitrine && sp.vitrine.value && sp.vitrine.value !== '-') ? sp.vitrine.value : '';
-    const own = (code)=>{ const h = shop.bySku[code]; return (h && h.product.id === sp.id) ? h.variants : []; };
-    const vVars = V ? own(V) : [];
-    if(V && (!coverId || !vVars.length)) return false;
-    const isCover = (m)=> m.id === coverId || m.id === oldCoverId;
-    let changed = false;
-    // 1) ancienne couleur de vitrine → reprend sa propre photo
-    if(had && had !== V){
-      const oVars = own(had);
-      const att = oVars.filter(v=> !v.media.nodes.length || v.media.nodes.some(isCover));
-      const det = coverChanged ? [] : att.filter(v=> v.media.nodes.some(m=> m.id === coverId));
-      if(det.length){
-        userErr(await gql(`mutation D($productId:ID!,$variantMedia:[ProductVariantDetachMediaInput!]!){ productVariantDetachMedia(productId:$productId, variantMedia:$variantMedia){ userErrors{ field message } } }`,
-          {productId: sp.id, variantMedia: det.map(v=>({variantId:v.id, mediaIds:[coverId]}))}));
-      }
-      const oc = colorsOf(p).find(c=> String(c.code) === had);
-      if(att.length && oc && oc.img){
-        const src = await uploadImage(oc.img, 'c'+oc.code);
-        if(src){
-          const res = userErr(await gql(`mutation PM($productId:ID!,$media:[CreateMediaInput!]!){ productCreateMedia(productId:$productId, media:$media){ media{ id } mediaUserErrors{ field message } } }`,
-            {productId: sp.id, media:[{originalSource:src, mediaContentType:'IMAGE', alt: sp.title}]}));
-          const mid = res.productCreateMedia.media[0] && res.productCreateMedia.media[0].id;
-          if(mid) await appendRetry(sp.id, att.map(v=>({variantId:v.id, mediaIds:[mid]})));
-        }
-      }
-      changed = true;
-    }
-    // 2) la couleur de vitrine prend la photo de vitrine
-    if(V){
-      const need = vVars.filter(v=> !v.media.nodes.some(m=> m.id === coverId));
-      if(need.length){
-        const vIds = new Set(vVars.map(v=>v.id));
-        const others = new Set();
-        sp.variants.nodes.forEach(v=>{ if(!vIds.has(v.id)) v.media.nodes.forEach(m=> others.add(m.id)); });
-        const old = [...new Set(need.flatMap(v=> v.media.nodes.map(m=>m.id)))].filter(id=> id !== coverId && id !== oldCoverId && !others.has(id));
-        if(old.length){ try{ await gql(Q_DELETE, {productId: sp.id, mediaIds: old}); }catch(e){} }
-        // si une photo reste liée (utilisée par une autre couleur), on la détache
-        const left = (v)=> v.media.nodes.map(m=>m.id).filter(id=> !old.includes(id) && id !== coverId && !(coverChanged && id === oldCoverId));
-        const keep = need.filter(v=> left(v).length);
-        if(keep.length){
-          try{ await gql(`mutation D($productId:ID!,$variantMedia:[ProductVariantDetachMediaInput!]!){ productVariantDetachMedia(productId:$productId, variantMedia:$variantMedia){ userErrors{ field message } } }`,
-            {productId: sp.id, variantMedia: keep.map(v=>({variantId:v.id, mediaIds: left(v)}))}); }catch(e){}
-        }
-        await appendRetry(sp.id, need.map(v=>({variantId:v.id, mediaIds:[coverId]})));
-        changed = true;
-      }
-    }
-    if(!changed && had === V) return false;
-    // 3) couleur de vitrine en premier + photo de vitrine en premier
-    if(V){
-      const vName = ((vVars[0].selectedOptions||[]).find(o=> o.name === OPTION) || {}).value;
-      const options = (sp.options||[]).map(o=>{
-        let vals = (o.optionValues||[]).map(x=> x.name);
-        if(o.name === OPTION && vName) vals = [vName, ...vals.filter(n=> n !== vName)];
-        return {name:o.name, values: vals.map(n=>({name:n}))};
-      });
-      try{ await gql(`mutation OR($productId:ID!,$options:[OptionReorderInput!]!){ productOptionsReorder(productId:$productId, options:$options){ userErrors{ field message } } }`, {productId: sp.id, options}); }catch(e){}
-      try{ await gql(`mutation R($id:ID!,$moves:[MoveInput!]!){ productReorderMedia(id:$id, moves:$moves){ mediaUserErrors{ field message } } }`, {id: sp.id, moves:[{id:coverId, newPosition:'0'}]}); }catch(e){}
-    }
-    userErr(await gql(`mutation PU($product:ProductUpdateInput!){ productUpdate(product:$product){ userErrors{ field message } } }`,
-      {product:{id: sp.id, metafields:[{namespace:'atelier', key:'vitrine', type:'single_line_text_field', value: V || '-'}]}}));
-    return true;
   }
   async function createProduct(p, shop, imgHash, existingId){
     const cols = colorsOf(p);
     const info = CAT_INFO[p.cat] || ['produit',''];
     const files = []; const variants = [];
     let coverHash = null, coverFile = null;
-    const V = vitrineCode(p);
     if(cols.length && p.img){
       const csrc = await uploadImage(p.img, 'cover'+p.code);
       if(csrc){ coverFile = {originalSource:csrc, contentType:'IMAGE', alt:p.name}; files.push(coverFile); coverHash = hashStr(p.img); }
     }
+    const withMain = cols.length && p.code && !cols.some(c=> String(c.code) === String(p.code));
     const names = cols.map((c,i)=> 'لون ' + (i+1));
+    if(withMain){
+      // la pièce de la photo de vitrine = première couleur
+      SIZES.forEach((sz, j)=>{
+        const v = {
+          optionValues:[{optionName:OPTION, name:MAIN_NAME}, {optionName:SIZE_OPT, name:sz}], price: money(p.price), sku: String(p.code),
+          inventoryItem:{tracked:true},
+          inventoryQuantities:[{locationId: shop.locationId, name:'available', quantity:int(p.qty)}]
+        };
+        if(coverFile && j === 0) v.file = coverFile;
+        variants.push(v);
+      });
+    }
     if(cols.length){
       for(let i=0;i<cols.length;i++){
         const c = cols[i];
-        let f = null;
-        if(coverFile && String(c.code) === V){ f = coverFile; }
-        else {
-          const src = c.img ? await uploadImage(c.img, 'c'+c.code) : null;
-          f = src ? {originalSource:src, contentType:'IMAGE', alt: p.name + ' - ' + names[i]} : null;
-          if(f) files.push(f);
-        }
+        const src = c.img ? await uploadImage(c.img, 'c'+c.code) : null;
+        const f = src ? {originalSource:src, contentType:'IMAGE', alt: p.name + ' - ' + names[i]} : null;
+        if(f) files.push(f);
         SIZES.forEach((sz, j)=>{
           const v = {
             optionValues:[{optionName:OPTION, name:names[i]}, {optionName:SIZE_OPT, name:sz}], price: money(colorPrice(p,c)), sku: String(c.code),
@@ -536,7 +496,7 @@
     }
     const input = {
       title: p.name, vendor: VENDOR, productType: p.cat || '', tags: p.cat ? [p.cat] : [], status:'ACTIVE',
-      productOptions: cols.length ? [{name:OPTION, values: (V ? [...names.filter((n,i)=> String(cols[i].code)===V), ...names.filter((n,i)=> String(cols[i].code)!==V)] : names).map(n=>({name:n}))}, {name:SIZE_OPT, values: SIZES.map(n=>({name:n}))}]
+      productOptions: cols.length ? [{name:OPTION, values: (withMain ? [MAIN_NAME, ...names] : names).map(n=>({name:n}))}, {name:SIZE_OPT, values: SIZES.map(n=>({name:n}))}]
                                   : [{name:SIZE_OPT, values: SIZES.map(n=>({name:n}))}],
       variants
     };
@@ -563,7 +523,6 @@
     if(id && coverHash){
       const m = res.productSet.product.media && res.productSet.product.media.nodes[0];
       try{ await saveCoverMeta(id, coverHash, m && m.id); }catch(e){}
-      try{ userErr(await gql(`mutation PU($product:ProductUpdateInput!){ productUpdate(product:$product){ userErrors{ field message } } }`, {product:{id, metafields:[{namespace:'atelier', key:'vitrine', type:'single_line_text_field', value: V || '-'}]}})); }catch(e){}
     }
     if(id && !existingId && shop.onlineStore){
       userErr(await gql(`mutation PP($id:ID!,$input:[PublicationInput!]!){ publishablePublish(id:$id, input:$input){ userErrors{ field message } } }`,

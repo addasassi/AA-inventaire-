@@ -2946,10 +2946,8 @@ function renderColorsGrid(){
     return;
   }
   let html = '<div class="grid-wrap">';
-  const vitIdx = vitrineColorIndex(p);
   colors.forEach((c, i)=>{
     const qty = c.qty || 0;
-    const isVit = i === vitIdx;
     const price = c.price != null ? c.price : p.price;
     const isOut = qty <= 0;
     const isLow = !isOut && qty <= 2;
@@ -2961,7 +2959,6 @@ function renderColorsGrid(){
         <img src="${c.img}">
         ${c.img ? `<button class="img-dl-btn" onclick="event.stopPropagation(); downloadColorImage(${i})" title="Télécharger la photo">${dlIconSvg()}</button>` : ''}
         <span class="qty-badge ${pillClass}">${pillText}</span>
-        ${isVit ? `<span style="position:absolute;top:8px;left:8px;background:#fff;border-radius:999px;padding:3px 8px;font-size:11px;font-weight:700;color:var(--mauve-dark);box-shadow:0 1px 4px rgba(0,0,0,.15);">⭐ Vitrine</span>` : ''}
         ${inCart>0 ? `<div class="op-badge">${inCart}</div>` : ''}
       </div>
       <div class="info">
@@ -2981,7 +2978,6 @@ function renderColorsGrid(){
       </div>
       ${(isAdmin && !isOrderContext) ? `
       <div class="color-extra" style="margin-top:0;padding:10px;border-top:1px solid var(--line);">
-        <button class="full" style="width:100%;margin-bottom:10px;${isVit?'background:var(--mauve-dark);color:#fff;':''}" onclick="setVitrineColor(${i})">${isVit ? '⭐ Couleur de la vitrine ✓' : '☆ C\'est la couleur de la vitrine'}</button>
         <label>Photo de la couleur</label>
         <div class="imgpick" style="margin-bottom:10px;">
           <label class="btn" for="color-photo-${i}" style="font-size:11px;padding:6px 10px;">📷 Changer la photo</label>
@@ -3049,24 +3045,6 @@ function renderColorsGrid(){
       }
     });
   }
-}
-// couleur montrée sur la photo de vitrine (choisie avec ⭐, ou même photo)
-function vitrineColorIndex(p){
-  const cols = p.colors || [];
-  if(!p.img || !cols.length) return -1;
-  if(p.vitrine){ const k = cols.findIndex(c=> c && String(c.code) === String(p.vitrine)); if(k >= 0) return k; }
-  return cols.findIndex(c=> c && c.img && c.img === p.img);
-}
-async function setVitrineColor(index){
-  const p = products.find(x=>x.id===currentColorsProductId);
-  if(!p || !p.colors || !p.colors[index]) return;
-  const prev = p.vitrine;
-  const code = String(p.colors[index].code || '');
-  p.vitrine = (vitrineColorIndex(p) === index && prev === code) ? '' : code;
-  renderColorsGrid();
-  const ok = await saveProductDoc(p);
-  if(!ok){ p.vitrine = prev; renderColorsGrid(); toast('Échec — non enregistré, réessayez', true); return; }
-  toast(p.vitrine ? '⭐ Couleur de la vitrine enregistrée — faites la synchro Shopify' : 'Couleur de la vitrine retirée');
 }
 async function setColorQtyDirect(index){
   const input = document.getElementById('color-setqty-'+index);
