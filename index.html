@@ -345,6 +345,7 @@
     border-radius:20px;background:rgba(255,255,255,0.95);color:var(--plum);box-shadow:0 1px 5px rgba(0,0,0,0.18);}
   .qty-badge.low{background:#f1d6d2;color:var(--danger);}
   .qty-badge.zero{background:var(--danger);color:#fff;}
+  .qty-badge.ok{background:#d9f2e1;color:#1e7b45;}
   .img-dl-btn{position:absolute;top:6px;left:6px;width:27px;height:27px;border-radius:50%;
     background:rgba(58,38,50,0.72);border:none;color:#fff;display:flex;align-items:center;
     justify-content:center;z-index:5;padding:0;cursor:pointer;box-shadow:0 1px 5px rgba(0,0,0,0.22);}
@@ -2552,7 +2553,7 @@ function renderFilteredStockList(type){
   items.forEach((p)=>{
     const isOut = p.qty <= 0;
     const isLow = !isOut && p.qty <= 2;
-    const pillClass = isOut ? 'zero' : (isLow ? 'low' : '');
+    const pillClass = isOut ? 'zero' : (isLow ? 'low' : 'ok');
     const pillText = isOut ? 'Rupture' : (p.qty + ' en stock');
     const colorCount = (p.colors || []).length;
     html += `<div class="product ${isOut?'out':''}" onclick="openProductModal('${p.id}')">
@@ -2610,7 +2611,7 @@ function renderList(cat){
   items.forEach((p)=>{
     const isOut = p.qty <= 0;
     const isLow = !isOut && p.qty <= 2;
-    const pillClass = isOut ? 'zero' : (isLow ? 'low' : '');
+    const pillClass = isOut ? 'zero' : (isLow ? 'low' : 'ok');
     const pillText = isOut ? 'Rupture' : (p.qty + ' en stock');
     const colorCount = (p.colors || []).length;
     html += `<div class="product ${isOut?'out':''}" onclick="openProductModal('${p.id}')">
@@ -2971,7 +2972,7 @@ function renderColorsGrid(){
     const price = c.price != null ? c.price : p.price;
     const isOut = qty <= 0;
     const isLow = !isOut && qty <= 2;
-    const pillClass = isOut ? 'zero' : (isLow ? 'low' : '');
+    const pillClass = isOut ? 'zero' : (isLow ? 'low' : 'ok');
     const pillText = isOut ? 'Rupture' : (qty + ' en stock');
     const inCart = cart[makeCartKey(p.id, i)] || 0;
     html += `<div class="product ${isOut?'out':''}">
@@ -4571,7 +4572,7 @@ function renderOrderProducts(cat){
     const inCart = cart[p.id] || 0;
     const isOut = p.qty <= 0;
     const isLow = !isOut && p.qty <= 2;
-    const pillClass = isOut ? 'zero' : (isLow ? 'low' : '');
+    const pillClass = isOut ? 'zero' : (isLow ? 'low' : 'ok');
     const pillText = isOut ? 'Rupture de stock' : (p.qty + ' en stock');
     const colorCount = (p.colors || []).length;
     return `<div class="order-pick ${isOut?'out-pick':''}" onclick="addToCart('${p.id}')">
@@ -5109,7 +5110,7 @@ function renderVisualSearchResults(results){
       const pct = Math.max(0, Math.round(r.sim*100));
       const isOut = p.qty <= 0;
       const isLow = !isOut && p.qty <= 2;
-      const pillClass = isOut ? 'zero' : (isLow ? 'low' : '');
+      const pillClass = isOut ? 'zero' : (isLow ? 'low' : 'ok');
       const pillText = isOut ? 'Rupture' : (p.qty + ' en stock');
       return `<div class="product ${isOut?'out':''}" onclick="openProductModal('${p.id}')">
         <div class="img-wrap">
