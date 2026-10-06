@@ -736,6 +736,7 @@
     <div id="catProducts" style="display:none;">
       <div class="cat-header-row">
         <button class="back-btn" id="btn-back-cats">← Retour aux catégories</button>
+        <button class="btn-primary" id="btn-share-available" style="width:100%;">📤 Envoyer les disponibles (Messenger)</button>
         <button class="btn-secondary" id="btn-download-cat-photos">⬇️ Télécharger les photos</button>
         <button class="btn-secondary" id="btn-print-cat-barcodes">🖨️ Imprimer codes-barres</button>
       </div>
@@ -3559,6 +3560,96 @@ document.getElementById('btn-print-color-barcodes').addEventListener('click', as
     code: c.code
   }));
   printLabelsBatch(items);
+});
+/* ---------- 📤 Envoyer les photos disponibles (avec le prix) ---------- */
+const SHARE_BATCH = 30;
+let shareQueue = [];
+function loadImg(src){
+  return new Promise((res, rej)=>{ const im = new Image(); im.onload = ()=>res(im); im.onerror = rej; im.src = src; });
+}
+async function priceImageFile(src, price, name){
+  const im = await loadImg(src);
+  const max = 1280, k = Math.min(1, max / Math.max(im.width, im.height));
+  const w = Math.round(im.width * k), h = Math.round(im.height * k);
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+  const g = cv.getContext('2d');
+  g.drawImage(im, 0, 0, w, h);
+  const label = Math.round(Number(price)||0) + ' DA';
+  const fs = Math.max(22, Math.round(w * 0.075));
+  g.font = '800 ' + fs + 'px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+  const tw = g.measureText(label).width, padX = fs * 0.6, padY = fs * 0.38;
+  const bw = tw + padX * 2, bh = fs + padY * 2, m = Math.round(w * 0.035);
+  const x = w - bw - m, y = h - bh - m, r = bh / 2;
+  g.fillStyle = 'rgba(58,38,50,0.88)';
+  g.beginPath();
+  g.moveTo(x + r, y); g.lineTo(x + bw - r, y); g.arc(x + bw - r, y + r, r, -Math.PI/2, Math.PI/2);
+  g.lineTo(x + r, y + bh); g.arc(x + r, y + r, r, Math.PI/2, Math.PI*1.5); g.closePath(); g.fill();
+  g.fillStyle = '#fff'; g.textBaseline = 'middle'; g.textAlign = 'center';
+  g.fillText(label, x + bw / 2, y + bh / 2 + fs * 0.04);
+  const blob = await new Promise(res=> cv.toBlob(res, 'image/jpeg', 0.88));
+  return new File([blob], name + '.jpg', {type:'image/jpeg'});
+}
+function availablePhotos(cat){
+  const out = [], seen = new Set();
+  products.filter(p=>p.cat===cat).forEach(p=>{
+    const add = (img, price)=>{ if(img && !seen.has(img)){ seen.add(img); out.push({img, price, name:p.name}); } };
+    if(p.img && (Number(p.qty)||0) > 0) add(p.img, p.price);
+    (p.colors||[]).forEach(c=>{ if((Number(c.qty)||0) > 0) add(c.img, (c.price!=null && c.price!=='') ? c.price : p.price); });
+  });
+  return out;
+}
+let shareStarted = false;
+function showShareNext(){
+  let b = document.getElementById('share-next-btn');
+  let x = document.getElementById('share-next-x');
+  if(!shareQueue.length){ if(b) b.remove(); if(x) x.remove(); return; }
+  if(!b){
+    b = document.createElement('button');
+    b.id = 'share-next-btn'; b.className = 'btn-primary';
+    b.style.cssText = 'position:fixed;left:16px;right:64px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:9998;padding:14px;border-radius:14px;font-size:15px;box-shadow:0 6px 20px rgba(0,0,0,.25);width:auto;margin:0;';
+    b.onclick = ()=> shareBatch();
+    document.body.appendChild(b);
+    x = document.createElement('button');
+    x.id = 'share-next-x'; x.textContent = '✕';
+    x.style.cssText = 'position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:9998;width:42px;height:48px;border-radius:14px;border:1px solid var(--line);background:var(--card,#fff);color:var(--plum);font-size:18px;box-shadow:0 6px 20px rgba(0,0,0,.2);';
+    x.onclick = ()=>{ shareQueue = []; showShareNext(); };
+    document.body.appendChild(x);
+  }
+  b.textContent = (shareStarted ? '📤 Envoyer la suite (' : '📤 Envoyer sur Messenger (') + shareQueue.length + ' photos)';
+}
+async function shareBatch(){
+  const batch = shareQueue.splice(0, SHARE_BATCH);
+  if(!batch.length){ showShareNext(); return; }
+  try{
+    await navigator.share({files: batch});
+    shareStarted = true;
+  }catch(e){
+    shareQueue = batch.concat(shareQueue);
+    if(!(e && (e.name === 'AbortError' || e.name === 'NotAllowedError'))) toast('Partage impossible : ' + (e && e.message || e), true);
+  }
+  showShareNext();
+}
+document.getElementById('btn-share-available').addEventListener('click', async ()=>{
+  const cat = currentStockFilterType ? '' : document.getElementById('catProductsTitle').textContent;
+  const list = availablePhotos(cat);
+  if(!list.length){ toast('Aucune photo disponible (stock à 0) dans cette catégorie', true); return; }
+  const btn = document.getElementById('btn-share-available');
+  const old = btn.textContent; btn.disabled = true; btn.textContent = '⏳ Préparation de ' + list.length + ' photos...';
+  try{
+    const files = [];
+    for(let i=0;i<list.length;i++){
+      try{ files.push(await priceImageFile(list[i].img, list[i].price, (cat || 'photo') + '-' + (i+1))); }catch(e){}
+    }
+    if(!files.length){ toast('Erreur de préparation des photos', true); return; }
+    if(!(navigator.canShare && navigator.canShare({files: files.slice(0,1)}))){
+      files.forEach(f=>{ const u = URL.createObjectURL(f); const a = document.createElement('a'); a.href = u; a.download = f.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u), 4000); });
+      toast('Partage impossible sur cet appareil — photos téléchargées', true); return;
+    }
+    // photos prêtes : un bouton apparaît en bas (le partage doit partir d'un toucher)
+    shareQueue = files; shareStarted = false;
+    showShareNext();
+    toast('✅ ' + files.length + ' photos prêtes — touchez le bouton en bas');
+  }finally{ btn.textContent = old; btn.disabled = false; }
 });
 document.getElementById('btn-download-cat-photos').addEventListener('click', async ()=>{
   const cat = document.getElementById('catProductsTitle').textContent;
