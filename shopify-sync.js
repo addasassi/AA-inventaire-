@@ -11,6 +11,8 @@
   const LS_KEY = 'shopify-relay-key';
   const META_DOC = 'shopifySync';
   const OPTION = 'اللون';
+  const SIZE_OPT = 'المقاس';
+  const SIZES = ['S','M','L','XL'];
   const VENDOR = 'A&A';
   const CAT_INFO = {
     'فوندغوب':['fond-de-robe','فوند غوب ناعم ومريح، قماش خفيف يبان شباب عليك.'],
@@ -121,7 +123,7 @@
             coverMedia: metafield(namespace:"atelier", key:"cover_media"){ value }
             options{ name }
             media(first:50){ nodes{ id } }
-            variants(first:100){ nodes{ id sku price title inventoryQuantity inventoryItem{ id tracked } media(first:5){ nodes{ id } } } } } }
+            variants(first:250){ nodes{ id sku price title inventoryQuantity selectedOptions{ name value } inventoryItem{ id tracked } media(first:5){ nodes{ id } } } } } }
         locations(first:5){ nodes{ id isActive } }
         publications(first:10){ nodes{ id name } } }`, {after});
       list.push(...d.products.nodes);
@@ -135,7 +137,12 @@
       after = d.products.pageInfo.endCursor;
     }
     const bySku = {};
-    list.forEach(sp=> sp.variants.nodes.forEach(v=>{ if(v.sku) bySku[String(v.sku)] = {product:sp, variant:v}; }));
+    list.forEach(sp=> sp.variants.nodes.forEach(v=>{
+      if(!v.sku) return;
+      const k = String(v.sku);
+      if(!bySku[k] || bySku[k].product.id !== sp.id) bySku[k] = {product:sp, variants:[]};
+      bySku[k].variants.push(v);
+    }));
     return {list, bySku, locationId, onlineStore};
   }
 
@@ -249,7 +256,10 @@
       }
 
       const spVariants = sp.variants.nodes;
-      const isDefault = spVariants.length === 1 && /default title/i.test(spVariants[0].title);
+      // produit sans couleur dans Shopify (seulement la taille, ou ancien « Default Title »)
+      const isDefault = !sp.options.some(o=> o.name === OPTION);
+      const hasSizes = sp.options.some(o=> o.name === SIZE_OPT);
+      const mediaFill = [];
 
       // Produit sans couleur dans Shopify mais avec couleurs dans Atelier → reconstruire
       if(cols.length && isDefault && !cols.some(c=> shop.bySku[String(c.code)])){
@@ -271,21 +281,30 @@
       }
       const priceUpdates = [];
       const newVariants = [];
-      const existingNames = new Set(spVariants.map(v=>v.title));
+      const colorOf = (v)=>{ const o = (v.selectedOptions||[]).find(x=>x.name===OPTION); return o ? o.value : v.title; };
+      const existingNames = new Set(spVariants.map(colorOf));
       const units = cols.length ? cols.map((c,i)=>({code:String(c.code), qty:int(c.qty), price:money(colorPrice(p,c)), img:c.img, idx:i}))
                                 : [{code:String(p.code), qty:int(p.qty), price:money(p.price), img:p.img, idx:-1}];
       for(const u of units){
         const hit = shop.bySku[u.code];
         if(hit && hit.product.id === sp.id){
-          const v = hit.variant;
-          if(money(v.price) !== u.price) priceUpdates.push({id:v.id, price:u.price});
-          if((v.inventoryQuantity||0) !== u.qty) qtyUpdates.push({inventoryItemId:v.inventoryItem.id, locationId:shop.locationId, quantity:u.qty, changeFromQuantity:null});
+          const vs = hit.variants;
+          const v = vs[0];
+          vs.forEach(x=>{
+            if(money(x.price) !== u.price) priceUpdates.push({id:x.id, price:u.price});
+            if((x.inventoryQuantity||0) !== u.qty) qtyUpdates.push({inventoryItemId:x.inventoryItem.id, locationId:shop.locationId, quantity:u.qty, changeFromQuantity:null});
+          });
+          // toutes les tailles d'une couleur gardent la photo de la couleur
+          if(!isDefault){
+            const withMedia = vs.find(x=> x.media.nodes.length);
+            if(withMedia) vs.forEach(x=>{ if(!x.media.nodes.length) mediaFill.push({variantId:x.id, mediaIds:[withMedia.media.nodes[0].id]}); });
+          }
           // Photo modifiée ?
           const h = hashStr(u.img);
           if(firstRun || !imgHash[u.code]){ imgHash[u.code] = h; }
           else if(u.img && imgHash[u.code] !== h){
             log('📷 Photo : ' + p.name + (u.idx>=0 ? ' #'+(u.idx+1) : ''));
-            await replacePhoto(sp, v, u, isDefault);
+            await replacePhoto(sp, vs, u, isDefault);
             imgHash[u.code] = h; stats.photos++;
           }
         } else if(!hit){
@@ -294,6 +313,10 @@
           existingNames.add(name);
           newVariants.push({u, name});
         }
+      }
+      if(mediaFill.length){
+        try{ userErr(await gql(`mutation VM($productId:ID!,$variantMedia:[ProductVariantAppendMediaInput!]!){ productVariantAppendMedia(productId:$productId, variantMedia:$variantMedia){ userErrors{ field message } } }`,
+          {productId: sp.id, variantMedia: mediaFill})); }catch(e){}
       }
       if(priceUpdates.length){
         userErr(await gql(`mutation U($productId:ID!,$variants:[ProductVariantsBulkInput!]!){ productVariantsBulkUpdate(productId:$productId, variants:$variants){ userErrors{ field message } } }`,
@@ -305,14 +328,18 @@
         const variants = [], media = [];
         for(const nv of newVariants){
           const src = nv.u.img ? await uploadImage(nv.u.img, 'c'+nv.u.code) : null;
-          const item = {
-            optionValues:[{optionName: (sp.options[0] && sp.options[0].name) || OPTION, name: nv.name}],
-            price: nv.u.price,
-            inventoryItem:{sku: nv.u.code, tracked:true},
-            inventoryQuantities:[{locationId: shop.locationId, availableQuantity: nv.u.qty}]
-          };
-          if(src){ item.mediaSrc = [src]; media.push({originalSource:src, mediaContentType:'IMAGE', alt: p.name + ' - ' + nv.name}); }
-          variants.push(item);
+          if(src) media.push({originalSource:src, mediaContentType:'IMAGE', alt: p.name + ' - ' + nv.name});
+          (hasSizes ? SIZES : [null]).forEach(sz=>{
+            const optionValues = [{optionName: OPTION, name: nv.name}];
+            if(sz) optionValues.push({optionName: SIZE_OPT, name: sz});
+            const item = {
+              optionValues, price: nv.u.price,
+              inventoryItem:{sku: nv.u.code, tracked:true},
+              inventoryQuantities:[{locationId: shop.locationId, availableQuantity: nv.u.qty}]
+            };
+            if(src) item.mediaSrc = [src];
+            variants.push(item);
+          });
           imgHash[nv.u.code] = hashStr(nv.u.img);
         }
         userErr(await gql(`mutation C($productId:ID!,$variants:[ProductVariantsBulkInput!]!,$media:[CreateMediaInput!]){ productVariantsBulkCreate(productId:$productId, variants:$variants, media:$media){ productVariants{ id } userErrors{ field message } } }`,
@@ -387,29 +414,33 @@
       for(let i=0;i<cols.length;i++){
         const c = cols[i];
         const src = c.img ? await uploadImage(c.img, 'c'+c.code) : null;
-        const v = {
-          optionValues:[{optionName:OPTION, name:names[i]}], price: money(colorPrice(p,c)), sku: String(c.code),
-          inventoryItem:{tracked:true},
-          inventoryQuantities:[{locationId: shop.locationId, name:'available', quantity:int(c.qty)}]
-        };
-        if(src){ const f = {originalSource:src, contentType:'IMAGE', alt: p.name + ' - ' + names[i]}; v.file = f; files.push(f); }
-        variants.push(v);
+        const f = src ? {originalSource:src, contentType:'IMAGE', alt: p.name + ' - ' + names[i]} : null;
+        if(f) files.push(f);
+        SIZES.forEach((sz, j)=>{
+          const v = {
+            optionValues:[{optionName:OPTION, name:names[i]}, {optionName:SIZE_OPT, name:sz}], price: money(colorPrice(p,c)), sku: String(c.code),
+            inventoryItem:{tracked:true},
+            inventoryQuantities:[{locationId: shop.locationId, name:'available', quantity:int(c.qty)}]
+          };
+          if(f && j === 0) v.file = f;
+          variants.push(v);
+        });
         imgHash[String(c.code)] = hashStr(c.img);
       }
     } else {
       const src = p.img ? await uploadImage(p.img, 'p'+p.code) : null;
       if(src) files.push({originalSource:src, contentType:'IMAGE', alt:p.name});
-      variants.push({
-        optionValues:[{optionName:'Title', name:'Default Title'}], price: money(p.price), sku: String(p.code),
+      SIZES.forEach(sz=> variants.push({
+        optionValues:[{optionName:SIZE_OPT, name:sz}], price: money(p.price), sku: String(p.code),
         inventoryItem:{tracked:true},
         inventoryQuantities:[{locationId: shop.locationId, name:'available', quantity:int(p.qty)}]
-      });
+      }));
       imgHash[String(p.code)] = hashStr(p.img);
     }
     const input = {
       title: p.name, vendor: VENDOR, productType: p.cat || '', tags: p.cat ? [p.cat] : [], status:'ACTIVE',
-      productOptions: cols.length ? [{name:OPTION, values: variants.map(v=>({name:v.optionValues[0].name}))}]
-                                  : [{name:'Title', values:[{name:'Default Title'}]}],
+      productOptions: cols.length ? [{name:OPTION, values: cols.map((c,i)=>({name:'لون ' + (i+1)}))}, {name:SIZE_OPT, values: SIZES.map(n=>({name:n}))}]
+                                  : [{name:SIZE_OPT, values: SIZES.map(n=>({name:n}))}],
       variants
     };
     if(files.length) input.files = files;
@@ -418,9 +449,20 @@
       input.handle = info[0] + '-' + (num || p.code) + (num ? '-' + String(p.code).slice(-4) : '');
       input.descriptionHtml = (info[1] ? '<p>'+info[1]+'</p>' : '') + DELIVERY;
     }
-    const res = userErr(await gql(`mutation PS($input:ProductSetInput!,$identifier:ProductSetIdentifiers){ productSet(input:$input, identifier:$identifier, synchronous:true){ product{ id media(first:1){ nodes{ id } } } userErrors{ field message } } }`,
+    const res = userErr(await gql(`mutation PS($input:ProductSetInput!,$identifier:ProductSetIdentifiers){ productSet(input:$input, identifier:$identifier, synchronous:true){ product{ id media(first:1){ nodes{ id } } variants(first:250){ nodes{ id sku media(first:1){ nodes{ id } } } } } userErrors{ field message } } }`,
       {input, identifier: existingId ? {id: existingId} : null}));
     const id = res.productSet.product && res.productSet.product.id;
+    // les autres tailles reçoivent la photo de leur couleur
+    if(id && cols.length){
+      const groups = {};
+      ((res.productSet.product.variants||{}).nodes||[]).forEach(v=>{ (groups[v.sku] = groups[v.sku] || []).push(v); });
+      const fill = [];
+      Object.values(groups).forEach(vs=>{
+        const m = vs.find(v=> v.media.nodes.length);
+        if(m) vs.forEach(v=>{ if(!v.media.nodes.length) fill.push({variantId:v.id, mediaIds:[m.media.nodes[0].id]}); });
+      });
+      if(fill.length){ try{ await gql(`mutation VM($productId:ID!,$variantMedia:[ProductVariantAppendMediaInput!]!){ productVariantAppendMedia(productId:$productId, variantMedia:$variantMedia){ userErrors{ field message } } }`, {productId:id, variantMedia:fill}); }catch(e){} }
+    }
     if(id && coverHash){
       const m = res.productSet.product.media && res.productSet.product.media.nodes[0];
       try{ await saveCoverMeta(id, coverHash, m && m.id); }catch(e){}
@@ -432,19 +474,25 @@
     return id;
   }
 
-  async function replacePhoto(sp, v, u, isDefault){
+  async function replacePhoto(sp, vs, u, isDefault){
+    const v = vs[0];
     const src = await uploadImage(u.img, (isDefault?'p':'c') + u.code);
     if(!src) return;
     const old = isDefault ? sp.media.nodes.map(m=>m.id) : v.media.nodes.map(m=>m.id);
     const res = userErr(await gql(`mutation PM($productId:ID!,$media:[CreateMediaInput!]!){ productCreateMedia(productId:$productId, media:$media){ media{ id status } mediaUserErrors{ field message } } }`,
       {productId: sp.id, media:[{originalSource:src, mediaContentType:'IMAGE', alt: sp.title}]}));
     const newId = res.productCreateMedia.media[0] && res.productCreateMedia.media[0].id;
+    // une couleur n'a qu'une photo : on enlève l'ancienne avant de lier la nouvelle
+    if(newId && !isDefault && old.length){
+      try{ await gql(`mutation DM($productId:ID!,$mediaIds:[ID!]!){ productDeleteMedia(productId:$productId, mediaIds:$mediaIds){ deletedMediaIds mediaUserErrors{ field message } } }`, {productId: sp.id, mediaIds: old}); }catch(e){}
+      old.length = 0;
+    }
     if(newId && !isDefault){
       // attendre que Shopify traite l'image avant de la lier à la couleur
       for(let i=0;i<6;i++){
         try{
           userErr(await gql(`mutation VM($productId:ID!,$variantMedia:[ProductVariantAppendMediaInput!]!){ productVariantAppendMedia(productId:$productId, variantMedia:$variantMedia){ userErrors{ field message } } }`,
-            {productId: sp.id, variantMedia:[{variantId: v.id, mediaIds:[newId]}]}));
+            {productId: sp.id, variantMedia: vs.map(x=>({variantId: x.id, mediaIds:[newId]}))}));
           break;
         }catch(e){ if(i===5) throw e; await new Promise(r=>setTimeout(r, 2000)); }
       }
@@ -544,7 +592,7 @@
     logEl.style.display = ''; logEl.textContent = '';
     const log = (s)=>{ logEl.textContent += s + '\n'; logEl.scrollTop = logEl.scrollHeight; };
     try{
-      log('v4 · 1/2 · Commandes du site → stock...');
+      log('v5 · 1/2 · Commandes du site → stock...');
       const n = await pullOrders(true);
       log(n ? '   ' + n + ' article(s) mis à jour' : '   aucune nouvelle commande');
       await new Promise(r=>setTimeout(r, 800)); // laisse le stock local se rafraîchir
