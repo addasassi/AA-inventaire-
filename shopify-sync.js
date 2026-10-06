@@ -13,7 +13,6 @@
   const OPTION = 'اللون';
   const SIZE_OPT = 'المقاس';
   const SIZES = ['S','M','L','XL'];
-  const MAIN_NAME = 'كيما في الصورة'; // la pièce de la photo de vitrine = une couleur au choix
   const VENDOR = 'A&A';
   const CAT_INFO = {
     'فوندغوب':['fond-de-robe','فوند غوب ناعم ومريح، قماش خفيف يبان شباب عليك.'],
@@ -288,35 +287,13 @@
         }
       }
       const mainFill = [];
-      let mainCreated = false;
       const priceUpdates = [];
       const newVariants = [];
       const colorOf = (v)=>{ const o = (v.selectedOptions||[]).find(x=>x.name===OPTION); return o ? o.value : v.title; };
-      // ⭐ : la nouvelle pièce de la vitrine prend le nom « كيما في الصورة », l'ancienne prend son nom
+      // la couleur de la vitrine passe en premier dans la liste des couleurs
       const mainHit = (!isDefault && cols.length && p.code && !cols.some(c=> String(c.code) === String(p.code))) ? shop.bySku[String(p.code)] : null;
-      if(mainHit && mainHit.product.id === sp.id){
-        const mName = colorOf(mainHit.variants[0]);
-        if(mName !== MAIN_NAME){
-          const demoted = spVariants.filter(v=> colorOf(v) === MAIN_NAME && String(v.sku) !== String(p.code));
-          const ren = (vs, name)=> gql(`mutation U($productId:ID!,$variants:[ProductVariantsBulkInput!]!){ productVariantsBulkUpdate(productId:$productId, variants:$variants){ userErrors{ field message } } }`,
-            {productId: sp.id, variants: vs.map(v=>({id:v.id, optionValues:[{optionName:OPTION, name}]}))}).then(userErr);
-          log('⭐ Vitrine changée : ' + p.name);
-          if(demoted.length) await ren(demoted, '__tmp');
-          await ren(mainHit.variants, MAIN_NAME);
-          if(demoted.length) await ren(demoted, mName);
-          const o = (sp.options||[]).find(x=> x.name === OPTION);
-          if(o){
-            const swapped = (o.optionValues||[]).map(x=> x.name === mName ? MAIN_NAME : (x.name === MAIN_NAME ? mName : x.name));
-            const names = [MAIN_NAME, ...swapped.filter(n=> n !== MAIN_NAME)];
-            o.optionValues = [...new Set(names)].map(n=>({name:n}));
-            const options = (sp.options||[]).map(x=> ({name:x.name, values:(x.optionValues||[]).map(v=>({name:v.name}))}));
-            try{ await gql(`mutation OR($productId:ID!,$options:[OptionReorderInput!]!){ productOptionsReorder(productId:$productId, options:$options){ userErrors{ field message } } }`, {productId: sp.id, options}); }catch(e){}
-          }
-          mainHit.variants.forEach(v=>{ (v.selectedOptions||[]).forEach(x=>{ if(x.name===OPTION) x.value = MAIN_NAME; }); });
-          demoted.forEach(v=>{ (v.selectedOptions||[]).forEach(x=>{ if(x.name===OPTION) x.value = mName; }); });
-          stats.photos++;
-        }
-      }
+      let mainFirstName = null;
+      if(mainHit && mainHit.product.id === sp.id) mainFirstName = colorOf(mainHit.variants[0]);
       const existingNames = new Set(spVariants.map(colorOf));
       const units = cols.length ? cols.map((c,i)=>({code:String(c.code), qty:int(c.qty), price:money(colorPrice(p,c)), img:c.img, idx:i}))
                                 : [{code:String(p.code), qty:int(p.qty), price:money(p.price), img:p.img, idx:-1}];
@@ -354,10 +331,8 @@
             await replacePhoto(sp, vs, u, isDefault);
             imgHash[u.code] = h; stats.photos++;
           }
-        } else if(!hit && u.main){
-          newVariants.push({u, name: MAIN_NAME});
         } else if(!hit){
-          let name = 'لون ' + (u.idx+1); let k = u.idx+1;
+          let k = u.main ? 1 : u.idx+1; let name = 'لون ' + k;
           while(existingNames.has(name)){ k++; name = 'لون ' + k; }
           existingNames.add(name);
           newVariants.push({u, name});
@@ -380,7 +355,7 @@
         const variants = [], media = [];
         for(const nv of newVariants){
           let src = null, mediaId = null;
-          if(nv.u.main){ mediaId = coverId || null; mainCreated = true; }
+          if(nv.u.main){ mediaId = coverId || null; mainFirstName = nv.name; }
           else{
             src = nv.u.img ? await uploadImage(nv.u.img, 'c'+nv.u.code) : null;
             if(src) media.push({originalSource:src, mediaContentType:'IMAGE', alt: p.name + ' - ' + nv.name});
@@ -402,10 +377,12 @@
         userErr(await gql(`mutation C($productId:ID!,$variants:[ProductVariantsBulkInput!]!,$media:[CreateMediaInput!]){ productVariantsBulkCreate(productId:$productId, variants:$variants, media:$media){ productVariants{ id } userErrors{ field message } } }`,
           {productId: sp.id, variants, media: media.length ? media : null}));
         stats.newColors += newVariants.length;
-        // « كيما في الصورة » en premier dans les couleurs
-        if(mainCreated){
-          const o = (sp.options||[]).find(x=> x.name === OPTION);
-          const names = [MAIN_NAME, ...((o && o.optionValues) || []).map(x=>x.name).filter(n=> n !== MAIN_NAME)];
+      }
+      if(mainFirstName){
+        const o = (sp.options||[]).find(x=> x.name === OPTION);
+        const cur = ((o && o.optionValues) || []).map(x=> x.name);
+        if(cur[0] !== mainFirstName){
+          const names = [mainFirstName, ...cur.filter(n=> n !== mainFirstName)];
           const options = (sp.options||[]).map(x=> x.name === OPTION ? {name:OPTION, values:names.map(n=>({name:n}))} : {name:x.name, values:(x.optionValues||[]).map(v=>({name:v.name}))});
           try{ await gql(`mutation OR($productId:ID!,$options:[OptionReorderInput!]!){ productOptionsReorder(productId:$productId, options:$options){ userErrors{ field message } } }`, {productId: sp.id, options}); }catch(e){}
         }
@@ -481,7 +458,8 @@
       if(csrc){ coverFile = {originalSource:csrc, contentType:'IMAGE', alt:p.name}; files.push(coverFile); coverHash = hashStr(p.img); }
     }
     const withMain = cols.length && p.code && !cols.some(c=> String(c.code) === String(p.code));
-    const names = cols.map((c,i)=> 'لون ' + (i+1));
+    const names = cols.map((c,i)=> 'لون ' + (i + (withMain ? 2 : 1)));
+    const MAIN_NAME = 'لون 1';
     if(withMain){
       // la pièce de la photo de vitrine = première couleur
       SIZES.forEach((sz, j)=>{
