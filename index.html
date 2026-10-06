@@ -455,6 +455,9 @@
   .empty p{font-size:13.5px;line-height:1.5;}
 
   .manual-row{display:flex;gap:8px;}
+  .name-row{display:flex;gap:6px;min-width:0;width:100%;box-sizing:border-box;}
+  .name-row input{flex:1 1 auto;min-width:0;width:auto !important;box-sizing:border-box;padding:8px 10px;border:1px solid var(--line);border-radius:9px;font-size:14px;background:var(--card,#fff);color:inherit;}
+  .name-row button{flex:0 0 auto;padding:0 10px !important;min-width:0;}
   .manual-row input{flex:1;}
   .manual-row button{padding:0 18px;background:var(--plum);color:var(--cream);border:none;border-radius:9px;font-weight:700;cursor:pointer;}
 
@@ -2947,11 +2950,11 @@ function renderColorsGrid(){
   }
   let html = '';
   if(isAdmin && !isOrderContext){
-    html += `<div style="display:flex;gap:10px;align-items:center;background:var(--cream);border:1px solid var(--line);border-radius:14px;padding:10px;margin-bottom:12px;">
+    html += `<div style="display:flex;gap:10px;align-items:center;background:var(--cream);border:1px solid var(--line);border-radius:14px;padding:10px;margin-bottom:12px;box-sizing:border-box;width:100%;overflow:hidden;">
       <img src="${p.img || placeholderImg()}" style="width:56px;height:56px;border-radius:10px;object-fit:cover;flex-shrink:0;">
       <div style="flex:1;min-width:0;">
         <div style="font-size:12px;font-weight:700;color:var(--mauve-dark);margin-bottom:4px;">Couleur de la photo de vitrine</div>
-        <div class="manual-row">
+        <div class="manual-row name-row">
           <input type="text" id="color-name-main" value="${escapeHtml(p.colorName||'')}" placeholder="ex : فوشيا">
           <button onclick="aiNameColor(-1)" title="Nommer avec l'IA">✨</button>
           <button onclick="setColorName(-1)">OK</button>
@@ -2995,7 +2998,7 @@ function renderColorsGrid(){
       <div class="color-extra" style="margin-top:0;padding:10px;border-top:1px solid var(--line);">
         <button class="full" style="width:100%;margin-bottom:10px;" onclick="setVitrineColor(${i})">⭐ Mettre en vitrine</button>
         <label>Nom de la couleur (Shopify)</label>
-        <div class="manual-row" style="margin-bottom:10px;">
+        <div class="manual-row name-row" style="margin-bottom:10px;">
           <input type="text" id="color-name-${i}" value="${escapeHtml(c.name||'')}" placeholder="ex : أحمر">
           <button onclick="aiNameColor(${i})" title="Nommer avec l'IA">✨</button>
           <button onclick="setColorName(${i})">OK</button>
