@@ -3598,34 +3598,75 @@ function availablePhotos(cat){
   });
   return out;
 }
+let shareZipName = 'photos';
 function showShareNext(){
-  let b = document.getElementById('share-next-btn');
-  let x = document.getElementById('share-next-x');
-  if(!shareQueue.length){ if(b) b.remove(); if(x) x.remove(); return; }
-  if(!b){
-    b = document.createElement('button');
-    b.id = 'share-next-btn'; b.className = 'btn-primary';
-    b.style.cssText = 'position:fixed;left:16px;right:64px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:9998;padding:14px;border-radius:14px;font-size:15px;box-shadow:0 6px 20px rgba(0,0,0,.25);width:auto;margin:0;';
-    b.onclick = ()=> downloadQueue();
-    document.body.appendChild(b);
-    x = document.createElement('button');
-    x.id = 'share-next-x'; x.textContent = '✕';
-    x.style.cssText = 'position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:9998;width:42px;height:48px;border-radius:14px;border:1px solid var(--line);background:var(--card,#fff);color:var(--plum);font-size:18px;box-shadow:0 6px 20px rgba(0,0,0,.2);';
-    x.onclick = ()=>{ shareQueue = []; showShareNext(); };
-    document.body.appendChild(x);
+  let bar = document.getElementById('share-next-bar');
+  if(!shareQueue.length){ if(bar) bar.remove(); return; }
+  if(!bar){
+    bar = document.createElement('div');
+    bar.id = 'share-next-bar';
+    bar.style.cssText = 'position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:9998;background:var(--card,#fff);border:1px solid var(--line);border-radius:16px;padding:10px;box-shadow:0 8px 24px rgba(0,0,0,.25);';
+    document.body.appendChild(bar);
   }
-  b.textContent = '⬇️ Enregistrer les ' + shareQueue.length + ' photos dans la galerie';
+  bar.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+      <b style="font-size:14px;color:var(--plum);">✅ ${shareQueue.length} photos prêtes</b>
+      <button id="share-x" style="border:none;background:none;font-size:20px;color:var(--plum);padding:0 6px;">✕</button>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn-primary" id="share-gal" style="flex:1;margin:0;padding:12px 6px;font-size:13.5px;">⬇️ Photos (galerie)</button>
+      <button class="btn-secondary" id="share-zip" style="flex:1;margin:0;padding:12px 6px;font-size:13.5px;">🗜️ Fichier ZIP</button>
+    </div>`;
+  document.getElementById('share-x').onclick = ()=>{ shareQueue = []; showShareNext(); };
+  document.getElementById('share-gal').onclick = ()=> downloadQueue();
+  document.getElementById('share-zip').onclick = ()=> downloadZip();
+}
+function saveBlob(blob, name){
+  const u = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = u; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(u), 30000);
 }
 async function downloadQueue(){
   const files = shareQueue.slice(); shareQueue = []; showShareNext();
-  for(const f of files){
-    const u = URL.createObjectURL(f);
-    const a = document.createElement('a'); a.href = u; a.download = f.name;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(()=>URL.revokeObjectURL(u), 20000);
-    await new Promise(r=>setTimeout(r, 350));
-  }
+  for(const f of files){ saveBlob(f, f.name); await new Promise(r=>setTimeout(r, 350)); }
   toast('✅ ' + files.length + ' photos enregistrées — dans Messenger : 📷 Galerie → choisissez-les toutes', false);
+}
+/* ZIP simple (sans compression : les JPEG sont déjà compressés), noms en UTF-8 */
+const CRC_TABLE = (()=>{ const t = new Uint32Array(256); for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c = c&1 ? 0xEDB88320 ^ (c>>>1) : c>>>1; t[n]=c>>>0; } return t; })();
+function crc32(buf){ let c = 0xFFFFFFFF; for(let i=0;i<buf.length;i++) c = CRC_TABLE[(c ^ buf[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+async function makeZip(entries){ // entries: [{path, file}]
+  const enc = new TextEncoder(), parts = [], central = []; let offset = 0;
+  const d = new Date(), dt = ((d.getHours()<<11)|(d.getMinutes()<<5)|(d.getSeconds()>>1)) & 0xFFFF, dd = (((d.getFullYear()-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate()) & 0xFFFF;
+  for(const e of entries){
+    const data = new Uint8Array(await e.file.arrayBuffer()), name = enc.encode(e.path), crc = crc32(data);
+    const h = new DataView(new ArrayBuffer(30));
+    h.setUint32(0,0x04034b50,true); h.setUint16(4,20,true); h.setUint16(6,0x0800,true); h.setUint16(8,0,true);
+    h.setUint16(10,dt,true); h.setUint16(12,dd,true); h.setUint32(14,crc,true); h.setUint32(18,data.length,true); h.setUint32(22,data.length,true);
+    h.setUint16(26,name.length,true); h.setUint16(28,0,true);
+    parts.push(h.buffer, name, data);
+    const c = new DataView(new ArrayBuffer(46));
+    c.setUint32(0,0x02014b50,true); c.setUint16(4,20,true); c.setUint16(6,20,true); c.setUint16(8,0x0800,true); c.setUint16(10,0,true);
+    c.setUint16(12,dt,true); c.setUint16(14,dd,true); c.setUint32(16,crc,true); c.setUint32(20,data.length,true); c.setUint32(24,data.length,true);
+    c.setUint16(28,name.length,true); c.setUint32(42,offset,true);
+    central.push(c.buffer, name);
+    offset += 30 + name.length + data.length;
+  }
+  const cSize = central.reduce((n,x)=> n + (x.byteLength), 0);
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0,0x06054b50,true); end.setUint16(8,entries.length,true); end.setUint16(10,entries.length,true);
+  end.setUint32(12,cSize,true); end.setUint32(16,offset,true);
+  return new Blob([...parts, ...central, end.buffer], {type:'application/zip'});
+}
+async function downloadZip(){
+  const files = shareQueue.slice(); shareQueue = []; showShareNext();
+  toast('🗜️ Création du ZIP...');
+  try{
+    // un dossier par catégorie (le nom de la photo commence par la catégorie)
+    const entries = files.map(f=>({path: (f.catName || 'photos') + '/' + f.name, file: f}));
+    const zip = await makeZip(entries);
+    saveBlob(zip, shareZipName + '.zip');
+    toast('✅ ZIP enregistré — ouvrez-le dans Mes fichiers puis « Extraire »', false);
+  }catch(e){ toast('Erreur ZIP : ' + (e.message||e), true); }
 }
 async function prepareAvailablePhotos(cat, btn){
   // cat = null → toutes les catégories
@@ -3640,11 +3681,12 @@ async function prepareAvailablePhotos(cat, btn){
     const count = {};
     for(const x of list){
       count[x.cat] = (count[x.cat]||0) + 1;
-      try{ files.push(await priceImageFile(x.img, x.price, x.cat + '-' + stamp + '-' + String(count[x.cat]).padStart(2,'0'))); }catch(e){}
+      try{ const f = await priceImageFile(x.img, x.price, x.cat + '-' + stamp + '-' + String(count[x.cat]).padStart(2,'0')); f.catName = x.cat; files.push(f); }catch(e){}
     }
     if(!files.length){ toast('Erreur de préparation des photos', true); return; }
     // photos prêtes : un bouton apparaît en bas (le téléchargement doit partir d'un toucher)
     shareQueue = files;
+    shareZipName = cat ? cat : ('A&A disponibles ' + stamp);
     showShareNext();
   }finally{ btn.textContent = old; btn.disabled = false; }
 }
