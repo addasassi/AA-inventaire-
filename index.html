@@ -736,7 +736,7 @@
     <div id="catProducts" style="display:none;">
       <div class="cat-header-row">
         <button class="back-btn" id="btn-back-cats">← Retour aux catégories</button>
-        <button class="btn-primary" id="btn-share-available" style="width:100%;">📤 Envoyer les disponibles (Messenger)</button>
+        <button class="btn-primary" id="btn-share-available" style="width:100%;">⬇️ Photos disponibles avec prix (pour Messenger)</button>
         <button class="btn-secondary" id="btn-download-cat-photos">⬇️ Télécharger les photos</button>
         <button class="btn-secondary" id="btn-print-cat-barcodes">🖨️ Imprimer codes-barres</button>
       </div>
@@ -3562,7 +3562,6 @@ document.getElementById('btn-print-color-barcodes').addEventListener('click', as
   printLabelsBatch(items);
 });
 /* ---------- 📤 Envoyer les photos disponibles (avec le prix) ---------- */
-const SHARE_BATCH = 10; // Chrome accepte au maximum 10 fichiers par partage
 let shareQueue = [];
 function loadImg(src){
   return new Promise((res, rej)=>{ const im = new Image(); im.onload = ()=>res(im); im.onerror = rej; im.src = src; });
@@ -3598,7 +3597,6 @@ function availablePhotos(cat){
   });
   return out;
 }
-let shareStarted = false;
 function showShareNext(){
   let b = document.getElementById('share-next-btn');
   let x = document.getElementById('share-next-x');
@@ -3607,7 +3605,7 @@ function showShareNext(){
     b = document.createElement('button');
     b.id = 'share-next-btn'; b.className = 'btn-primary';
     b.style.cssText = 'position:fixed;left:16px;right:64px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:9998;padding:14px;border-radius:14px;font-size:15px;box-shadow:0 6px 20px rgba(0,0,0,.25);width:auto;margin:0;';
-    b.onclick = ()=> shareBatch();
+    b.onclick = ()=> downloadQueue();
     document.body.appendChild(b);
     x = document.createElement('button');
     x.id = 'share-next-x'; x.textContent = '✕';
@@ -3615,19 +3613,18 @@ function showShareNext(){
     x.onclick = ()=>{ shareQueue = []; showShareNext(); };
     document.body.appendChild(x);
   }
-  b.textContent = (shareStarted ? '📤 Envoyer la suite (' : '📤 Envoyer sur Messenger (') + shareQueue.length + ' photos)';
+  b.textContent = '⬇️ Enregistrer les ' + shareQueue.length + ' photos dans la galerie';
 }
-async function shareBatch(){
-  const batch = shareQueue.splice(0, SHARE_BATCH);
-  if(!batch.length){ showShareNext(); return; }
-  try{
-    await navigator.share({files: batch});
-    shareStarted = true;
-  }catch(e){
-    shareQueue = batch.concat(shareQueue);
-    if(!(e && e.name === 'AbortError')) toast('Partage impossible : ' + (e && (e.name + ' ' + e.message) || e), true);
+async function downloadQueue(){
+  const files = shareQueue.slice(); shareQueue = []; showShareNext();
+  for(const f of files){
+    const u = URL.createObjectURL(f);
+    const a = document.createElement('a'); a.href = u; a.download = f.name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(u), 20000);
+    await new Promise(r=>setTimeout(r, 350));
   }
-  showShareNext();
+  toast('✅ ' + files.length + ' photos enregistrées — dans Messenger : 📷 Galerie → choisissez-les toutes', false);
 }
 document.getElementById('btn-share-available').addEventListener('click', async ()=>{
   const cat = currentStockFilterType ? '' : document.getElementById('catProductsTitle').textContent;
@@ -3637,18 +3634,14 @@ document.getElementById('btn-share-available').addEventListener('click', async (
   const old = btn.textContent; btn.disabled = true; btn.textContent = '⏳ Préparation de ' + list.length + ' photos...';
   try{
     const files = [];
+    const stamp = new Date().toISOString().slice(5,16).replace(/[-T:]/g,'');
     for(let i=0;i<list.length;i++){
-      try{ files.push(await priceImageFile(list[i].img, list[i].price, (cat || 'photo') + '-' + (i+1))); }catch(e){}
+      try{ files.push(await priceImageFile(list[i].img, list[i].price, (cat || 'photo') + '-' + stamp + '-' + String(i+1).padStart(2,'0'))); }catch(e){}
     }
     if(!files.length){ toast('Erreur de préparation des photos', true); return; }
-    if(!(navigator.canShare && navigator.canShare({files: files.slice(0,1)}))){
-      files.forEach(f=>{ const u = URL.createObjectURL(f); const a = document.createElement('a'); a.href = u; a.download = f.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u), 4000); });
-      toast('Partage impossible sur cet appareil — photos téléchargées', true); return;
-    }
-    // photos prêtes : un bouton apparaît en bas (le partage doit partir d'un toucher)
-    shareQueue = files; shareStarted = false;
+    // photos prêtes : un bouton apparaît en bas (le téléchargement doit partir d'un toucher)
+    shareQueue = files;
     showShareNext();
-    toast('✅ ' + files.length + ' photos prêtes — touchez le bouton en bas');
   }finally{ btn.textContent = old; btn.disabled = false; }
 });
 document.getElementById('btn-download-cat-photos').addEventListener('click', async ()=>{
