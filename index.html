@@ -1969,10 +1969,18 @@ darkModeToggle.addEventListener('change', ()=>{
   }
 });
 
+function getOutColors(){
+  const res = [];
+  products.forEach(p=> (p.colors||[]).forEach((c,i)=>{ if((c.qty||0) <= 0) res.push({p, c, i}); }));
+  return res;
+}
+function countOutItems(){
+  return products.filter(p=> p.qty <= 0).length + getOutColors().length;
+}
 function updateStockAlertBadge(){
   const badge = document.getElementById('stockAlertBadge');
   if(!badge) return;
-  const count = products.filter(p=> p.qty <= 0).length;
+  const count = countOutItems();
   if(count > 0){
     badge.textContent = count > 99 ? '99+' : count;
     badge.style.display = 'flex';
@@ -2429,7 +2437,8 @@ function openStockFilter(type){
 function renderFilteredStockList(type){
   const wrap = document.getElementById('listWrap');
   const items = products.filter(p=> type === 'out' ? p.qty <= 0 : (p.qty > 0 && p.qty <= 2));
-  if(items.length === 0){
+  const outColors = type === 'out' ? getOutColors() : [];
+  if(items.length === 0 && outColors.length === 0){
     wrap.innerHTML = `<div class="empty"><h3>Aucun résultat</h3><p>${type==='out' ? 'Aucun produit en rupture de stock.' : 'Aucun produit en stock faible.'}</p></div>`;
     return;
   }
@@ -2456,6 +2465,23 @@ function renderFilteredStockList(type){
     </div>`;
   });
   html += '</div>';
+  if(outColors.length){
+    html += `<div class="dash-section-title" style="margin:18px 4px 8px;">🎨 Couleurs en rupture (${outColors.length})</div><div class="grid-wrap">`;
+    outColors.forEach(({p,c,i})=>{
+      html += `<div class="product out" onclick="openColorsModal('${p.id}')">
+        <div class="img-wrap">
+          <img src="${c.img || placeholderImg()}">
+          <span class="qty-badge zero">Rupture</span>
+        </div>
+        <div class="info">
+          <div class="name">${escapeHtml(colorLabel(p.name, i))}</div>
+          <div class="meta">${Number(c.price != null ? c.price : p.price).toFixed(2)} DA</div>
+          <div class="code" style="color:var(--mauve-dark);">${escapeHtml(p.cat)}</div>
+        </div>
+      </div>`;
+    });
+    html += '</div>';
+  }
   wrap.innerHTML = html;
 }
 document.getElementById('btn-back-cats').addEventListener('click', showCatFolders);
@@ -2566,7 +2592,7 @@ function renderDashboard(){
   dateEl.textContent = now.toLocaleDateString('fr-FR', {weekday:'long', day:'numeric', month:'long'});
   const todayStr = now.toDateString();
   const ordersToday = orders.filter(o=> new Date(o.createdAt).toDateString() === todayStr).length;
-  const outCount = products.filter(p=> p.qty <= 0).length;
+  const outCount = countOutItems();
   const lowCount = products.filter(p=> p.qty > 0 && p.qty <= 2).length;
   document.getElementById('dash-orders').textContent = ordersToday;
   document.getElementById('dash-out').textContent = outCount;
