@@ -701,7 +701,7 @@
       </div>
     </div>
     <div id="deferredRemindersWrap" style="display:none;">
-      <div class="dash-section-title">🕓 Commandes différées à envoyer</div>
+      <div class="dash-section-title">🕓 Commandes reportées à envoyer</div>
       <div class="deferred-reminder-card" id="deferredRemindersList"></div>
     </div>
 
@@ -866,7 +866,7 @@
       <div class="order-filters">
         <div class="stats-presets" style="margin-bottom:12px;">
           <button type="button" class="chip active" id="of-filter-all">Toutes</button>
-          <button type="button" class="chip" id="of-filter-deferred">🕓 Différées</button>
+          <button type="button" class="chip" id="of-filter-deferred">🕓 Reportées</button>
         </div>
         <div class="field">
           <label>Filtrer par employé</label>
@@ -950,7 +950,7 @@
         <input type="text" id="o-address" placeholder="Adresse complète">
       </div>
       <div class="account-row" style="cursor:default;background:var(--cream);border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-bottom:14px;">
-        <span style="display:block;">Commande différée
+        <span style="display:block;">Commande reportée
           <span style="display:block;font-size:11px;font-weight:600;color:var(--mauve-dark);margin-top:2px;">À préparer/envoyer plus tard</span>
         </span>
         <label class="switch"><input type="checkbox" id="o-deferred-toggle"><span class="switch-slider"></span></label>
@@ -1260,7 +1260,7 @@
       <button type="button" class="btn-secondary" id="eo-add-item">+ Ajouter un article</button>
     </div>
     <div class="account-row" style="cursor:default;background:var(--cream);border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-bottom:14px;">
-      <span style="display:block;">Commande différée
+      <span style="display:block;">Commande reportée
         <span style="display:block;font-size:11px;font-weight:600;color:var(--mauve-dark);margin-top:2px;">À préparer/envoyer plus tard</span>
       </span>
       <label class="switch"><input type="checkbox" id="eo-deferred-toggle"><span class="switch-slider"></span></label>
@@ -2116,7 +2116,7 @@ async function checkDeferredNotification(){
   if(!soundMuted) playNotifTone();
   const title = '📦 Commandes à envoyer';
   const names = due.slice(0,3).map(o=> (o.customer && o.customer.name) ? o.customer.name : 'Client').join(', ');
-  const body = due.length + ' commande' + (due.length>1?'s':'') + ' différée' + (due.length>1?'s':'') + ' arrive' + (due.length>1?'nt':'') + ' à échéance : ' + names + (due.length>3 ? '…' : '');
+  const body = due.length + ' commande' + (due.length>1?'s':'') + ' reportée' + (due.length>1?'s':'') + ' arrive' + (due.length>1?'nt':'') + ' à échéance : ' + names + (due.length>3 ? '…' : '');
   try{
     if('serviceWorker' in navigator && navigator.serviceWorker.ready){
       const reg = await navigator.serviceWorker.ready;
@@ -4221,7 +4221,7 @@ function renderOrdersHistory(){
       const late = daysLate(o.deferredDate);
       const dLabel = new Date(o.deferredDate+'T00:00:00').toLocaleDateString('fr-FR');
       const cls = late > 0 ? 'late' : (late === 0 ? 'today' : 'future');
-      const txt = late > 0 ? `En retard · envoi prévu le ${dLabel}` : `🕓 Différée · envoi le ${dLabel}`;
+      const txt = late > 0 ? `En retard · envoi prévu le ${dLabel}` : `🕓 Reportée · envoi le ${dLabel}`;
       return `<div class="deferred-badge ${cls}">${escapeHtml(txt)}</div>`;
     })() : '';
     return `<div class="order-card ${o.deferred ? 'deferred' : ''}" onclick="showOrderDetail('${o.id}')">
@@ -4252,7 +4252,7 @@ function showOrderDetail(id){
     const late = daysLate(o.deferredDate);
     const dLabel = new Date(o.deferredDate+'T00:00:00').toLocaleDateString('fr-FR');
     const cls = late > 0 ? 'late' : (late === 0 ? 'today' : 'future');
-    const txt = late > 0 ? `En retard · envoi prévu le ${dLabel}` : `🕓 Différée · envoi le ${dLabel}`;
+    const txt = late > 0 ? `En retard · envoi prévu le ${dLabel}` : `🕓 Reportée · envoi le ${dLabel}`;
     odBadgeEl.innerHTML = `<div class="deferred-badge ${cls}">${escapeHtml(txt)}</div>`;
   } else {
     odBadgeEl.innerHTML = '';
