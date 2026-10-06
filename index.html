@@ -542,6 +542,14 @@
   .team-item .p{font-size:12px;color:var(--mauve-dark);margin-top:2px;}
   .team-item button{border:1px solid var(--line);background:var(--cream);border-radius:7px;padding:6px 10px;font-size:12px;font-weight:700;color:var(--danger);cursor:pointer;}
   .sync-dot{width:7px;height:7px;border-radius:50%;background:var(--ok);display:inline-block;margin-right:5px;}
+
+#ruptureBanner{position:fixed;top:10px;left:10px;right:10px;z-index:99999;display:flex;align-items:center;gap:12px;
+  background:#b3261e;color:#fff;border-radius:16px;padding:14px 16px;box-shadow:0 8px 28px rgba(0,0,0,.35);
+  transform:translateY(-140%);transition:transform .35s cubic-bezier(.2,.9,.3,1.2);cursor:pointer;max-width:560px;margin:0 auto;}
+#ruptureBanner.show{transform:translateY(0);}
+#ruptureBanner .rb-ico{font-size:28px;line-height:1;}
+#ruptureBanner .rb-txt{display:flex;flex-direction:column;gap:2px;font-size:14px;}
+#ruptureBanner .rb-txt b{font-size:15px;}
 </style>
 </head>
 <body>
@@ -1423,8 +1431,39 @@ function startProductsListener(){
   if(!FIREBASE_OK || productsUnsub) return;
   productsUnsub = db.collection('products').onSnapshot(snap=>{
     products = snap.docs.map(d=>d.data()).sort((a,b)=>(a.order||0)-(b.order||0));
+    detectNewRuptures();
     refreshCurrentInventoryView();
   }, ()=> warnStorage());
+}
+/* ---------- Alerte rupture de stock (produit ou couleur qui passe à 0) ---------- */
+let stockPrevMap = null;
+let pendingRuptures = [];
+let ruptureTimer = null;
+function buildStockMap(list){
+  const m = {};
+  list.forEach(p=>{
+    m[p.id] = {qty:p.qty||0, label:p.name};
+    (p.colors||[]).forEach((c,i)=>{ m[p.id+'#'+i] = {qty:c.qty||0, label:colorLabel(p.name, i)}; });
+  });
+  return m;
+}
+function detectNewRuptures(){
+  const cur = buildStockMap(products);
+  if(stockPrevMap){
+    Object.keys(cur).forEach(k=>{
+      const prev = stockPrevMap[k];
+      if(prev && prev.qty > 0 && cur[k].qty <= 0) pendingRuptures.push(cur[k].label);
+    });
+    if(pendingRuptures.length && !ruptureTimer){
+      // regroupe les ruptures survenues ensemble (une même commande peut en provoquer plusieurs)
+      ruptureTimer = setTimeout(()=>{
+        const names = Array.from(new Set(pendingRuptures));
+        pendingRuptures = []; ruptureTimer = null;
+        notifyRupture(names);
+      }, 700);
+    }
+  }
+  stockPrevMap = cur;
 }
 async function loadProducts(){
   if(!FIREBASE_OK){ warnStorage(); refreshCurrentInventoryView(); return; }
@@ -1913,6 +1952,60 @@ document.getElementById('btn-sound-toggle').addEventListener('click', ()=>{
   updateSoundIcon();
 });
 updateSoundIcon();
+function playRuptureTone(){
+  const ctx = getAudioCtx();
+  if(!ctx) return;
+  try{
+    [[0,988],[0.22,988],[0.44,1319],[0.7,988],[0.92,1319]].forEach(([delay,freq])=>{
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime + delay);
+      gain.gain.exponentialRampToValueAtTime(0.7, ctx.currentTime + delay + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + delay + 0.2);
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start(ctx.currentTime + delay);
+      osc.stop(ctx.currentTime + delay + 0.22);
+    });
+  }catch(e){}
+}
+function showRuptureBanner(text){
+  let b = document.getElementById('ruptureBanner');
+  if(!b){
+    b = document.createElement('div');
+    b.id = 'ruptureBanner';
+    b.addEventListener('click', ()=>{ b.classList.remove('show'); openStockFilter('out'); });
+    document.body.appendChild(b);
+  }
+  b.innerHTML = '<div class="rb-ico">⚠️</div><div class="rb-txt"><b>Rupture de stock</b><span></span></div>';
+  b.querySelector('span').textContent = text;
+  b.classList.add('show');
+  clearTimeout(showRuptureBanner.t);
+  showRuptureBanner.t = setTimeout(()=> b.classList.remove('show'), 9000);
+}
+async function notifyRupture(names){
+  if(!currentUser || !names.length) return;
+  const shown = names.slice(0,3).join(' • ') + (names.length>3 ? ' +' + (names.length-3) + ' autres' : '');
+  const title = names.length > 1 ? '⚠️ ' + names.length + ' ruptures de stock' : '⚠️ Rupture de stock';
+  showRuptureBanner(shown);
+  if(!soundMuted) playRuptureTone();
+  try{ if(navigator.vibrate) navigator.vibrate([300,150,300,150,500]); }catch(e){}
+  if(!notifPrefEnabled()) return;
+  const body = shown + (names.length>1 ? ' — plus de stock' : ' — plus de stock disponible');
+  try{
+    if('serviceWorker' in navigator && navigator.serviceWorker.ready){
+      const reg = await navigator.serviceWorker.ready;
+      reg.showNotification(title, {
+        body, icon:'icon-192.png', badge:'icon-192.png',
+        vibrate:[300,150,300,150,500], tag:'rupture-'+Date.now(), renotify:true,
+        requireInteraction:true
+      });
+    } else if('Notification' in window){
+      new Notification(title, {body, icon:'icon-192.png'});
+    }
+  }catch(e){}
+}
 async function notifyNewOrder(o){
   if(!notifPrefEnabled()) return;
   if(!soundMuted) playNotifTone();
