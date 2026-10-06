@@ -1316,9 +1316,17 @@ function withTimeout(promise, ms){
     new Promise((_, rej)=> setTimeout(()=> rej(new Error('timeout')), ms))
   ]);
 }
-let storageWarned = false;
+let lastStorageWarnAt = 0;
 function warnStorage(){
-  if(!storageWarned){ storageWarned = true; toast('Synchronisation en ligne indisponible — vérifiez votre connexion', true); }
+  // Avant : ce message ne s'affichait qu'UNE SEULE FOIS par session, donc après la première
+  // coupure réseau, toutes les sauvegardes suivantes pouvaient échouer EN SILENCE — l'app
+  // affichait quand même "enregistré" alors que rien n'était envoyé à Firestore. On laisse
+  // maintenant le message réapparaître (avec un court délai anti-spam) à chaque échec.
+  const now = Date.now();
+  if(now - lastStorageWarnAt > 4000){
+    lastStorageWarnAt = now;
+    toast('Connexion instable — enregistrement en ligne échoué, réessayez', true);
+  }
 }
 function escapeHtml(s){
   return (s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
@@ -1426,13 +1434,40 @@ async function loadProducts(){
   }catch(e){ warnStorage(); }
   refreshCurrentInventoryView();
 }
+// Sauvegarde TOUS les produits (écrase chaque document) — à réserver aux opérations
+// qui touchent plusieurs produits à la fois (réorganisation, suppression de catégorie, import...).
+// Renvoie true/false : le code appelant doit vérifier le résultat avant d'annoncer un succès,
+// sinon une commande/quantité peut sembler "enregistrée" alors qu'elle ne l'était pas.
 async function saveProducts(){
-  if(!FIREBASE_OK){ warnStorage(); return; }
-  try{
-    const batch = db.batch();
-    products.forEach(p=> batch.set(db.collection('products').doc(p.id), p));
-    await withTimeout(batch.commit(), 8000);
-  }catch(e){ warnStorage(); }
+  if(!FIREBASE_OK){ warnStorage(); return false; }
+  for(let attempt=0; attempt<2; attempt++){
+    try{
+      const batch = db.batch();
+      products.forEach(p=> batch.set(db.collection('products').doc(p.id), p));
+      await withTimeout(batch.commit(), 20000);
+      return true;
+    }catch(e){
+      if(attempt===0) await new Promise(r=>setTimeout(r,1000)); // une nouvelle tentative avant d'abandonner
+    }
+  }
+  warnStorage();
+  return false;
+}
+// Sauvegarde UN SEUL produit — beaucoup plus léger et plus fiable qu'un saveProducts() complet
+// (surtout quand des photos sont attachées), à utiliser pour toute modification d'un seul article
+// (quantité, prix, coût, photo d'une couleur...).
+async function saveProductDoc(p){
+  if(!FIREBASE_OK || !p){ warnStorage(); return false; }
+  for(let attempt=0; attempt<2; attempt++){
+    try{
+      await withTimeout(db.collection('products').doc(p.id).set(p), 20000);
+      return true;
+    }catch(e){
+      if(attempt===0) await new Promise(r=>setTimeout(r,1000));
+    }
+  }
+  warnStorage();
+  return false;
 }
 async function deleteProductDoc(id){
   if(!FIREBASE_OK) return;
@@ -2570,9 +2605,15 @@ async function adjustQty(id, delta){
   await loadProducts();
   const p = products.find(x=>x.id===id);
   if(!p) return;
+  const prevQty = p.qty;
   p.qty = Math.max(0, p.qty + delta);
-  await saveProducts();
   refreshCurrentInventoryView();
+  const ok = await saveProductDoc(p);
+  if(!ok){
+    p.qty = prevQty; // on annule le changement localement puisqu'il n'a pas été enregistré
+    refreshCurrentInventoryView();
+    toast('Échec — quantité NON enregistrée, réessayez', true);
+  }
 }
 async function deleteProduct(id){
   await loadProducts();
@@ -2595,8 +2636,9 @@ async function moveProduct(id, direction){
   const tmp = products[i];
   products[i] = products[j];
   products[j] = tmp;
-  await saveProducts();
   refreshCurrentInventoryView();
+  const [okA, okB] = await Promise.all([saveProductDoc(products[j]), saveProductDoc(products[i])]);
+  if(!okA || !okB) toast('Échec — ordre NON enregistré, réessayez', true);
 }
 
 document.getElementById('f-image').addEventListener('change', async (e)=>{
@@ -2631,8 +2673,14 @@ document.getElementById('btn-save').addEventListener('click', async ()=>{
     colors: []
   };
   products.push(product);
-  await saveProducts();
   refreshCurrentInventoryView();
+  const ok = await saveProductDoc(product);
+  if(!ok){
+    products = products.filter(x=>x.id!==product.id);
+    refreshCurrentInventoryView();
+    toast('Échec — produit NON enregistré, réessayez', true);
+    return;
+  }
   toast('Produit enregistré');
   document.getElementById('f-name').value = '';
   document.getElementById('f-price').value = '1000';
@@ -2844,10 +2892,18 @@ function renderColorsGrid(){
             const dataUrl = await compressImage(file);
             const pp = products.find(x=>x.id===currentColorsProductId);
             if(!pp || !pp.colors || !pp.colors[i]) return;
+            const prevImg = pp.colors[i].img;
             pp.colors[i].img = dataUrl;
-            await saveProducts();
             refreshCurrentInventoryView();
             renderColorsGrid();
+            const ok = await saveProductDoc(pp);
+            if(!ok){
+              pp.colors[i].img = prevImg;
+              refreshCurrentInventoryView();
+              renderColorsGrid();
+              toast('Échec — photo NON enregistrée, réessayez', true);
+              return;
+            }
             toast('Photo mise à jour');
           }catch(err){
             toast("Erreur de traitement de l'image", true);
@@ -2863,46 +2919,67 @@ function renderColorsGrid(){
     });
   }
 }
-function setColorQtyDirect(index){
+async function setColorQtyDirect(index){
   const input = document.getElementById('color-setqty-'+index);
   const newQty = parseInt(input.value, 10);
   if(isNaN(newQty) || newQty < 0){ toast('Entrez une quantité valide', true); return; }
   const p = products.find(x=>x.id===currentColorsProductId);
   if(!p || !p.colors || !p.colors[index]) return;
+  const prevQty = p.colors[index].qty;
   p.colors[index].qty = newQty;
-  saveProducts().then(()=>{
+  refreshCurrentInventoryView();
+  renderColorsGrid();
+  const ok = await saveProductDoc(p);
+  if(!ok){
+    p.colors[index].qty = prevQty;
     refreshCurrentInventoryView();
     renderColorsGrid();
-    toast('Quantité mise à jour');
-  });
+    toast('Échec — quantité NON enregistrée, réessayez', true);
+    return;
+  }
+  toast('Quantité mise à jour');
 }
-function setColorPriceDirect(index){
+async function setColorPriceDirect(index){
   const input = document.getElementById('color-setprice-'+index);
   const newPrice = parseFloat(input.value);
   if(isNaN(newPrice) || newPrice < 0){ toast('Entrez un prix valide', true); return; }
   const p = products.find(x=>x.id===currentColorsProductId);
   if(!p || !p.colors || !p.colors[index]) return;
+  const prevPrice = p.colors[index].price;
   p.colors[index].price = newPrice;
-  saveProducts().then(()=>{
+  refreshCurrentInventoryView();
+  renderColorsGrid();
+  const ok = await saveProductDoc(p);
+  if(!ok){
+    p.colors[index].price = prevPrice;
     refreshCurrentInventoryView();
     renderColorsGrid();
-    toast('Prix mis à jour');
-  });
+    toast('Échec — prix NON enregistré, réessayez', true);
+    return;
+  }
+  toast('Prix mis à jour');
 }
-function setColorCostDirect(index){
+async function setColorCostDirect(index){
   const input = document.getElementById('color-setcost-'+index);
   const newCost = parseFloat(input.value);
   if(isNaN(newCost) || newCost < 0){ toast('Entrez un coût valide', true); return; }
   const p = products.find(x=>x.id===currentColorsProductId);
   if(!p || !p.colors || !p.colors[index]) return;
+  const prevCost = p.colors[index].cost;
   p.colors[index].cost = newCost;
-  saveProducts().then(()=>{
+  refreshCurrentInventoryView();
+  renderColorsGrid();
+  const ok = await saveProductDoc(p);
+  if(!ok){
+    p.colors[index].cost = prevCost;
     refreshCurrentInventoryView();
     renderColorsGrid();
-    toast('Coût mis à jour');
-  });
+    toast('Échec — coût NON enregistré, réessayez', true);
+    return;
+  }
+  toast('Coût mis à jour');
 }
-function scanColorAddQty(index){
+async function scanColorAddQty(index){
   const input = document.getElementById('color-scan-'+index);
   const raw = input.value.trim();
   input.value = '';
@@ -2915,14 +2992,21 @@ function scanColorAddQty(index){
     input.focus();
     return;
   }
-  p.colors[index].qty = (p.colors[index].qty || 0) + 1;
-  saveProducts().then(()=>{
+  const prevQty = p.colors[index].qty || 0;
+  p.colors[index].qty = prevQty + 1;
+  refreshCurrentInventoryView();
+  renderColorsGrid();
+  const ok = await saveProductDoc(p);
+  if(!ok){
+    p.colors[index].qty = prevQty;
     refreshCurrentInventoryView();
     renderColorsGrid();
-    toast('+1 ajouté');
-    const newInput = document.getElementById('color-scan-'+index);
-    if(newInput) newInput.focus();
-  });
+    toast('Échec — ajout NON enregistré, réessayez', true);
+    return;
+  }
+  toast('+1 ajouté');
+  const newInput = document.getElementById('color-scan-'+index);
+  if(newInput) newInput.focus();
 }
 let colorFullscreenIndex = null;
 function openColorFullscreen(index){
@@ -2988,33 +3072,54 @@ document.getElementById('ac-color-save').addEventListener('click', async ()=>{
   const p = products.find(x=>x.id===currentColorsProductId);
   if(!p) return;
   if(!p.colors) p.colors = [];
+  const addedCount = pendingColorImages.length;
   pendingColorImages.forEach(img=>{
     p.colors.push({img, price, cost, qty, code: genBarcode()});
   });
-  await saveProducts();
   refreshCurrentInventoryView();
   renderColorsGrid();
+  const ok = await saveProductDoc(p);
+  if(!ok){
+    p.colors.splice(p.colors.length - addedCount, addedCount);
+    refreshCurrentInventoryView();
+    renderColorsGrid();
+    toast('Échec — couleur NON enregistrée, réessayez', true);
+    return;
+  }
   document.getElementById('addColorModal').classList.remove('show');
-  toast(pendingColorImages.length > 1 ? pendingColorImages.length+' couleurs ajoutées' : 'Couleur ajoutée');
+  toast(addedCount > 1 ? addedCount+' couleurs ajoutées' : 'Couleur ajoutée');
   pendingColorImages = [];
 });
 async function modalAdjustColorQty(index, delta){
   await loadProducts();
   const p = products.find(x=>x.id===currentColorsProductId);
   if(!p || !p.colors || !p.colors[index]) return;
-  p.colors[index].qty = Math.max(0, (p.colors[index].qty||0) + delta);
-  await saveProducts();
+  const prevQty = p.colors[index].qty||0;
+  p.colors[index].qty = Math.max(0, prevQty + delta);
   refreshCurrentInventoryView();
   renderColorsGrid();
+  const ok = await saveProductDoc(p);
+  if(!ok){
+    p.colors[index].qty = prevQty;
+    refreshCurrentInventoryView();
+    renderColorsGrid();
+    toast('Échec NON enregistré, réessayez', true);
+  }
 }
 async function deleteColorPhoto(index){
   await loadProducts();
   const p = products.find(x=>x.id===currentColorsProductId);
   if(!p || !p.colors) return;
-  p.colors.splice(index, 1);
-  await saveProducts();
+  const removed = p.colors.splice(index, 1);
   refreshCurrentInventoryView();
   renderColorsGrid();
+  const ok = await saveProductDoc(p);
+  if(!ok){
+    p.colors.splice(index, 0, removed[0]);
+    refreshCurrentInventoryView();
+    renderColorsGrid();
+    toast('Échec — suppression NON enregistrée, réessayez', true);
+  }
 }
 function pmShowBarcode(id){
   closeProductModal();
@@ -3051,10 +3156,18 @@ document.getElementById('pm-setqty-btn').addEventListener('click', async ()=>{
   await loadProducts();
   const p = products.find(x=>x.id===id);
   if(!p) return;
+  const prevQty = p.qty;
   p.qty = newQty;
-  await saveProducts();
   refreshCurrentInventoryView();
   openProductModal(id);
+  const ok = await saveProductDoc(p);
+  if(!ok){
+    p.qty = prevQty;
+    refreshCurrentInventoryView();
+    openProductModal(id);
+    toast('Échec — quantité NON enregistrée, réessayez', true);
+    return;
+  }
   toast('Quantité mise à jour');
 });
 document.getElementById('pm-setprice-btn').addEventListener('click', async ()=>{
@@ -3066,10 +3179,18 @@ document.getElementById('pm-setprice-btn').addEventListener('click', async ()=>{
   await loadProducts();
   const p = products.find(x=>x.id===id);
   if(!p) return;
+  const prevPrice = p.price;
   p.price = newPrice;
-  await saveProducts();
   refreshCurrentInventoryView();
   openProductModal(id);
+  const ok = await saveProductDoc(p);
+  if(!ok){
+    p.price = prevPrice;
+    refreshCurrentInventoryView();
+    openProductModal(id);
+    toast('Échec — prix NON enregistré, réessayez', true);
+    return;
+  }
   toast('Prix mis à jour');
 });
 document.getElementById('pm-setcost-btn').addEventListener('click', async ()=>{
@@ -3081,10 +3202,18 @@ document.getElementById('pm-setcost-btn').addEventListener('click', async ()=>{
   await loadProducts();
   const p = products.find(x=>x.id===id);
   if(!p) return;
+  const prevCost = p.cost;
   p.cost = newCost;
-  await saveProducts();
   refreshCurrentInventoryView();
   openProductModal(id);
+  const ok = await saveProductDoc(p);
+  if(!ok){
+    p.cost = prevCost;
+    refreshCurrentInventoryView();
+    openProductModal(id);
+    toast('Échec — coût NON enregistré, réessayez', true);
+    return;
+  }
   toast('Coût mis à jour');
 });
 document.getElementById('pm-photo-input').addEventListener('change', async (e)=>{
@@ -3097,10 +3226,18 @@ document.getElementById('pm-photo-input').addEventListener('change', async (e)=>
     await loadProducts();
     const p = products.find(x=>x.id===id);
     if(!p) return;
+    const prevImg = p.img;
     p.img = dataUrl;
-    await saveProducts();
     refreshCurrentInventoryView();
     openProductModal(id);
+    const ok = await saveProductDoc(p);
+    if(!ok){
+      p.img = prevImg;
+      refreshCurrentInventoryView();
+      openProductModal(id);
+      toast('Échec — photo NON enregistrée, réessayez', true);
+      return;
+    }
     toast('Photo mise à jour');
   }catch(err){
     toast("Erreur de traitement de l'image", true);
@@ -3249,9 +3386,16 @@ async function handleScannedCode(rawCode){
       scanHistoryData.unshift({name:p.name, ok:false, msg:'Stock déjà à 0'});
       renderScanHistory(); return;
     }
+    const prevQty = p.qty;
     p.qty -= 1;
-    await saveProducts();
     refreshCurrentInventoryView();
+    const ok = await saveProductDoc(p);
+    if(!ok){
+      p.qty = prevQty;
+      refreshCurrentInventoryView();
+      toast('Échec — scan NON enregistré, réessayez', true);
+      return;
+    }
     toast(p.name+' — 1 unité retirée ('+p.qty+' restant)');
     scanHistoryData.unshift({name:p.name, ok:true, qty:p.qty, by: currentUser ? currentUser.name : ''});
     renderScanHistory();
@@ -3270,9 +3414,16 @@ async function handleScannedCode(rawCode){
         scanHistoryData.unshift({name:label, ok:false, msg:'Stock déjà à 0'});
         renderScanHistory(); return;
       }
+      const prevCQty = c.qty;
       c.qty -= 1;
-      await saveProducts();
       refreshCurrentInventoryView();
+      const ok = await saveProductDoc(prod);
+      if(!ok){
+        c.qty = prevCQty;
+        refreshCurrentInventoryView();
+        toast('Échec — scan NON enregistré, réessayez', true);
+        return;
+      }
       toast(label+' — 1 unité retirée ('+c.qty+' restant)');
       scanHistoryData.unshift({name:label, ok:true, qty:c.qty, by: currentUser ? currentUser.name : ''});
       renderScanHistory();
@@ -3300,9 +3451,16 @@ async function handleScannedCodeAdd(rawCode){
   await loadProducts();
   const p = products.find(x=>x.code===code);
   if(p){
-    p.qty = (p.qty||0) + 1;
-    await saveProducts();
+    const prevQty = p.qty||0;
+    p.qty = prevQty + 1;
     refreshCurrentInventoryView();
+    const ok = await saveProductDoc(p);
+    if(!ok){
+      p.qty = prevQty;
+      refreshCurrentInventoryView();
+      toast('Échec — scan NON enregistré, réessayez', true);
+      return;
+    }
     toast(p.name+' — 1 unité ajoutée ('+p.qty+' en stock)');
     scanAddHistoryData.unshift({name:p.name, ok:true, qty:p.qty, by: currentUser ? currentUser.name : ''});
     renderScanAddHistory();
@@ -3315,9 +3473,16 @@ async function handleScannedCodeAdd(rawCode){
     if(ci !== -1){
       const c = prod.colors[ci];
       const label = colorLabel(prod.name, ci);
-      c.qty = (c.qty||0) + 1;
-      await saveProducts();
+      const prevCQty = c.qty||0;
+      c.qty = prevCQty + 1;
       refreshCurrentInventoryView();
+      const ok = await saveProductDoc(prod);
+      if(!ok){
+        c.qty = prevCQty;
+        refreshCurrentInventoryView();
+        toast('Échec — scan NON enregistré, réessayez', true);
+        return;
+      }
       toast(label+' — 1 unité ajoutée ('+c.qty+' en stock)');
       scanAddHistoryData.unshift({name:label, ok:true, qty:c.qty, by: currentUser ? currentUser.name : ''});
       renderScanAddHistory();
@@ -3445,9 +3610,17 @@ async function loadOrders(){
   }catch(e){ warnStorage(); }
 }
 async function saveOrderDoc(order){
-  if(!FIREBASE_OK){ warnStorage(); return; }
-  try{ await withTimeout(db.collection('orders').doc(order.id).set(order), 8000); }
-  catch(e){ warnStorage(); }
+  if(!FIREBASE_OK){ warnStorage(); return false; }
+  for(let attempt=0; attempt<2; attempt++){
+    try{
+      await withTimeout(db.collection('orders').doc(order.id).set(order), 20000);
+      return true;
+    }catch(e){
+      if(attempt===0) await new Promise(r=>setTimeout(r,1000));
+    }
+  }
+  warnStorage();
+  return false;
 }
 async function deleteOrderDoc(id){
   if(!FIREBASE_OK) return;
@@ -3863,9 +4036,11 @@ document.getElementById('eo-save').addEventListener('click', async ()=>{
 
   await loadProducts();
   // Remet en stock les anciens articles, puis retire les nouveaux
+  const touchedIds = new Set();
   o.items.forEach(it=>{
     const p = products.find(x=>x.id===it.productId);
     if(!p) return;
+    touchedIds.add(p.id);
     if(it.colorIndex !== undefined && it.colorIndex !== null && p.colors && p.colors[it.colorIndex]){
       p.colors[it.colorIndex].qty = (p.colors[it.colorIndex].qty || 0) + it.qty;
     } else {
@@ -3875,14 +4050,20 @@ document.getElementById('eo-save').addEventListener('click', async ()=>{
   editingOrderItems.forEach(it=>{
     const p = products.find(x=>x.id===it.productId);
     if(!p) return;
+    touchedIds.add(p.id);
     if(it.colorIndex !== undefined && it.colorIndex !== null && p.colors && p.colors[it.colorIndex]){
       p.colors[it.colorIndex].qty = Math.max(0, (p.colors[it.colorIndex].qty || 0) - it.qty);
     } else {
       p.qty = Math.max(0, p.qty - it.qty);
     }
   });
-  await saveProducts();
   refreshCurrentInventoryView();
+  const touchedProducts = products.filter(p=> touchedIds.has(p.id));
+  const results = await Promise.all(touchedProducts.map(p=> saveProductDoc(p)));
+  if(results.some(r=> !r)){
+    toast('Échec — stock NON mis à jour pour certains articles, réessayez', true);
+    return;
+  }
 
   o.customer = Object.assign({}, o.customer, {name, phone, wilaya, commune, address, deliveryType: eoDeliveryType});
   o.items = editingOrderItems;
@@ -3891,7 +4072,11 @@ document.getElementById('eo-save').addEventListener('click', async ()=>{
   o.profit = total - o.costTotal;
   o.deferred = eoIsDeferred;
   o.deferredDate = eoIsDeferred ? eoDeferredDate : '';
-  await saveOrderDoc(o);
+  const orderSaved = await saveOrderDoc(o);
+  if(!orderSaved){
+    toast('Échec — la commande n\'a pas été enregistrée (le stock, lui, est à jour), réessayez', true);
+    return;
+  }
   await upsertCustomer(o);
   updateDeferredBadge();
   document.getElementById('editOrderModal').classList.remove('show');
@@ -3905,20 +4090,25 @@ async function deleteOrder(id){
   const order = orders.find(o=>o.id===id);
   if(order){
     await loadProducts();
-    let changed = false;
+    const touchedIds = new Set();
     order.items.forEach(it=>{
       const p = products.find(x=>x.id===it.productId);
       if(!p) return;
+      touchedIds.add(p.id);
       if(it.colorIndex !== undefined && it.colorIndex !== null && p.colors && p.colors[it.colorIndex]){
         p.colors[it.colorIndex].qty = (p.colors[it.colorIndex].qty || 0) + it.qty;
       } else {
         p.qty = (p.qty || 0) + it.qty;
       }
-      changed = true;
     });
-    if(changed){
-      await saveProducts();
+    if(touchedIds.size > 0){
       refreshCurrentInventoryView();
+      const touchedProducts = products.filter(p=> touchedIds.has(p.id));
+      const results = await Promise.all(touchedProducts.map(p=> saveProductDoc(p)));
+      if(results.some(r=> !r)){
+        toast('Échec — remise en stock NON enregistrée pour certains articles, réessayez', true);
+        return;
+      }
     }
   }
   orders = orders.filter(o=>o.id!==id);
@@ -4170,10 +4360,12 @@ document.getElementById('btn-save-order').addEventListener('click', async ()=>{
   const items = [];
   let computedTotal = 0;
   let costTotal = 0;
+  const touchedIds = new Set();
   keys.forEach(key=>{
     const {productId, colorIndex} = parseCartKey(key);
     const p = products.find(x=>x.id===productId);
     if(!p) return;
+    touchedIds.add(p.id);
     const qty = cart[key];
     if(colorIndex !== null && p.colors && p.colors[colorIndex]){
       const c = p.colors[colorIndex];
@@ -4192,8 +4384,13 @@ document.getElementById('btn-save-order').addEventListener('click', async ()=>{
     }
   });
   const total = totalInput !== '' ? parseFloat(totalInput) : computedTotal;
-  await saveProducts();
   refreshCurrentInventoryView();
+  const touchedProducts = products.filter(p=> touchedIds.has(p.id));
+  const results = await Promise.all(touchedProducts.map(p=> saveProductDoc(p)));
+  if(results.some(r=> !r)){
+    toast('Échec — la commande n\'a PAS été enregistrée, réessayez', true);
+    return;
+  }
 
   const newOrder = {
     id: 'o'+Date.now()+Math.floor(Math.random()*1000),
@@ -4204,8 +4401,12 @@ document.getElementById('btn-save-order').addEventListener('click', async ()=>{
     deferred: isDeferred,
     deferredDate: isDeferred ? deferredDate : ''
   };
+  const orderSaved = await saveOrderDoc(newOrder);
+  if(!orderSaved){
+    toast('Échec — la commande n\'a pas été enregistrée (le stock, lui, est à jour), réessayez', true);
+    return;
+  }
   orders.push(newOrder);
-  await saveOrderDoc(newOrder);
   await upsertCustomer(newOrder);
   updateDeferredBadge();
 
