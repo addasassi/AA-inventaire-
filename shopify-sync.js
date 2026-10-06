@@ -79,6 +79,14 @@
     const cols = colorsOf(p);
     return cols.length ? cols.map(c=>String(c.code)) : (p.code ? [String(p.code)] : []);
   }
+  // couleur affichée sur la photo de vitrine : choisie (⭐) ou même photo que la couleur
+  function vitrineCode(p){
+    const cols = colorsOf(p);
+    if(!cols.length || !p.img) return '';
+    if(p.vitrine && cols.some(c=> String(c.code) === String(p.vitrine))) return String(p.vitrine);
+    const same = cols.find(c=> c.img && c.img === p.img);
+    return same ? String(same.code) : '';
+  }
   function mimeOf(dataUrl){ const m = String(dataUrl||'').match(/^data:([^;]+);base64,/); return m ? m[1] : null; }
 
   async function getMeta(){
@@ -121,7 +129,8 @@
           nodes{ id title status productType tags handle
             cover: metafield(namespace:"atelier", key:"cover"){ value }
             coverMedia: metafield(namespace:"atelier", key:"cover_media"){ value }
-            options{ name }
+            vitrine: metafield(namespace:"atelier", key:"vitrine"){ value }
+            options{ name optionValues{ name } }
             media(first:50){ nodes{ id } }
             variants(first:250){ nodes{ id sku price title inventoryQuantity selectedOptions{ name value } inventoryItem{ id tracked } media(first:5){ nodes{ id } } } } } }
         locations(first:5){ nodes{ id isActive } }
@@ -270,14 +279,23 @@
       }
 
       // Photo de vitrine (couverture) des produits avec couleurs
+      const oldCoverId = sp.coverMedia && sp.coverMedia.value;
+      let coverId = oldCoverId, coverChanged = false;
       if(cols.length && !isDefault && p.img){
         const want = hashStr(p.img);
         const have = sp.cover && sp.cover.value;
         if(want !== have){
           log('🖼️ Photo de vitrine : ' + p.name);
-          await setCover(sp.id, p, want, sp.coverMedia && sp.coverMedia.value);
+          coverId = (await setCover(sp.id, p, want, oldCoverId)) || coverId;
+          coverChanged = coverId !== oldCoverId;
           stats.photos++;
         }
+      }
+      // La photo de vitrine = une couleur qu'on peut choisir
+      const vCode = (!isDefault && cols.length) ? vitrineCode(p) : '';
+      if(!isDefault && cols.length){
+        try{ if(await syncVitrine(sp, p, shop, coverId, oldCoverId, coverChanged, vCode)){ log('⭐ Vitrine liée à sa couleur : ' + p.name); stats.photos++; } }
+        catch(e){ log('⚠️ Vitrine ' + p.name + ' : ' + (e.message||e)); }
       }
       const priceUpdates = [];
       const newVariants = [];
@@ -295,13 +313,14 @@
             if((x.inventoryQuantity||0) !== u.qty) qtyUpdates.push({inventoryItemId:x.inventoryItem.id, locationId:shop.locationId, quantity:u.qty, changeFromQuantity:null});
           });
           // toutes les tailles d'une couleur gardent la photo de la couleur
-          if(!isDefault){
+          if(!isDefault && u.code !== vCode){
             const withMedia = vs.find(x=> x.media.nodes.length);
             if(withMedia) vs.forEach(x=>{ if(!x.media.nodes.length) mediaFill.push({variantId:x.id, mediaIds:[withMedia.media.nodes[0].id]}); });
           }
           // Photo modifiée ?
           const h = hashStr(u.img);
           if(firstRun || !imgHash[u.code]){ imgHash[u.code] = h; }
+          else if(u.img && imgHash[u.code] !== h && u.code === vCode){ imgHash[u.code] = h; }
           else if(u.img && imgHash[u.code] !== h){
             log('📷 Photo : ' + p.name + (u.idx>=0 ? ' #'+(u.idx+1) : ''));
             await replacePhoto(sp, vs, u, isDefault);
@@ -399,23 +418,101 @@
       try{ await gql(`mutation DM($productId:ID!,$mediaIds:[ID!]!){ productDeleteMedia(productId:$productId, mediaIds:$mediaIds){ deletedMediaIds mediaUserErrors{ field message } } }`, {productId, mediaIds:[oldMediaId]}); }catch(e){}
     }
     await saveCoverMeta(productId, hash, newId);
+    return newId;
+  }
+  const Q_APPEND = `mutation VM($productId:ID!,$variantMedia:[ProductVariantAppendMediaInput!]!){ productVariantAppendMedia(productId:$productId, variantMedia:$variantMedia){ userErrors{ field message } } }`;
+  const Q_DELETE = `mutation DM($productId:ID!,$mediaIds:[ID!]!){ productDeleteMedia(productId:$productId, mediaIds:$mediaIds){ deletedMediaIds mediaUserErrors{ field message } } }`;
+  async function appendRetry(productId, variantMedia){
+    for(let i=0;i<8;i++){
+      try{ userErr(await gql(Q_APPEND, {productId, variantMedia})); return; }
+      catch(e){ if(i===7) throw e; await new Promise(r=>setTimeout(r, 2000)); }
+    }
+  }
+  async function syncVitrine(sp, p, shop, coverId, oldCoverId, coverChanged, V){
+    const had = (sp.vitrine && sp.vitrine.value && sp.vitrine.value !== '-') ? sp.vitrine.value : '';
+    const own = (code)=>{ const h = shop.bySku[code]; return (h && h.product.id === sp.id) ? h.variants : []; };
+    const vVars = V ? own(V) : [];
+    if(V && (!coverId || !vVars.length)) return false;
+    const isCover = (m)=> m.id === coverId || m.id === oldCoverId;
+    let changed = false;
+    // 1) ancienne couleur de vitrine → reprend sa propre photo
+    if(had && had !== V){
+      const oVars = own(had);
+      const att = oVars.filter(v=> !v.media.nodes.length || v.media.nodes.some(isCover));
+      const det = coverChanged ? [] : att.filter(v=> v.media.nodes.some(m=> m.id === coverId));
+      if(det.length){
+        userErr(await gql(`mutation D($productId:ID!,$variantMedia:[ProductVariantDetachMediaInput!]!){ productVariantDetachMedia(productId:$productId, variantMedia:$variantMedia){ userErrors{ field message } } }`,
+          {productId: sp.id, variantMedia: det.map(v=>({variantId:v.id, mediaIds:[coverId]}))}));
+      }
+      const oc = colorsOf(p).find(c=> String(c.code) === had);
+      if(att.length && oc && oc.img){
+        const src = await uploadImage(oc.img, 'c'+oc.code);
+        if(src){
+          const res = userErr(await gql(`mutation PM($productId:ID!,$media:[CreateMediaInput!]!){ productCreateMedia(productId:$productId, media:$media){ media{ id } mediaUserErrors{ field message } } }`,
+            {productId: sp.id, media:[{originalSource:src, mediaContentType:'IMAGE', alt: sp.title}]}));
+          const mid = res.productCreateMedia.media[0] && res.productCreateMedia.media[0].id;
+          if(mid) await appendRetry(sp.id, att.map(v=>({variantId:v.id, mediaIds:[mid]})));
+        }
+      }
+      changed = true;
+    }
+    // 2) la couleur de vitrine prend la photo de vitrine
+    if(V){
+      const need = vVars.filter(v=> !v.media.nodes.some(m=> m.id === coverId));
+      if(need.length){
+        const vIds = new Set(vVars.map(v=>v.id));
+        const others = new Set();
+        sp.variants.nodes.forEach(v=>{ if(!vIds.has(v.id)) v.media.nodes.forEach(m=> others.add(m.id)); });
+        const old = [...new Set(need.flatMap(v=> v.media.nodes.map(m=>m.id)))].filter(id=> id !== coverId && id !== oldCoverId && !others.has(id));
+        if(old.length){ try{ await gql(Q_DELETE, {productId: sp.id, mediaIds: old}); }catch(e){} }
+        // si une photo reste liée (utilisée par une autre couleur), on la détache
+        const left = (v)=> v.media.nodes.map(m=>m.id).filter(id=> !old.includes(id) && id !== coverId && !(coverChanged && id === oldCoverId));
+        const keep = need.filter(v=> left(v).length);
+        if(keep.length){
+          try{ await gql(`mutation D($productId:ID!,$variantMedia:[ProductVariantDetachMediaInput!]!){ productVariantDetachMedia(productId:$productId, variantMedia:$variantMedia){ userErrors{ field message } } }`,
+            {productId: sp.id, variantMedia: keep.map(v=>({variantId:v.id, mediaIds: left(v)}))}); }catch(e){}
+        }
+        await appendRetry(sp.id, need.map(v=>({variantId:v.id, mediaIds:[coverId]})));
+        changed = true;
+      }
+    }
+    if(!changed && had === V) return false;
+    // 3) couleur de vitrine en premier + photo de vitrine en premier
+    if(V){
+      const vName = ((vVars[0].selectedOptions||[]).find(o=> o.name === OPTION) || {}).value;
+      const options = (sp.options||[]).map(o=>{
+        let vals = (o.optionValues||[]).map(x=> x.name);
+        if(o.name === OPTION && vName) vals = [vName, ...vals.filter(n=> n !== vName)];
+        return {name:o.name, values: vals.map(n=>({name:n}))};
+      });
+      try{ await gql(`mutation OR($productId:ID!,$options:[OptionReorderInput!]!){ productOptionsReorder(productId:$productId, options:$options){ userErrors{ field message } } }`, {productId: sp.id, options}); }catch(e){}
+      try{ await gql(`mutation R($id:ID!,$moves:[MoveInput!]!){ productReorderMedia(id:$id, moves:$moves){ mediaUserErrors{ field message } } }`, {id: sp.id, moves:[{id:coverId, newPosition:'0'}]}); }catch(e){}
+    }
+    userErr(await gql(`mutation PU($product:ProductUpdateInput!){ productUpdate(product:$product){ userErrors{ field message } } }`,
+      {product:{id: sp.id, metafields:[{namespace:'atelier', key:'vitrine', type:'single_line_text_field', value: V || '-'}]}}));
+    return true;
   }
   async function createProduct(p, shop, imgHash, existingId){
     const cols = colorsOf(p);
     const info = CAT_INFO[p.cat] || ['produit',''];
     const files = []; const variants = [];
-    let coverHash = null;
+    let coverHash = null, coverFile = null;
+    const V = vitrineCode(p);
     if(cols.length && p.img){
       const csrc = await uploadImage(p.img, 'cover'+p.code);
-      if(csrc){ files.push({originalSource:csrc, contentType:'IMAGE', alt:p.name}); coverHash = hashStr(p.img); }
+      if(csrc){ coverFile = {originalSource:csrc, contentType:'IMAGE', alt:p.name}; files.push(coverFile); coverHash = hashStr(p.img); }
     }
+    const names = cols.map((c,i)=> 'لون ' + (i+1));
     if(cols.length){
-      const names = cols.map((c,i)=> 'لون ' + (i+1));
       for(let i=0;i<cols.length;i++){
         const c = cols[i];
-        const src = c.img ? await uploadImage(c.img, 'c'+c.code) : null;
-        const f = src ? {originalSource:src, contentType:'IMAGE', alt: p.name + ' - ' + names[i]} : null;
-        if(f) files.push(f);
+        let f = null;
+        if(coverFile && String(c.code) === V){ f = coverFile; }
+        else {
+          const src = c.img ? await uploadImage(c.img, 'c'+c.code) : null;
+          f = src ? {originalSource:src, contentType:'IMAGE', alt: p.name + ' - ' + names[i]} : null;
+          if(f) files.push(f);
+        }
         SIZES.forEach((sz, j)=>{
           const v = {
             optionValues:[{optionName:OPTION, name:names[i]}, {optionName:SIZE_OPT, name:sz}], price: money(colorPrice(p,c)), sku: String(c.code),
@@ -439,7 +536,7 @@
     }
     const input = {
       title: p.name, vendor: VENDOR, productType: p.cat || '', tags: p.cat ? [p.cat] : [], status:'ACTIVE',
-      productOptions: cols.length ? [{name:OPTION, values: cols.map((c,i)=>({name:'لون ' + (i+1)}))}, {name:SIZE_OPT, values: SIZES.map(n=>({name:n}))}]
+      productOptions: cols.length ? [{name:OPTION, values: (V ? [...names.filter((n,i)=> String(cols[i].code)===V), ...names.filter((n,i)=> String(cols[i].code)!==V)] : names).map(n=>({name:n}))}, {name:SIZE_OPT, values: SIZES.map(n=>({name:n}))}]
                                   : [{name:SIZE_OPT, values: SIZES.map(n=>({name:n}))}],
       variants
     };
@@ -466,6 +563,7 @@
     if(id && coverHash){
       const m = res.productSet.product.media && res.productSet.product.media.nodes[0];
       try{ await saveCoverMeta(id, coverHash, m && m.id); }catch(e){}
+      try{ userErr(await gql(`mutation PU($product:ProductUpdateInput!){ productUpdate(product:$product){ userErrors{ field message } } }`, {product:{id, metafields:[{namespace:'atelier', key:'vitrine', type:'single_line_text_field', value: V || '-'}]}})); }catch(e){}
     }
     if(id && !existingId && shop.onlineStore){
       userErr(await gql(`mutation PP($id:ID!,$input:[PublicationInput!]!){ publishablePublish(id:$id, input:$input){ userErrors{ field message } } }`,
@@ -592,7 +690,7 @@
     logEl.style.display = ''; logEl.textContent = '';
     const log = (s)=>{ logEl.textContent += s + '\n'; logEl.scrollTop = logEl.scrollHeight; };
     try{
-      log('v5 · 1/2 · Commandes du site → stock...');
+      log('v6 · 1/2 · Commandes du site → stock...');
       const n = await pullOrders(true);
       log(n ? '   ' + n + ' article(s) mis à jour' : '   aucune nouvelle commande');
       await new Promise(r=>setTimeout(r, 800)); // laisse le stock local se rafraîchir
