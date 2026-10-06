@@ -2978,6 +2978,7 @@ function renderColorsGrid(){
       </div>
       ${(isAdmin && !isOrderContext) ? `
       <div class="color-extra" style="margin-top:0;padding:10px;border-top:1px solid var(--line);">
+        <button class="full" style="width:100%;margin-bottom:10px;" onclick="setVitrineColor(${i})">⭐ Mettre en vitrine</button>
         <label>Photo de la couleur</label>
         <div class="imgpick" style="margin-bottom:10px;">
           <label class="btn" for="color-photo-${i}" style="font-size:11px;padding:6px 10px;">📷 Changer la photo</label>
@@ -3045,6 +3046,31 @@ function renderColorsGrid(){
       }
     });
   }
+}
+// ⭐ Mettre en vitrine : la couleur prend la place de la pièce de la vitrine (photo, quantité, prix, code)
+// et l'ancienne pièce de la vitrine devient une couleur. Le code-barres reste avec sa pièce.
+async function setVitrineColor(index){
+  const p = products.find(x=>x.id===currentColorsProductId);
+  if(!p || !p.colors || !p.colors[index]) return;
+  if(!confirm('Mettre cette couleur en photo de vitrine ?\nL\'ancienne photo de vitrine deviendra une couleur (avec sa quantité).')) return;
+  const before = JSON.parse(JSON.stringify(p));
+  const c = p.colors[index];
+  const main = {img:p.img||'', qty:Number(p.qty)||0, price:p.price, cost:(p.cost!=null?p.cost:null), code:p.code};
+  p.img = c.img || '';
+  p.qty = Number(c.qty)||0;
+  p.price = (c.price!=null && c.price!=='') ? c.price : p.price;
+  p.cost = (c.cost!=null && c.cost!=='') ? c.cost : p.cost;
+  p.code = c.code;
+  p.colors[index] = {img:main.img, qty:main.qty, price:main.price, cost:main.cost, code:main.code};
+  refreshCurrentInventoryView();
+  renderColorsGrid();
+  const ok = await saveProductDoc(p);
+  if(!ok){
+    Object.keys(p).forEach(k=> delete p[k]); Object.assign(p, before);
+    refreshCurrentInventoryView(); renderColorsGrid();
+    toast('Échec — non enregistré, réessayez', true); return;
+  }
+  toast('⭐ Nouvelle photo de vitrine — faites la synchro Shopify');
 }
 async function setColorQtyDirect(index){
   const input = document.getElementById('color-setqty-'+index);

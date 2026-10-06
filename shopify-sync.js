@@ -280,7 +280,9 @@
         const have = sp.cover && sp.cover.value;
         if(want !== have){
           log('🖼️ Photo de vitrine : ' + p.name);
-          coverId = (await setCover(sp.id, p, want, oldCoverId)) || coverId;
+          // l'ancienne photo reste si elle est la photo d'une couleur (après ⭐)
+          const keepOld = spVariants.some(v=> String(v.sku) !== String(p.code) && v.media.nodes.some(m=> m.id === oldCoverId));
+          coverId = (await setCover(sp.id, p, want, keepOld ? null : oldCoverId)) || coverId;
           coverChanged = coverId !== oldCoverId;
           stats.photos++;
         }
@@ -290,6 +292,31 @@
       const priceUpdates = [];
       const newVariants = [];
       const colorOf = (v)=>{ const o = (v.selectedOptions||[]).find(x=>x.name===OPTION); return o ? o.value : v.title; };
+      // ⭐ : la nouvelle pièce de la vitrine prend le nom « كيما في الصورة », l'ancienne prend son nom
+      const mainHit = (!isDefault && cols.length && p.code && !cols.some(c=> String(c.code) === String(p.code))) ? shop.bySku[String(p.code)] : null;
+      if(mainHit && mainHit.product.id === sp.id){
+        const mName = colorOf(mainHit.variants[0]);
+        if(mName !== MAIN_NAME){
+          const demoted = spVariants.filter(v=> colorOf(v) === MAIN_NAME && String(v.sku) !== String(p.code));
+          const ren = (vs, name)=> gql(`mutation U($productId:ID!,$variants:[ProductVariantsBulkInput!]!){ productVariantsBulkUpdate(productId:$productId, variants:$variants){ userErrors{ field message } } }`,
+            {productId: sp.id, variants: vs.map(v=>({id:v.id, optionValues:[{optionName:OPTION, name}]}))}).then(userErr);
+          log('⭐ Vitrine changée : ' + p.name);
+          if(demoted.length) await ren(demoted, '__tmp');
+          await ren(mainHit.variants, MAIN_NAME);
+          if(demoted.length) await ren(demoted, mName);
+          const o = (sp.options||[]).find(x=> x.name === OPTION);
+          if(o){
+            const swapped = (o.optionValues||[]).map(x=> x.name === mName ? MAIN_NAME : (x.name === MAIN_NAME ? mName : x.name));
+            const names = [MAIN_NAME, ...swapped.filter(n=> n !== MAIN_NAME)];
+            o.optionValues = [...new Set(names)].map(n=>({name:n}));
+            const options = (sp.options||[]).map(x=> ({name:x.name, values:(x.optionValues||[]).map(v=>({name:v.name}))}));
+            try{ await gql(`mutation OR($productId:ID!,$options:[OptionReorderInput!]!){ productOptionsReorder(productId:$productId, options:$options){ userErrors{ field message } } }`, {productId: sp.id, options}); }catch(e){}
+          }
+          mainHit.variants.forEach(v=>{ (v.selectedOptions||[]).forEach(x=>{ if(x.name===OPTION) x.value = MAIN_NAME; }); });
+          demoted.forEach(v=>{ (v.selectedOptions||[]).forEach(x=>{ if(x.name===OPTION) x.value = mName; }); });
+          stats.photos++;
+        }
+      }
       const existingNames = new Set(spVariants.map(colorOf));
       const units = cols.length ? cols.map((c,i)=>({code:String(c.code), qty:int(c.qty), price:money(colorPrice(p,c)), img:c.img, idx:i}))
                                 : [{code:String(p.code), qty:int(p.qty), price:money(p.price), img:p.img, idx:-1}];
