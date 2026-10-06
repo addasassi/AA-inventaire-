@@ -2945,7 +2945,22 @@ function renderColorsGrid(){
     document.getElementById('cm-grid').innerHTML = '<div class="empty"><h3>Aucune couleur</h3><p>Aucune autre couleur enregistrée pour ce modèle.</p></div>';
     return;
   }
-  let html = '<div class="grid-wrap">';
+  let html = '';
+  if(isAdmin && !isOrderContext){
+    html += `<div style="display:flex;gap:10px;align-items:center;background:var(--cream);border:1px solid var(--line);border-radius:14px;padding:10px;margin-bottom:12px;">
+      <img src="${p.img || placeholderImg()}" style="width:56px;height:56px;border-radius:10px;object-fit:cover;flex-shrink:0;">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:12px;font-weight:700;color:var(--mauve-dark);margin-bottom:4px;">Couleur de la photo de vitrine</div>
+        <div class="manual-row">
+          <input type="text" id="color-name-main" value="${escapeHtml(p.colorName||'')}" placeholder="ex : فوشيا">
+          <button onclick="aiNameColor(-1)" title="Nommer avec l'IA">✨</button>
+          <button onclick="setColorName(-1)">OK</button>
+        </div>
+      </div>
+    </div>
+    <button class="full" style="width:100%;margin-bottom:12px;" onclick="aiNameAllColors()">✨ Nommer toutes les couleurs sans nom (IA)</button>`;
+  }
+  html += '<div class="grid-wrap">';
   colors.forEach((c, i)=>{
     const qty = c.qty || 0;
     const price = c.price != null ? c.price : p.price;
@@ -2962,7 +2977,7 @@ function renderColorsGrid(){
         ${inCart>0 ? `<div class="op-badge">${inCart}</div>` : ''}
       </div>
       <div class="info">
-        <div class="name">${escapeHtml(colorLabel(p.name, i))}</div>
+        <div class="name">${escapeHtml(c.name || colorLabel(p.name, i))}</div>
         <div class="meta">${Number(price).toFixed(2)} DA</div>
         ${c.code ? `<div class="code">#${c.code}</div>` : ''}
       </div>
@@ -2979,6 +2994,12 @@ function renderColorsGrid(){
       ${(isAdmin && !isOrderContext) ? `
       <div class="color-extra" style="margin-top:0;padding:10px;border-top:1px solid var(--line);">
         <button class="full" style="width:100%;margin-bottom:10px;" onclick="setVitrineColor(${i})">⭐ Mettre en vitrine</button>
+        <label>Nom de la couleur (Shopify)</label>
+        <div class="manual-row" style="margin-bottom:10px;">
+          <input type="text" id="color-name-${i}" value="${escapeHtml(c.name||'')}" placeholder="ex : أحمر">
+          <button onclick="aiNameColor(${i})" title="Nommer avec l'IA">✨</button>
+          <button onclick="setColorName(${i})">OK</button>
+        </div>
         <label>Photo de la couleur</label>
         <div class="imgpick" style="margin-bottom:10px;">
           <label class="btn" for="color-photo-${i}" style="font-size:11px;padding:6px 10px;">📷 Changer la photo</label>
@@ -3047,6 +3068,64 @@ function renderColorsGrid(){
     });
   }
 }
+// ---------- Nom des couleurs (envoyé à Shopify) ----------
+function colorNameUsed(p, name, exceptIdx){
+  if(exceptIdx !== -1 && p.colorName === name) return true;
+  return (p.colors||[]).some((c,k)=> k !== exceptIdx && c.name === name);
+}
+async function saveColorName(p, idx, name){
+  const prev = idx === -1 ? p.colorName : p.colors[idx].name;
+  if(idx === -1) p.colorName = name; else p.colors[idx].name = name;
+  renderColorsGrid();
+  const ok = await saveProductDoc(p);
+  if(!ok){ if(idx === -1) p.colorName = prev; else p.colors[idx].name = prev; renderColorsGrid(); toast('Échec — non enregistré', true); return false; }
+  return true;
+}
+async function setColorName(idx){
+  const p = products.find(x=>x.id===currentColorsProductId);
+  if(!p) return;
+  const el = document.getElementById(idx === -1 ? 'color-name-main' : 'color-name-'+idx);
+  const name = (el && el.value || '').trim();
+  if(name && colorNameUsed(p, name, idx)){ toast('Ce nom est déjà utilisé pour une autre couleur', true); return; }
+  if(await saveColorName(p, idx, name)) toast(name ? 'Nom enregistré — faites la synchro Shopify' : 'Nom effacé');
+}
+async function aiNameOne(p, idx){
+  const img = idx === -1 ? p.img : (p.colors[idx]||{}).img;
+  if(!img) return '';
+  let n = await window.aiColorName(img);
+  if(!n) return '';
+  if(colorNameUsed(p, n, idx)){ let k = 2; while(colorNameUsed(p, n+' '+k, idx)) k++; n = n+' '+k; }
+  return n;
+}
+function aiReady(){
+  if(typeof window.aiColorName !== 'function' || !window.shopifyReady || !window.shopifyReady()){ toast('Configurez d\'abord Shopify (relais)', true); return false; }
+  return true;
+}
+async function aiNameColor(idx){
+  const p = products.find(x=>x.id===currentColorsProductId);
+  if(!p || !aiReady()) return;
+  toast('✨ L\'IA regarde la photo...');
+  try{
+    const n = await aiNameOne(p, idx);
+    if(!n){ toast('L\'IA n\'a pas trouvé la couleur', true); return; }
+    if(await saveColorName(p, idx, n)) toast('✨ ' + n);
+  }catch(e){ toast('IA : ' + (e.message||e), true); }
+}
+async function aiNameAllColors(){
+  const p = products.find(x=>x.id===currentColorsProductId);
+  if(!p || !aiReady()) return;
+  const todo = [];
+  if(p.img && !p.colorName) todo.push(-1);
+  (p.colors||[]).forEach((c,i)=>{ if(c.img && !c.name) todo.push(i); });
+  if(!todo.length){ toast('Toutes les couleurs ont déjà un nom'); return; }
+  toast('✨ L\'IA nomme ' + todo.length + ' couleur(s)...');
+  let done = 0;
+  for(const idx of todo){
+    try{ const n = await aiNameOne(p, idx); if(n){ if(idx === -1) p.colorName = n; else p.colors[idx].name = n; done++; renderColorsGrid(); } }
+    catch(e){ toast('IA : ' + (e.message||e), true); break; }
+  }
+  if(done){ const ok = await saveProductDoc(p); toast(ok ? '✨ ' + done + ' couleur(s) nommée(s)' : 'Échec — non enregistré', !ok); }
+}
 // ⭐ Mettre en vitrine : la couleur prend la place de la pièce de la vitrine (photo, quantité, prix, code)
 // et l'ancienne pièce de la vitrine devient une couleur. Le code-barres reste avec sa pièce.
 async function setVitrineColor(index){
@@ -3055,13 +3134,14 @@ async function setVitrineColor(index){
   if(!confirm('Mettre cette couleur en photo de vitrine ?\nL\'ancienne photo de vitrine deviendra une couleur (avec sa quantité).')) return;
   const before = JSON.parse(JSON.stringify(p));
   const c = p.colors[index];
-  const main = {img:p.img||'', qty:Number(p.qty)||0, price:p.price, cost:(p.cost!=null?p.cost:null), code:p.code};
+  const main = {img:p.img||'', qty:Number(p.qty)||0, price:p.price, cost:(p.cost!=null?p.cost:null), code:p.code, name:p.colorName||''};
   p.img = c.img || '';
   p.qty = Number(c.qty)||0;
   p.price = (c.price!=null && c.price!=='') ? c.price : p.price;
   p.cost = (c.cost!=null && c.cost!=='') ? c.cost : p.cost;
   p.code = c.code;
-  p.colors[index] = {img:main.img, qty:main.qty, price:main.price, cost:main.cost, code:main.code};
+  p.colorName = c.name || '';
+  p.colors[index] = {img:main.img, qty:main.qty, price:main.price, cost:main.cost, code:main.code, name:main.name};
   refreshCurrentInventoryView();
   renderColorsGrid();
   const ok = await saveProductDoc(p);
@@ -3242,6 +3322,18 @@ document.getElementById('ac-color-save').addEventListener('click', async ()=>{
   document.getElementById('addColorModal').classList.remove('show');
   toast(addedCount > 1 ? addedCount+' couleurs ajoutées' : 'Couleur ajoutée');
   pendingColorImages = [];
+  // l'IA donne un nom aux nouvelles couleurs (en arrière-plan)
+  if(typeof window.aiColorName === 'function' && window.shopifyReady && window.shopifyReady()){
+    (async ()=>{
+      let done = 0;
+      for(let k = p.colors.length - addedCount; k < p.colors.length; k++){
+        if(p.colors[k] && !p.colors[k].name){
+          try{ const n = await aiNameOne(p, k); if(n){ p.colors[k].name = n; done++; } }catch(e){ break; }
+        }
+      }
+      if(done){ await saveProductDoc(p); if(currentColorsProductId === p.id) renderColorsGrid(); toast('✨ Couleur(s) nommée(s) par l\'IA'); }
+    })();
+  }
 });
 async function modalAdjustColorQty(index, delta){
   await loadProducts();

@@ -81,6 +81,41 @@
     if(p.code && !out.includes(String(p.code))) out.unshift(String(p.code));
     return out;
   }
+  /* ---------- Nom des couleurs par l'IA (relais /color) ---------- */
+  const GENERIC = /^لون \d+$/;
+  const AI_COLORS = [['light pink','وردي فاتح'],['light blue','أزرق فاتح'],['sky blue','سماوي'],['royal blue','أزرق ملكي'],['light green','أخضر فاتح'],['dark green','أخضر داكن'],
+    ['black','أسود'],['white','أبيض'],['red','أحمر'],['burgundy','عنابي'],['fuchsia','فوشيا'],['pink','وردي'],['purple','بنفسجي'],['lilac','موف'],['navy','كحلي'],['turquoise','تركواز'],
+    ['teal','بترولي'],['blue','أزرق'],['olive','زيتي'],['mint','أخضر مائي'],['green','أخضر'],['mustard','أصفر خردلي'],['yellow','أصفر'],['orange','برتقالي'],['peach','خوخي'],['coral','مرجاني'],
+    ['beige','بيج'],['cream','كريمي'],['brown','بني'],['camel','كاميل'],['grey','رمادي'],['gray','رمادي'],['gold','ذهبي'],['silver','فضي'],['multicolor','ملوّن']];
+  function parseAi(text){
+    const t = String(text||'').toLowerCase();
+    const [cPart, pPart] = t.includes('|') ? t.split('|') : [t, t];
+    const hit = AI_COLORS.find(([en])=> new RegExp('\\b'+en+'\\b').test(cPart)) || AI_COLORS.find(([en])=> new RegExp('\\b'+en+'\\b').test(t));
+    if(!hit) return '';
+    const c = hit[1], pt = pPart || '';
+    if(/heart/.test(pt)) return 'قلوب ' + c;
+    if(/leopard|animal/.test(pt)) return ['بني','بيج','كاميل','كريمي'].includes(c) ? 'نمري' : 'نمري ' + c;
+    if(/flor|flower/.test(pt)) return c + ' مورّد';
+    if(/dot/.test(pt)) return c + ' منقّط';
+    if(/stripe/.test(pt)) return c + ' مخطط';
+    if(/bow/.test(pt)) return 'فيونكات ' + c;
+    if(/cherr/.test(pt)) return 'كرز ' + c;
+    if(/print/.test(pt)) return c + ' مطبوع';
+    return c;
+  }
+  async function aiColorName(dataUrl){
+    if(!isReady() || !mimeOf(dataUrl)) return '';
+    const c = cfg();
+    const r = await fetch(c.url + '/color', {method:'POST', headers:{'Content-Type':'application/json','X-App-Key':c.key}, body: JSON.stringify({dataUrl})});
+    let j = {}; try{ j = await r.json(); }catch(e){}
+    if(!r.ok || j.error) throw new Error(j.error || ('IA ' + r.status));
+    return parseAi(j.text);
+  }
+  function uniqueName(name, used){
+    if(!used.has(name)) return name;
+    let k = 2; while(used.has(name + ' ' + k)) k++;
+    return name + ' ' + k;
+  }
   function mimeOf(dataUrl){ const m = String(dataUrl||'').match(/^data:([^;]+);base64,/); return m ? m[1] : null; }
 
   async function getMeta(){
@@ -301,6 +336,46 @@
       if(cols.length && !isDefault && p.code && !cols.some(c=> String(c.code) === String(p.code))){
         units.unshift({code:String(p.code), qty:int(p.qty), price:money(p.price), img:p.img, idx:-2, main:true});
       }
+      // ---- Noms des couleurs (Atelier ⇄ Shopify, IA pour les couleurs sans nom) ----
+      let pChanged = false;
+      if(!isDefault && cols.length){
+        units.forEach(u=>{ u.name = String((u.main ? p.colorName : (cols[u.idx]||{}).name) || '').trim(); });
+        const setName = (u, n)=>{ u.name = n; if(u.main) p.colorName = n; else cols[u.idx].name = n; pChanged = true; };
+        const own = (u)=>{ const h = shop.bySku[u.code]; return (h && h.product.id === sp.id) ? h.variants : null; };
+        for(const u of units){
+          const vs = own(u); const shopName = vs ? colorOf(vs[0]) : '';
+          if(!u.name && shopName && !GENERIC.test(shopName)){ setName(u, shopName); continue; } // nom déjà mis sur Shopify → Atelier
+          if(!u.name && u.img && (!vs || GENERIC.test(shopName))){
+            try{
+              const n = await aiColorName(u.img);
+              if(n){
+                const used = new Set([...existingNames, ...units.filter(x=> x!==u && x.name).map(x=>x.name)]);
+                if(shopName) used.delete(shopName);
+                setName(u, uniqueName(n, used)); log('✨ Couleur nommée : ' + p.name + ' → ' + u.name);
+              }
+            }catch(e){ log('⚠️ IA : ' + (e.message||e)); break; }
+          }
+        }
+        // renommer sur Shopify quand le nom change dans Atelier
+        for(const u of units){
+          const vs = own(u); if(!vs || !u.name) continue;
+          const shopName = colorOf(vs[0]);
+          if(shopName === u.name) continue;
+          const others = new Set(spVariants.filter(v=> !vs.includes(v)).map(colorOf));
+          if(others.has(u.name)) continue;
+          try{
+            userErr(await gql(`mutation U($productId:ID!,$variants:[ProductVariantsBulkInput!]!){ productVariantsBulkUpdate(productId:$productId, variants:$variants){ userErrors{ field message } } }`,
+              {productId: sp.id, variants: vs.map(v=>({id:v.id, optionValues:[{optionName:OPTION, name:u.name}]}))}));
+            vs.forEach(v=> (v.selectedOptions||[]).forEach(x=>{ if(x.name===OPTION) x.value = u.name; }));
+            existingNames.delete(shopName); existingNames.add(u.name);
+            const o = (sp.options||[]).find(x=> x.name === OPTION);
+            if(o) o.optionValues = (o.optionValues||[]).map(x=> x.name === shopName ? {name:u.name} : x);
+            if(u.main) mainFirstName = u.name;
+            log('🏷️ ' + p.name + ' : ' + shopName + ' → ' + u.name); stats.titles++;
+          }catch(e){ log('⚠️ Nom ' + p.name + ' : ' + (e.message||e)); }
+        }
+        if(pChanged && typeof saveProductDoc === 'function'){ try{ await saveProductDoc(p); }catch(e){} }
+      }
       for(const u of units){
         const hit = shop.bySku[u.code];
         if(hit && hit.product.id === sp.id){
@@ -332,8 +407,9 @@
             imgHash[u.code] = h; stats.photos++;
           }
         } else if(!hit){
-          let k = u.main ? 1 : u.idx+1; let name = 'لون ' + k;
-          while(existingNames.has(name)){ k++; name = 'لون ' + k; }
+          let k = u.main ? 1 : u.idx+1; let name = u.name || ('لون ' + k);
+          if(u.name) name = uniqueName(u.name, existingNames);
+          else while(existingNames.has(name)){ k++; name = 'لون ' + k; }
           existingNames.add(name);
           newVariants.push({u, name});
         }
@@ -458,8 +534,22 @@
       if(csrc){ coverFile = {originalSource:csrc, contentType:'IMAGE', alt:p.name}; files.push(coverFile); coverHash = hashStr(p.img); }
     }
     const withMain = cols.length && p.code && !cols.some(c=> String(c.code) === String(p.code));
-    const names = cols.map((c,i)=> 'لون ' + (i + (withMain ? 2 : 1)));
-    const MAIN_NAME = 'لون 1';
+    // noms : ceux d'Atelier, sinon IA, sinon « لون N »
+    const used = new Set(); let pChanged = false; let aiOk = true;
+    const pick = async (cur, img, fallback)=>{
+      let n = String(cur||'').trim();
+      if(!n && img && aiOk){ try{ n = await aiColorName(img); if(n) pChanged = true; }catch(e){ aiOk = false; } }
+      n = uniqueName(n || fallback, used); used.add(n); return n;
+    };
+    const MAIN_NAME = withMain ? await pick(p.colorName, p.img, 'لون 1') : '';
+    if(withMain && MAIN_NAME !== p.colorName){ p.colorName = MAIN_NAME; }
+    const names = [];
+    for(let i=0;i<cols.length;i++){
+      const n = await pick(cols[i].name, cols[i].img, 'لون ' + (i + (withMain ? 2 : 1)));
+      if(n !== cols[i].name){ cols[i].name = n; pChanged = true; }
+      names.push(n);
+    }
+    if(pChanged && typeof saveProductDoc === 'function'){ try{ await saveProductDoc(p); }catch(e){} }
     if(withMain){
       // la pièce de la photo de vitrine = première couleur
       SIZES.forEach((sz, j)=>{
@@ -654,7 +744,7 @@
     logEl.style.display = ''; logEl.textContent = '';
     const log = (s)=>{ logEl.textContent += s + '\n'; logEl.scrollTop = logEl.scrollHeight; };
     try{
-      log('v6 · 1/2 · Commandes du site → stock...');
+      log('v7 · 1/2 · Commandes du site → stock...');
       const n = await pullOrders(true);
       log(n ? '   ' + n + ' article(s) mis à jour' : '   aucune nouvelle commande');
       await new Promise(r=>setTimeout(r, 800)); // laisse le stock local se rafraîchir
@@ -712,6 +802,8 @@
   setTimeout(()=>{ try{ if(typeof currentUser!=='undefined' && currentUser) afterLogin(); }catch(e){} }, 2500);
 
   window.openShopifySync = openModal;
+  window.aiColorName = aiColorName;
+  window.shopifyReady = isReady;
   window.__shopifyPushAll = pushAll;
   window.shopifyPullOrders = pullOrders;
 })();
