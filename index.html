@@ -2500,7 +2500,8 @@ function renderCatFolders(){
       <span class="os-txt">Rupture de stock</span>
       <span class="os-count">${outTotal}</span>
     </div>`;
-  wrap.innerHTML = outBar + '<div class="folder-grid">' + CATS.map(cat=>{
+  const dlAll = `<button class="btn-primary" style="width:100%;margin:0 0 12px;" onclick="prepareAvailablePhotos(null, this)">⬇️ Toutes les photos disponibles avec prix</button>`;
+  wrap.innerHTML = outBar + dlAll + '<div class="folder-grid">' + CATS.map(cat=>{
     const items = products.filter(p=>p.cat===cat);
     const thumb = catThumb(cat) || catEmojiBg();
     return `<div class="cat-folder ${items.length===0?'empty-cat':''}" onclick="openCategory('${cat}')">
@@ -3626,23 +3627,30 @@ async function downloadQueue(){
   }
   toast('✅ ' + files.length + ' photos enregistrées — dans Messenger : 📷 Galerie → choisissez-les toutes', false);
 }
-document.getElementById('btn-share-available').addEventListener('click', async ()=>{
-  const cat = currentStockFilterType ? '' : document.getElementById('catProductsTitle').textContent;
-  const list = availablePhotos(cat);
-  if(!list.length){ toast('Aucune photo disponible (stock à 0) dans cette catégorie', true); return; }
-  const btn = document.getElementById('btn-share-available');
+async function prepareAvailablePhotos(cat, btn){
+  // cat = null → toutes les catégories
+  const cats = cat ? [cat] : CATS;
+  const list = [];
+  cats.forEach(c=> availablePhotos(c).forEach(x=> list.push(Object.assign({cat:c}, x))));
+  if(!list.length){ toast('Aucune photo disponible (stock à 0)', true); return; }
   const old = btn.textContent; btn.disabled = true; btn.textContent = '⏳ Préparation de ' + list.length + ' photos...';
   try{
     const files = [];
     const stamp = new Date().toISOString().slice(5,16).replace(/[-T:]/g,'');
-    for(let i=0;i<list.length;i++){
-      try{ files.push(await priceImageFile(list[i].img, list[i].price, (cat || 'photo') + '-' + stamp + '-' + String(i+1).padStart(2,'0'))); }catch(e){}
+    const count = {};
+    for(const x of list){
+      count[x.cat] = (count[x.cat]||0) + 1;
+      try{ files.push(await priceImageFile(x.img, x.price, x.cat + '-' + stamp + '-' + String(count[x.cat]).padStart(2,'0'))); }catch(e){}
     }
     if(!files.length){ toast('Erreur de préparation des photos', true); return; }
     // photos prêtes : un bouton apparaît en bas (le téléchargement doit partir d'un toucher)
     shareQueue = files;
     showShareNext();
   }finally{ btn.textContent = old; btn.disabled = false; }
+}
+document.getElementById('btn-share-available').addEventListener('click', ()=>{
+  if(currentStockFilterType) return;
+  prepareAvailablePhotos(document.getElementById('catProductsTitle').textContent, document.getElementById('btn-share-available'));
 });
 document.getElementById('btn-download-cat-photos').addEventListener('click', async ()=>{
   const cat = document.getElementById('catProductsTitle').textContent;
