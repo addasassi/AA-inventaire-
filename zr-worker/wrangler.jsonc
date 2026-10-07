@@ -1,5 +1,5 @@
 // Configuration du relais ZR Express (Cloudflare Worker « atelier-zr »).
-// Déployé automatiquement par Cloudflare à chaque mise à jour de ce dossier sur GitHub.
+// Déployé automatiquement par Cloudflare (Workers Builds) à chaque mise à jour de ce dossier sur GitHub.
 {
   "name": "atelier-zr",
   "main": "worker.js",
