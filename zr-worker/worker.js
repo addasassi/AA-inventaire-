@@ -1,0 +1,347 @@
+/* =====================================================================
+   Atelier Stock ⇄ ZR Express (nouvelle plateforme api.zrexpress.app)
+   Cloudflare Worker — à coller dans un Worker nommé « atelier-zr ».
+
+   Secrets à ajouter dans Cloudflare (Settings → Variables and Secrets) :
+     ZR_API_KEY  = la clé API (Secret Key) de ZR Express
+     ZR_TENANT   = le Tenant ID de ZR Express
+   Déclencheur Cron (Settings → Triggers → Cron) : toutes les 10 minutes
+
+   Ce que fait le Worker :
+   - POST /send   {id}  → crée le colis ZR d'une commande (une seule fois)
+   - POST /label  {id}  → lien PDF de l'étiquette
+   - POST /track  {id}  → met à jour l'état du colis tout de suite
+   - POST /test         → vérifie les identifiants ZR
+   - Toutes les 10 min : envoie les commandes reportées arrivées à date,
+     réessaie les envois ratés, et met à jour l'état des colis en cours.
+   Les identifiants ZR restent ici : ils ne sont jamais dans l'application.
+   ===================================================================== */
+
+const ZR = 'https://api.zrexpress.app/api/v1';
+const FS_PROJECT = 'aa-inventaire';
+const FS_KEY = 'AIzaSyAfMIEi1MynF82Jp1j1J1BFQM5w8182JTo';
+const FS = `https://firestore.googleapis.com/v1/projects/${FS_PROJECT}/databases/(default)/documents`;
+const TRACK_EVERY_MS = 30 * 60 * 1000;   // état des colis : toutes les 30 min
+const MAX_ATTEMPTS = 5;
+
+const WILAYAS = ["Adrar","Chlef","Laghouat","Oum El Bouaghi","Batna","Bejaia","Biskra","Bechar","Blida","Bouira",
+  "Tamanrasset","Tebessa","Tlemcen","Tiaret","Tizi Ouzou","Alger","Djelfa","Jijel","Setif","Saida","Skikda",
+  "Sidi Bel Abbes","Annaba","Guelma","Constantine","Medea","Mostaganem","MSila","Mascara","Ouargla","Oran",
+  "El Bayadh","Illizi","Bordj Bou Arreridj","Boumerdes","El Tarf","Tindouf","Tissemsilt","El Oued","Khenchela",
+  "Souk Ahras","Tipaza","Mila","Ain Defla","Naama","Ain Temouchent","Ghardaia","Relizane","El MGhair",
+  "El Meniaa","Ouled Djellal","Bordj Badji Mokhtar","Beni Abbes","Timimoun","Touggourt","Djanet","In Salah","In Guezzam"];
+
+/* ---------- États ZR → étape simple pour l'app ---------- */
+const STAGES = {
+  livre:'delivered', 'livre au client':'delivered', encaisse:'delivered', recouvert:'delivered',
+  retour_sous_traitant:'returned', colis_recupere:'returned', attente_recuperation_fournisseur:'returned',
+  reinjecte_dans_stock:'returned', recupere_par_fournisseur:'returned', remboursement_reinjecte:'returned',
+  en_livraison:'out_for_delivery', sortie_en_livraison:'out_for_delivery',
+  commande_recue:'created', en_traitement:'created', appel_confirmation:'created', commande_confirmee:'created',
+  en_preparation:'created', pret_a_expedier:'created',
+  confirme_au_bureau:'in_transit', confirme_chez_partenaire:'in_transit', dispatch:'in_transit', vers_wilaya:'in_transit'
+};
+const strip = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/['’`]/g, '');
+const norm = s => strip(s).toLowerCase().replace(/[\s_-]+/g, ' ').trim();
+function stageOf(state){
+  if(!state) return null;
+  for(const v of [state.name, state.description]){
+    if(!v) continue;
+    const k = strip(v).toLowerCase().trim();
+    if(STAGES[k]) return STAGES[k];
+    if(STAGES[k.replace(/\s+/g, '_')]) return STAGES[k.replace(/\s+/g, '_')];
+  }
+  return null;
+}
+
+/* ---------- Firestore (REST) ---------- */
+function toFs(v){
+  if(v === null || v === undefined) return {nullValue: null};
+  if(typeof v === 'boolean') return {booleanValue: v};
+  if(typeof v === 'number') return Number.isInteger(v) ? {integerValue: String(v)} : {doubleValue: v};
+  if(Array.isArray(v)) return {arrayValue: {values: v.map(toFs)}};
+  if(typeof v === 'object'){ const f = {}; for(const k in v) f[k] = toFs(v[k]); return {mapValue: {fields: f}}; }
+  return {stringValue: String(v)};
+}
+function fromFs(v){
+  if(!v) return null;
+  if('stringValue' in v) return v.stringValue;
+  if('integerValue' in v) return Number(v.integerValue);
+  if('doubleValue' in v) return v.doubleValue;
+  if('booleanValue' in v) return v.booleanValue;
+  if('nullValue' in v) return null;
+  if('timestampValue' in v) return v.timestampValue;
+  if('mapValue' in v){ const o = {}, f = v.mapValue.fields || {}; for(const k in f) o[k] = fromFs(f[k]); return o; }
+  if('arrayValue' in v) return (v.arrayValue.values || []).map(fromFs);
+  return null;
+}
+const FIELDS = ['customer', 'total', 'zr', 'zrDesc', 'deferred', 'deferredDate', 'createdAt'];
+
+async function getOrder(id){
+  const mask = FIELDS.map(f => 'mask.fieldPaths=' + f).join('&');
+  const r = await fetch(`${FS}/orders/${encodeURIComponent(id)}?${mask}&key=${FS_KEY}`);
+  if(r.status === 404) return null;
+  if(!r.ok) throw new Error('Firestore ' + r.status);
+  const j = await r.json();
+  const o = fromFs({mapValue: {fields: j.fields || {}}});
+  o.id = id; o._updateTime = j.updateTime;
+  return o;
+}
+// Écrit seulement le champ zr de la commande. Avec updateTime : échoue si quelqu'un l'a modifiée entre-temps (verrou).
+async function saveZr(id, zr, updateTime){
+  let url = `${FS}/orders/${encodeURIComponent(id)}?updateMask.fieldPaths=zr&key=${FS_KEY}`;
+  url += updateTime ? `&currentDocument.updateTime=${encodeURIComponent(updateTime)}` : '&currentDocument.exists=true';
+  const r = await fetch(url, {method: 'PATCH', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({fields: {zr: toFs(zr)}})});
+  if(!r.ok) return null;
+  return (await r.json()).updateTime;
+}
+async function activeOrders(){
+  const r = await fetch(`${FS}:runQuery?key=${FS_KEY}`, {method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({structuredQuery: {
+      from: [{collectionId: 'orders'}],
+      where: {fieldFilter: {field: {fieldPath: 'zr.active'}, op: 'EQUAL', value: {booleanValue: true}}},
+      select: {fields: FIELDS.map(f => ({fieldPath: f}))},
+      limit: 300
+    }})});
+  if(!r.ok) throw new Error('Firestore query ' + r.status);
+  const rows = await r.json();
+  return rows.filter(x => x.document).map(x => {
+    const o = fromFs({mapValue: {fields: x.document.fields || {}}});
+    o.id = x.document.name.split('/').pop(); o._updateTime = x.document.updateTime;
+    return o;
+  });
+}
+
+/* ---------- ZR Express ---------- */
+class ZrError extends Error { constructor(msg, permanent){ super(msg); this.permanent = permanent; } }
+async function zr(env, path, init = {}){
+  const r = await fetch(ZR + path, {...init, headers: {'Content-Type': 'application/json', Accept: 'application/json',
+    'X-Api-Key': env.ZR_API_KEY || '', 'X-Tenant': env.ZR_TENANT || ''}});
+  let body = null; try{ body = await r.json(); }catch(e){}
+  if(!r.ok){
+    const b = body || {};
+    let errs = '';
+    if(Array.isArray(b.errors)) errs = b.errors.map(e => typeof e === 'string' ? e : (e.description || e.message || JSON.stringify(e))).join(' | ');
+    else if(b.errors && typeof b.errors === 'object') errs = Object.entries(b.errors).map(([k, v]) => k + ': ' + [].concat(v).join(', ')).join(' | ');
+    const msg = [b.title, b.detail, errs].filter(Boolean).join(' — ') || b.message || ('HTTP ' + r.status);
+    throw new ZrError(msg, r.status >= 400 && r.status < 500 && r.status !== 429 && r.status !== 401 && r.status !== 403);
+  }
+  return body;
+}
+async function territories(env, keyword, extra = {}){
+  const b = await zr(env, '/territories/search', {method: 'POST', body: JSON.stringify({keyword, pageSize: 50, pageNumber: 1, ...extra})});
+  return (b && b.items) || [];
+}
+const cityCache = new Map();
+async function resolveCity(env, code, name){
+  if(cityCache.has(code)) return cityCache.get(code);
+  const ok = t => t.code === code && t.level === 'wilaya';
+  let c = (await territories(env, strip(name))).find(ok);
+  if(!c) c = (await territories(env, String(code), {pageSize: 200})).find(ok);
+  if(!c) throw new ZrError(`ZR ne livre pas la wilaya ${code} (${name})`, true);
+  cityCache.set(code, c);
+  return c;
+}
+async function resolveDistrict(env, commune, city, pickup){
+  const items = (await territories(env, strip(commune), pickup ? {deliveryType: {value: 'pickup-point'}} : {}))
+    .filter(t => t.level === 'commune');
+  const d = items.find(t => t.parentId === city.id && norm(t.name) === norm(commune))
+         || items.find(t => t.parentId === city.id)
+         || items.find(t => norm(t.name) === norm(commune));
+  if(!d) throw new ZrError(`Commune « ${commune} » introuvable chez ZR (wilaya ${city.name || ''})`, true);
+  return d;
+}
+let hubCache = null, hubTime = 0;
+async function hubs(env){
+  if(hubCache && Date.now() - hubTime < 6 * 3600 * 1000) return hubCache;
+  const out = [];
+  for(let p = 1; p <= 10; p++){
+    const b = await zr(env, '/hubs/search', {method: 'POST', body: JSON.stringify({pageSize: 200, pageNumber: p})});
+    const items = (b && b.items) || [];
+    out.push(...items);
+    if(!items.length || p >= ((b && b.totalPages) || 1)) break;
+  }
+  hubCache = out; hubTime = Date.now();
+  return out;
+}
+async function resolveHub(env, city, commune){
+  const list = (await hubs(env)).filter(h => h.isPickupPoint !== false);
+  let district = null;
+  try{ district = await resolveDistrict(env, commune, city, true); }catch(e){}
+  const inCity = list.filter(h => h.address && h.address.cityTerritoryId === city.id);
+  const h = (district && list.find(x => x.address && x.address.districtTerritoryId === district.id))
+         || inCity.find(x => norm(x.name).includes(norm(commune)))
+         || list.find(x => norm(x.name).includes(norm(commune)))
+         || (inCity.length === 1 ? inCity[0] : null);
+  if(!h) throw new ZrError(`Bureau Stop Desk « ${commune} » introuvable chez ZR`, true);
+  return h;
+}
+function phoneIntl(p){
+  p = String(p || '').replace(/[^\d+]/g, '');
+  if(p.startsWith('+')) return p;
+  if(p.startsWith('00')) return '+' + p.slice(2);
+  if(p.startsWith('0')) return '+213' + p.slice(1);
+  if(p.startsWith('213')) return '+' + p;
+  return '+213' + p;
+}
+function wilayaCodeOf(c){
+  const n = Number(c.wilayaCode);
+  if(n >= 1 && n <= 58) return n;
+  const k = norm(c.wilaya);
+  const i = WILAYAS.findIndex(w => norm(w) === k);
+  return i >= 0 ? i + 1 : 0;
+}
+
+async function createParcel(env, o){
+  const c = o.customer || {};
+  if(!c.name || !c.phone) throw new ZrError('Nom ou téléphone manquant', true);
+  const code = wilayaCodeOf(c);
+  if(!code) throw new ZrError(`Wilaya « ${c.wilaya || ''} » non reconnue`, true);
+  const pickup = c.deliveryType === 'stopdesk';
+  if(!c.commune) throw new ZrError(pickup ? 'Bureau Stop Desk manquant' : 'Commune manquante', true);
+  const phone = phoneIntl(c.phone);
+  const city = await resolveCity(env, code, WILAYAS[code - 1]);
+  let cityId, districtId, hubId = null;
+  if(pickup){
+    const h = await resolveHub(env, city, c.commune);
+    hubId = h.id;
+    cityId = (h.address && h.address.cityTerritoryId) || city.id;
+    districtId = h.address && h.address.districtTerritoryId;
+    if(!districtId) districtId = (await resolveDistrict(env, c.commune, city, true)).id;
+  }else{
+    cityId = city.id;
+    districtId = (await resolveDistrict(env, c.commune, city, false)).id;
+  }
+  const cust = await zr(env, '/customers/individual', {method: 'POST', body: JSON.stringify({name: c.name, phone: {number1: phone}})});
+  if(!cust || !cust.id) throw new ZrError('Création du client ZR impossible', false);
+  const amount = Math.round(Number(o.total) || 0);
+  const desc = (o.zrDesc || 'Commande').slice(0, 250);
+  const created = await zr(env, '/parcels', {method: 'POST', body: JSON.stringify({
+    customer: {customerId: cust.id, name: c.name, phone: {number1: phone}},
+    deliveryAddress: {cityTerritoryId: cityId, districtTerritoryId: districtId, street: pickup ? null : (c.address || null)},
+    deliveryType: pickup ? 'pickup-point' : 'home',
+    amount, description: desc, externalId: o.id,
+    orderedProducts: [{productName: desc, unitPrice: amount, quantity: 1, stockType: 'none'}],
+    ...(hubId ? {hubId} : {})
+  })});
+  if(!created || !created.id) throw new ZrError('ZR n\'a pas renvoyé de colis', false);
+  let parcel = null;
+  for(let i = 0; i < 3 && !(parcel && parcel.trackingNumber); i++){
+    if(i) await new Promise(r => setTimeout(r, 1500));
+    parcel = await zr(env, '/parcels/' + created.id).catch(() => null);
+  }
+  return {parcelId: created.id, tracking: (parcel && parcel.trackingNumber) || '', state: parcel && parcel.state};
+}
+
+/* ---------- Envoi d'une commande (idempotent + verrou) ---------- */
+async function sendOrder(env, id, force){
+  const o = await getOrder(id);
+  if(!o) return {ok: false, error: 'Commande introuvable'};
+  const z = o.zr || {};
+  if(z.parcelId) return {ok: true, zr: z};                           // déjà envoyée
+  if(!force && z.status === 'error') return {ok: false, zr: z};
+  if(z.status === 'sending' && Date.now() - Date.parse(z.updatedAt || 0) < 3 * 60 * 1000) return {ok: true, zr: z};
+  const now = new Date().toISOString();
+  const lockTime = await saveZr(id, {...z, status: 'sending', active: true, updatedAt: now}, o._updateTime);
+  if(!lockTime) return {ok: true, zr: z};                           // un autre envoi est en cours
+  try{
+    const p = await createParcel(env, o);
+    const nz = {status: 'sent', active: true, parcelId: p.parcelId, tracking: p.tracking,
+      state: (p.state && (p.state.description || p.state.name)) || 'Commande reçue', stage: stageOf(p.state) || 'created',
+      sentAt: now, updatedAt: new Date().toISOString(), lastCheck: Date.now(), error: '', attempts: (z.attempts || 0) + 1};
+    await saveZr(id, nz);
+    return {ok: true, zr: nz};
+  }catch(e){
+    const attempts = (z.attempts || 0) + 1;
+    const permanent = e.permanent || attempts >= MAX_ATTEMPTS;
+    const nz = {...z, status: permanent ? 'error' : 'queued', active: !permanent, error: e.message || String(e),
+      attempts, updatedAt: new Date().toISOString()};
+    await saveZr(id, nz);
+    return {ok: false, zr: nz};
+  }
+}
+
+async function trackOrder(env, o){
+  const z = o.zr || {};
+  if(!z.parcelId) return z;
+  const p = await zr(env, '/parcels/' + z.parcelId);
+  let stage = stageOf(p.state) || z.stage || 'created';
+  if(p.isReturn === true) stage = 'returned';
+  const final = stage === 'delivered' || stage === 'returned';
+  const nz = {...z, tracking: p.trackingNumber || z.tracking,
+    state: (p.state && (p.state.description || p.state.name)) || z.state, stage,
+    status: final ? stage : 'sent', active: !final, lastCheck: Date.now(), updatedAt: new Date().toISOString()};
+  await saveZr(o.id, nz);
+  return nz;
+}
+
+async function cron(env){
+  const today = new Date(Date.now() + 3600 * 1000).toISOString().slice(0, 10);   // heure d'Algérie
+  const list = await activeOrders();
+  for(const o of list){
+    const z = o.zr || {};
+    try{
+      if(!z.parcelId){
+        const due = !z.sendAfter || z.sendAfter <= today;
+        const old = Date.now() - Date.parse(z.updatedAt || o.createdAt || 0) > 2 * 60 * 1000;
+        if(due && old) await sendOrder(env, o.id, false);
+      }else if(Date.now() - (z.lastCheck || 0) > TRACK_EVERY_MS){
+        await trackOrder(env, o);
+      }
+    }catch(e){ /* on réessaiera au prochain passage */ }
+  }
+}
+
+/* ---------- HTTP ---------- */
+const CORS = {'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type'};
+const json = (b, s = 200) => new Response(JSON.stringify(b), {status: s, headers: {...CORS, 'Content-Type': 'application/json'}});
+
+export default {
+  async fetch(req, env){
+    if(req.method === 'OPTIONS') return new Response(null, {headers: CORS});
+    const path = new URL(req.url).pathname.replace(/\/+$/, '') || '/';
+    if(path === '/' ) return json({ok: true, service: 'atelier-zr', configured: !!(env.ZR_API_KEY && env.ZR_TENANT)});
+    if(req.method !== 'POST') return json({error: 'POST attendu'}, 405);
+    if(!env.ZR_API_KEY || !env.ZR_TENANT) return json({ok: false, error: 'Secrets ZR_API_KEY / ZR_TENANT manquants dans Cloudflare'}, 500);
+    let body = {}; try{ body = await req.json(); }catch(e){}
+    const id = String(body.id || '').trim();
+    try{
+      if(path === '/test'){
+        const t = await territories(env, 'alger');
+        return json({ok: true, message: 'Connexion ZR Express OK', sample: t.length});
+      }
+      if(!id) return json({ok: false, error: 'id manquant'}, 400);
+      if(path === '/send') return json(await sendOrder(env, id, !!body.force));
+      if(path === '/track'){
+        const o = await getOrder(id);
+        if(!o) return json({ok: false, error: 'Commande introuvable'}, 404);
+        return json({ok: true, zr: await trackOrder(env, o)});
+      }
+      if(path === '/label'){
+        const o = await getOrder(id);
+        const t = o && o.zr && o.zr.tracking;
+        if(!t) return json({ok: false, error: 'Pas encore de numéro de suivi'}, 400);
+        const b = await zr(env, '/parcels/labels/individual/pdf', {method: 'POST', body: JSON.stringify({trackingNumbers: [t], format: 'a6'})});
+        const url = b && b.parcelLabelFiles && b.parcelLabelFiles[0] && b.parcelLabelFiles[0].fileUrl;
+        return url ? json({ok: true, url}) : json({ok: false, error: 'Étiquette indisponible'}, 502);
+      }
+      if(path === '/cancel'){
+        const o = await getOrder(id);
+        const t = o && o.zr && o.zr.tracking;
+        if(!t) return json({ok: true, cancelled: false});
+        try{
+          await zr(env, '/parcels/bulk/by-tracking-number', {method: 'DELETE', body: JSON.stringify({trackingNumbers: [t]})});
+        }catch(e){ if(!/not found/i.test(e.message)) throw e; }
+        return json({ok: true, cancelled: true});
+      }
+      return json({error: 'Route inconnue'}, 404);
+    }catch(e){
+      return json({ok: false, error: e.message || String(e)}, 502);
+    }
+  },
+  async scheduled(event, env, ctx){
+    if(env.ZR_API_KEY && env.ZR_TENANT) ctx.waitUntil(cron(env));
+  }
+};

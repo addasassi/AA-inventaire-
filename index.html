@@ -1217,6 +1217,7 @@
     <div class="od-sub oc-phone-row" id="od-sub"></div>
     <div class="od-sub" id="od-address"></div>
     <div class="od-items" id="od-items"></div>
+    <div id="od-zr"></div>
     <div class="od-total" id="od-total"></div>
     <div class="modal-actions">
       <button id="od-close">Fermer</button>
@@ -4027,6 +4028,7 @@ function startOrdersListener(){
       renderOrdersHistory();
     }
     if(typeof renderDashboard === 'function') renderDashboard();
+    if(window.zrOnOrders) window.zrOnOrders();
   }, ()=> warnStorage());
 }
 async function loadOrders(){
@@ -4267,6 +4269,7 @@ function renderOrdersHistory(){
     })() : '';
     return `<div class="order-card ${o.deferred ? 'deferred' : ''}" onclick="showOrderDetail('${o.id}')">
       ${deferredBadge}
+      ${window.zrBadge ? window.zrBadge(o) : ''}
       <div class="oc-top">
         <div class="oc-name">${escapeHtml(o.customer.name || 'Client')}</div>
         <div class="oc-total">${Number(o.total).toFixed(2)} DA</div>
@@ -4317,6 +4320,7 @@ function showOrderDetail(id){
   const isAdmin = currentUser && currentUser.role === 'admin';
   const canEdit = isAdmin || (currentUser && o.createdBy === currentUser.name);
   document.getElementById('od-edit').style.display = canEdit ? '' : 'none';
+  if(window.zrDetail) window.zrDetail(o);
   document.getElementById('orderDetailModal').classList.add('show');
 }
 document.getElementById('od-close').addEventListener('click', ()=>{
@@ -4499,11 +4503,13 @@ document.getElementById('eo-save').addEventListener('click', async ()=>{
   o.profit = total - o.costTotal;
   o.deferred = eoIsDeferred;
   o.deferredDate = eoIsDeferred ? eoDeferredDate : '';
+  if(window.zrPrepareOrder) window.zrPrepareOrder(o);
   const orderSaved = await saveOrderDoc(o);
   if(!orderSaved){
     toast('Échec — la commande n\'a pas été enregistrée (le stock, lui, est à jour), réessayez', true);
     return;
   }
+  if(window.zrAfterSave) window.zrAfterSave(o);
   await upsertCustomer(o);
   updateDeferredBadge();
   document.getElementById('editOrderModal').classList.remove('show');
@@ -4515,6 +4521,7 @@ document.getElementById('eo-save').addEventListener('click', async ()=>{
 
 async function deleteOrder(id){
   const order = orders.find(o=>o.id===id);
+  if(order && window.zrBeforeDelete && !(await window.zrBeforeDelete(order))) return;
   if(order){
     await loadProducts();
     const touchedIds = new Set();
@@ -4828,12 +4835,14 @@ document.getElementById('btn-save-order').addEventListener('click', async ()=>{
     deferred: isDeferred,
     deferredDate: isDeferred ? deferredDate : ''
   };
+  if(window.zrPrepareOrder) window.zrPrepareOrder(newOrder);
   const orderSaved = await saveOrderDoc(newOrder);
   if(!orderSaved){
     toast('Échec — la commande n\'a pas été enregistrée (le stock, lui, est à jour), réessayez', true);
     return;
   }
   orders.push(newOrder);
+  if(window.zrAfterSave) window.zrAfterSave(newOrder);
   await upsertCustomer(newOrder);
   updateDeferredBadge();
 
@@ -5473,6 +5482,7 @@ boot();
 </script>
 <script>document.write('<script src="shopify-sync.js?t='+Date.now()+'"><\/script>');</script>
 <script>document.write('<script src="zr-bureaux.js?t='+Date.now()+'"><\/script>');</script>
+<script>document.write('<script src="zr-sync.js?t='+Date.now()+'"><\/script>');</script>
 <script>document.write('<script src="app-update.js?t='+Date.now()+'"><\/script>');</script>
 </body>
 </html>
