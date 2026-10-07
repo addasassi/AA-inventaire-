@@ -765,6 +765,54 @@
     refreshStatus();
   }
 
+  /* ---------- Synchro AUTOMATIQUE ----------
+     Après chaque changement de prix, quantité, nom, catégorie ou couleur
+     (y compris une commande saisie sur n'importe quel téléphone), l'app
+     envoie les changements vers Shopify toute seule, quelques secondes après.
+     - L'empreinte du stock déjà envoyé est gardée dans Firestore : un changement
+       fait pendant que l'app était fermée est envoyé à la prochaine ouverture.
+     - Un verrou évite que deux téléphones synchronisent en même temps. */
+  const DEVICE = (()=>{ try{ let d = localStorage.getItem('ss-device'); if(!d){ d = uuid(); localStorage.setItem('ss-device', d); } return d; }catch(e){ return uuid(); } })();
+  let autoTimer = null, autoBusy = false, autoErrShown = false;
+  function stockSig(){
+    const rows = products.map(p=> [p.id, p.name||'', p.cat||'', Number(p.price)||0, Number(p.qty)||0, p.code||'',
+      colorsOf(p).map(c=> [c.code, Number(colorPrice(p,c))||0, Number(c.qty)||0, c.name||''].join(':')).join(',')].join('|'));
+    return hashStr(rows.sort().join('\n'));
+  }
+  function scheduleAuto(delay){
+    if(!isReady()) return;
+    clearTimeout(autoTimer);
+    autoTimer = setTimeout(autoSync, delay == null ? 6000 : delay);
+  }
+  async function autoSync(){
+    if(!isReady() || !isAdmin() || autoBusy) return;
+    if(running){ scheduleAuto(15000); return; }
+    if(!Array.isArray(products) || !products.length) return;
+    const sig = stockSig();
+    const meta = await getMeta();
+    if(meta.autoSig === sig) return;                       // déjà envoyé
+    const lock = meta.autoLock || {};
+    if(lock.until > Date.now() && lock.by !== DEVICE){ scheduleAuto(60000); return; }  // un autre téléphone s'en occupe
+    autoBusy = true; running = true;
+    try{
+      await setMeta({autoLock: {by: DEVICE, until: Date.now() + 5*60*1000}});
+      await pullOrders(true);
+      await new Promise(r=>setTimeout(r, 800));
+      const s = await pushAll(()=>{});
+      await setMeta({autoSig: stockSig(), autoLock: null, lastAuto: Date.now()});
+      const n = (s.qty||0) + (s.price||0) + (s.created||0) + (s.newColors||0) + (s.titles||0) + (s.drafted||0);
+      if(n) toast('🛍️ Shopify mis à jour automatiquement');
+      autoErrShown = false;
+    }catch(e){
+      try{ await setMeta({autoLock: null}); }catch(_){}
+      if(!autoErrShown){ toast('Synchro Shopify auto : ' + (e.message || e), true); autoErrShown = true; }
+      scheduleAuto(2*60*1000);                               // nouvel essai plus tard
+    }
+    autoBusy = false; running = false;
+    if(stockSig() !== (await getMeta()).autoSig) scheduleAuto();  // changé pendant l'envoi
+    refreshStatus();
+  }
+
   function startOrdersPolling(){
     if(ordersTimer) clearInterval(ordersTimer);
     if(!isReady()) return;
@@ -793,6 +841,7 @@
     const b = document.getElementById('dash-btn-shopify');
     if(b) b.style.display = isAdmin() ? '' : 'none';
     if(isAdmin()) startOrdersPolling();
+    scheduleAuto(5000);
   }
   if(typeof origEnter === 'function'){
     window.enterApp = function(){ const r = origEnter.apply(this, arguments); try{ afterLogin(); }catch(e){} return r; };
@@ -806,4 +855,5 @@
   window.shopifyReady = isReady;
   window.__shopifyPushAll = pushAll;
   window.shopifyPullOrders = pullOrders;
+  window.shopifyAutoSync = ()=> scheduleAuto();
 })();

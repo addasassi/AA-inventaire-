@@ -1449,6 +1449,7 @@ function startProductsListener(){
   productsUnsub = db.collection('products').onSnapshot(snap=>{
     products = snap.docs.map(d=>d.data()).sort((a,b)=>(a.order||0)-(b.order||0));
     scheduleStockLight();
+    if(window.shopifyAutoSync) window.shopifyAutoSync();
     detectNewRuptures();
     refreshCurrentInventoryView();
   }, ()=> warnStorage());
@@ -3133,7 +3134,7 @@ async function setColorName(idx){
   const el = document.getElementById(idx === -1 ? 'color-name-main' : 'color-name-'+idx);
   const name = (el && el.value || '').trim();
   if(name && colorNameUsed(p, name, idx)){ toast('Ce nom est déjà utilisé pour une autre couleur', true); return; }
-  if(await saveColorName(p, idx, name)) toast(name ? 'Nom enregistré — faites la synchro Shopify' : 'Nom effacé');
+  if(await saveColorName(p, idx, name)) toast(name ? 'Nom enregistré' : 'Nom effacé');
 }
 async function aiNameOne(p, idx){
   const img = idx === -1 ? p.img : (p.colors[idx]||{}).img;
@@ -3196,7 +3197,7 @@ async function setVitrineColor(index){
     refreshCurrentInventoryView(); renderColorsGrid();
     toast('Échec — non enregistré, réessayez', true); return;
   }
-  toast('⭐ Nouvelle photo de vitrine — faites la synchro Shopify');
+  toast('⭐ Nouvelle photo de vitrine');
 }
 async function setColorQtyDirect(index){
   const input = document.getElementById('color-setqty-'+index);
