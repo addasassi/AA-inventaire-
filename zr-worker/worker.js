@@ -136,7 +136,7 @@ async function activeOrders(){
 }
 
 /* ---------- Tenant : secret ZR_TENANT, sinon trouvé tout seul via GET /users/profile ---------- */
-let tenantCache = '', tenantName = '', tenantDiag = '';
+let tenantCache = '', tenantName = '', tenantDiag = '', authMode = 'key';
 async function tenantOf(env){
   if((env.ZR_TENANT || '').trim()) return env.ZR_TENANT.trim();
   if(tenantCache) return tenantCache;
@@ -149,7 +149,7 @@ async function tenantOf(env){
     if(!r.ok){
       const r2 = await fetch(ZR + '/users/profile', {headers: {Accept: 'application/json', Authorization: 'Bearer ' + key}});
       const raw2 = await r2.text();
-      if(r2.ok){ r = r2; raw = raw2; }
+      if(r2.ok){ r = r2; raw = raw2; authMode = 'bearer'; }
       else{ tenantDiag = 'profile HTTP ' + r.status + ' / bearer ' + r2.status + ' — clé de ' + key.length + ' caractères'; return ''; }
     }
     let me = {}; try{ me = JSON.parse(raw); }catch(e){}
@@ -163,9 +163,20 @@ async function tenantOf(env){
 
 /* ---------- ZR Express ---------- */
 class ZrError extends Error { constructor(msg, permanent){ super(msg); this.permanent = permanent; } }
+function authHeaders(env, mode){
+  const key = String(env.ZR_API_KEY || '').trim().replace(/^"+|"+$/g, '');
+  return mode === 'bearer' ? {Authorization: 'Bearer ' + key} : {'X-Api-Key': key};
+}
 async function zr(env, path, init = {}){
-  const r = await fetch(ZR + path, {...init, headers: {'Content-Type': 'application/json', Accept: 'application/json',
-    'X-Api-Key': env.ZR_API_KEY || '', 'X-Tenant': await tenantOf(env)}});
+  const tenant = await tenantOf(env);
+  const send = mode => fetch(ZR + path, {...init, headers: {'Content-Type': 'application/json', Accept: 'application/json',
+    ...authHeaders(env, mode), 'X-Tenant': tenant}});
+  let r = await send(authMode);
+  if(r.status === 401){                                   // l'autre façon d'envoyer la clé
+    const other = authMode === 'bearer' ? 'key' : 'bearer';
+    const r2 = await send(other);
+    if(r2.status !== 401){ authMode = other; r = r2; }
+  }
   let body = null; try{ body = await r.json(); }catch(e){}
   if(!r.ok){
     const b = body || {};
@@ -355,7 +366,11 @@ export default {
     const path = new URL(req.url).pathname.replace(/\/+$/, '') || '/';
     if(path === '/' ){
       const t = await tenantOf(env);
-      return json({ok: true, service: 'atelier-zr', version: 5, configured: !!env.ZR_API_KEY, tenant: t ? 'ok' : 'manquant',
+      if(new URL(req.url).searchParams.get('test') && t){
+        try{ const x = await territories(env, 'alger'); return json({ok: true, test: 'connexion ZR OK', territoires: x.length, auth: authMode}); }
+        catch(e){ return json({ok: false, test: 'échec', error: e.message, auth: authMode}); }
+      }
+      return json({ok: true, service: 'atelier-zr', version: 6, configured: !!env.ZR_API_KEY, tenant: t ? 'ok' : 'manquant',
         boutique: tenantName || undefined, info: t ? undefined : (tenantDiag || undefined)});
     }
     if(req.method !== 'POST') return json({error: 'POST attendu'}, 405);
