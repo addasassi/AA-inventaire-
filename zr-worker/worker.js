@@ -54,6 +54,28 @@ function stageOf(state){
   return null;
 }
 
+/* ---------- Situation de livraison (Ne répond pas 1/2/3, Commune erronée, SMS envoyé…) ----------
+   ZR la donne à part de l'état. On cherche tout champ « situation » du colis
+   (texte, objet {name/description/label} ou liste → la dernière). */
+function txt(v){
+  if(!v) return '';
+  if(typeof v === 'string') return v;
+  if(Array.isArray(v)) return v.length ? txt(v[v.length - 1]) : '';
+  if(typeof v === 'object') return txt(v.description || v.label || v.title || v.name || v.situation || v.value || '');
+  return '';
+}
+function situationOf(p){
+  if(!p || typeof p !== 'object') return '';
+  for(const k of Object.keys(p)){
+    if(/situation/i.test(k)){ const t = txt(p[k]); if(t) return t; }
+  }
+  for(const k of ['lastAttempt', 'deliveryAttempt', 'attempt', 'lastEvent']){
+    if(p[k] && typeof p[k] === 'object'){ const t = situationOf(p[k]); if(t) return t; }
+  }
+  return '';
+}
+const isNoSituation = t => !t || /pas de situation/i.test(strip(t));
+
 /* ---------- Firestore (REST) ---------- */
 function toFs(v){
   if(v === null || v === undefined) return {nullValue: null};
@@ -248,7 +270,7 @@ async function sendOrder(env, id, force){
   try{
     const p = await createParcel(env, o);
     const nz = {status: 'sent', active: true, parcelId: p.parcelId, tracking: p.tracking,
-      state: (p.state && (p.state.description || p.state.name)) || 'Commande reçue', stage: stageOf(p.state) || 'created',
+      state: (p.state && (p.state.description || p.state.name)) || 'Commande reçue', stage: stageOf(p.state) || 'created', situation: '',
       sentAt: now, updatedAt: new Date().toISOString(), lastCheck: Date.now(), error: '', attempts: (z.attempts || 0) + 1};
     await saveZr(id, nz);
     return {ok: true, zr: nz};
@@ -269,8 +291,10 @@ async function trackOrder(env, o){
   let stage = stageOf(p.state) || z.stage || 'created';
   if(p.isReturn === true) stage = 'returned';
   const final = stage === 'delivered' || stage === 'returned';
+  const sit = situationOf(p);
   const nz = {...z, tracking: p.trackingNumber || z.tracking,
     state: (p.state && (p.state.description || p.state.name)) || z.state, stage,
+    situation: isNoSituation(sit) ? '' : sit, keys: Object.keys(p || {}).join(',').slice(0, 400),
     status: final ? stage : 'sent', active: !final, lastCheck: Date.now(), updatedAt: new Date().toISOString()};
   await saveZr(o.id, nz);
   return nz;
@@ -286,7 +310,7 @@ async function cron(env){
         const due = !z.sendAfter || z.sendAfter <= today;
         const old = Date.now() - Date.parse(z.updatedAt || o.createdAt || 0) > 2 * 60 * 1000;
         if(due && old) await sendOrder(env, o.id, false);
-      }else if(Date.now() - (z.lastCheck || 0) > TRACK_EVERY_MS){
+      }else if(Date.now() - (z.lastCheck || 0) > ((z.stage === 'out_for_delivery' || z.situation) ? 10 * 60 * 1000 : TRACK_EVERY_MS)){
         await trackOrder(env, o);
       }
     }catch(e){ /* on réessaiera au prochain passage */ }

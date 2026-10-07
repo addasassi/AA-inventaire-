@@ -70,6 +70,25 @@
     delivered:        ['✅', 'Livrée', '#1f7a4a', '#dcf3e6'],
     returned:         ['↩️', 'Retour', '#a4483f', '#f8dedb']
   };
+  // Situations de livraison ZR : même couleur que dans ZR Express
+  function sitStyle(t){
+    const k = norm(t);
+    if(/ne repond pas 3|annule/.test(k)) return ['📵', '#fff', '#c0392b'];
+    if(/ne repond pas/.test(k)) return ['📵', '#7a4b00', '#ffe7a8'];
+    if(/commune erronee/.test(k)) return ['📍', '#7a4b00', '#ffe7a8'];
+    if(/reportee|rendez vous/.test(k)) return ['📅', '#1f6b3a', '#dcf3e6'];
+    if(/changement stop ?desk/.test(k)) return ['🏢', '#1f6b3a', '#dcf3e6'];
+    if(/sms/.test(k)) return ['✉️', '#1a5fa0', '#dcebfa'];
+    if(/appel/.test(k)) return ['📞', '#1a5fa0', '#dcebfa'];
+    return ['ℹ️', '#444', '#eee'];
+  }
+  function sitBadge(o){
+    const t = o && o.zr && o.zr.situation;
+    if(!t || o.zr.stage === 'delivered' || o.zr.stage === 'returned') return '';
+    const s = sitStyle(t);
+    return `<div class="zr-badge" style="color:${s[1]};background:${s[2]}">${s[0]} ${esc(t)}</div>`;
+  }
+
   function info(o){
     const z = o && o.zr;
     if(!z) return null;
@@ -86,7 +105,7 @@
     const i = info(o);
     if(!i) return '';
     const t = o.zr.tracking ? ' · ' + esc(o.zr.tracking) : '';
-    return `<div class="zr-badge" style="color:${i[2]};background:${i[3]}">${i[0]} ${esc(i[1])}${t}</div>`;
+    return `<div class="zr-badges"><div class="zr-badge" style="color:${i[2]};background:${i[3]}">${i[0]} ${esc(i[1])}${t}</div>${sitBadge(o)}</div>`;
   }
 
   let detailId = null;
@@ -111,7 +130,7 @@
         btns.push('<button class="zr-btn ghost" data-zr="track">🔄 Actualiser</button>');
       }
       el.innerHTML = `<div class="zr-box"><div class="zr-h">🚚 ZR Express <span class="zr-badge" style="color:${i[2]};background:${i[3]}">${i[0]} ${esc(i[1])}</span></div>
-        ${tr}${hist}${err}<div class="zr-row">${btns.join('')}</div></div>`;
+        ${sitBadge(o) ? '<div style="margin-top:8px">' + sitBadge(o) + '</div>' : ''}${tr}${hist}${err}<div class="zr-row">${btns.join('')}</div></div>`;
     }
     el.querySelectorAll('[data-zr]').forEach(b => b.onclick = () => action(b.dataset.zr, o, b));
   }
@@ -163,6 +182,8 @@
     if(document.getElementById('zrModal')) return;
     const css = document.createElement('style');
     css.textContent = `
+      .zr-badges{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 6px;}
+      .zr-badges .zr-badge{margin:0;}
       .zr-badge{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:800;padding:4px 10px;border-radius:999px;margin:0 0 6px;}
       .zr-box{background:var(--cream,#f7f2ef);border:1px solid var(--line,#ddd);border-radius:14px;padding:12px;margin:12px 0;}
       .zr-h{font-weight:800;font-size:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
