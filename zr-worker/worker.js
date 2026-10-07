@@ -136,19 +136,21 @@ async function activeOrders(){
 }
 
 /* ---------- Tenant : secret ZR_TENANT, sinon trouvé tout seul via GET /users/profile ---------- */
-let tenantCache = '', tenantName = '';
+let tenantCache = '', tenantName = '', tenantDiag = '';
 async function tenantOf(env){
   if((env.ZR_TENANT || '').trim()) return env.ZR_TENANT.trim();
   if(tenantCache) return tenantCache;
   if(!env.ZR_API_KEY) return '';
   try{
     const r = await fetch(ZR + '/users/profile', {headers: {Accept: 'application/json', 'X-Api-Key': env.ZR_API_KEY}});
-    if(!r.ok) return '';
-    const me = await r.json();
+    const raw = await r.text();
+    if(!r.ok){ tenantDiag = 'profile HTTP ' + r.status + ' ' + raw.slice(0, 200); return ''; }
+    let me = {}; try{ me = JSON.parse(raw); }catch(e){}
     const ms = (me && me.memberships) || [];
     const m = ms.find(x => x.isDefault && x.isActive && x.tenantId) || ms.find(x => x.isActive && x.tenantId) || ms.find(x => x.tenantId);
     if(m){ tenantCache = m.tenantId; tenantName = m.tenantName || ''; }
-  }catch(e){}
+    else tenantDiag = 'profile OK mais aucun tenant (' + ms.length + ' membership)';
+  }catch(e){ tenantDiag = 'profile erreur ' + (e.message || e); }
   return tenantCache;
 }
 
@@ -346,7 +348,8 @@ export default {
     const path = new URL(req.url).pathname.replace(/\/+$/, '') || '/';
     if(path === '/' ){
       const t = await tenantOf(env);
-      return json({ok: true, service: 'atelier-zr', configured: !!env.ZR_API_KEY, tenant: t ? 'ok' : 'manquant', boutique: tenantName || undefined});
+      return json({ok: true, service: 'atelier-zr', version: 4, configured: !!env.ZR_API_KEY, tenant: t ? 'ok' : 'manquant',
+        boutique: tenantName || undefined, info: t ? undefined : (tenantDiag || undefined)});
     }
     if(req.method !== 'POST') return json({error: 'POST attendu'}, 405);
     if(!env.ZR_API_KEY) return json({ok: false, error: 'Secret ZR_API_KEY manquant dans Cloudflare'}, 500);
