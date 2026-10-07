@@ -79,7 +79,8 @@
       return ['⏳', 'Envoi à ZR…', '#5b6b8c', '#eef0f5'];
     }
     const s = STAGE[z.stage] || STAGE.created;
-    return [s[0], s[1], s[2], s[3]];
+    // le texte affiché est celui du système ZR Express (ex. « Sortie en livraison ») ; l'icône/couleur vient de l'étape
+    return [s[0], z.state || s[1], s[2], s[3]];
   }
   function badge(o){
     const i = info(o);
@@ -100,7 +101,7 @@
         <button class="zr-btn" data-zr="send">Envoyer à ZR Express</button></div>`;
     }else{
       const i = info(o);
-      const hist = z.state ? `<div class="zr-sub">État ZR : <b>${esc(z.state)}</b></div>` : '';
+      const hist = '';
       const err = z.status === 'error' ? `<div class="zr-err">${esc(z.error || 'Erreur')}</div>` : '';
       const tr = z.tracking ? `<div class="zr-track"><span>N° de suivi</span><b>${esc(z.tracking)}</b><button class="zr-mini" data-zr="copy">Copier</button></div>` : '';
       const btns = [];
