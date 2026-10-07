@@ -1448,9 +1448,38 @@ function startProductsListener(){
   if(!FIREBASE_OK || productsUnsub) return;
   productsUnsub = db.collection('products').onSnapshot(snap=>{
     products = snap.docs.map(d=>d.data()).sort((a,b)=>(a.order||0)-(b.order||0));
+    scheduleStockLight();
     detectNewRuptures();
     refreshCurrentInventoryView();
   }, ()=> warnStorage());
+}
+/* ---------- Stock léger pour le catalogue client (aa-vetements.github.io) ----------
+   Petit document sans photos (quantités, prix, noms) que le catalogue lit en direct :
+   une pièce vendue ou un prix changé apparaît tout de suite chez les clientes. */
+let stockLightTimer = null, stockLightLast = '';
+function scheduleStockLight(){
+  clearTimeout(stockLightTimer);
+  stockLightTimer = setTimeout(publishStockLight, 2500);
+}
+async function publishStockLight(){
+  if(!FIREBASE_OK) return;
+  const items = {};
+  products.forEach(p=>{
+    if(!p || !p.id) return;
+    const pieces = [{k: String(p.code || (p.id + '-0')), q: Number(p.qty)||0, p: Number(p.price)||0, c: p.colorName||''}];
+    (p.colors||[]).forEach((c,i)=>{
+      if(!c) return;
+      pieces.push({k: String(c.code || (p.id + '-' + (i+1))), q: Number(c.qty)||0,
+        p: Number((c.price!=null && c.price!=='') ? c.price : p.price)||0, c: c.name||''});
+    });
+    items[p.id] = {n: p.name||'', cat: p.cat||'', o: p.order||0, pieces};
+  });
+  const json = JSON.stringify({items, cats: CATS});
+  if(json === stockLightLast) return;
+  try{
+    await withTimeout(db.collection('meta').doc('stockLight').set({data: json, updated: Date.now()}), 15000);
+    stockLightLast = json;
+  }catch(e){ /* réessai au prochain changement */ }
 }
 /* ---------- Alerte rupture de stock (produit ou couleur qui passe à 0) ---------- */
 let stockPrevMap = null;
