@@ -1,0 +1,37 @@
+name: Synchro Facebook (albums catalogue)
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'   # toutes les 5 minutes (GitHub peut parfois retarder de quelques minutes)
+  workflow_dispatch:         # lancement manuel possible depuis l'onglet Actions
+
+concurrency:
+  group: facebook-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Synchroniser les albums Facebook
+        env:
+          FB_PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
+        run: node facebook-sync/sync.mjs
+      - name: Enregistrer l'état de la synchro
+        if: always()
+        run: |
+          git config user.name "atelier-stock-bot"
+          git config user.email "atelier-stock-bot@users.noreply.github.com"
+          git add facebook-sync/state.json
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Synchro Facebook : état mis à jour [skip ci]"
+          for i in 1 2 3; do git pull --rebase -q && git push -q && exit 0; sleep 5; done
+          exit 1
