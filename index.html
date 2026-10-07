@@ -1691,6 +1691,11 @@ function enterApp(){
 }
 
 document.getElementById('btn-logout').addEventListener('click', ()=>{
+  // fermer « Mon compte » et tout ce qui est ouvert avant de revenir à la connexion
+  document.getElementById('accountModal').classList.remove('show');
+  document.querySelectorAll('.show').forEach(el=>{ if(el.id && /Modal$/.test(el.id)) el.classList.remove('show'); });
+  try{ if(typeof closeSidebar === 'function') closeSidebar(); }catch(e){}
+  const sb = document.getElementById('share-next-bar'); if(sb) sb.remove();
   currentUser = null;
   clearSession();
   if(equipeTimer) clearInterval(equipeTimer);
