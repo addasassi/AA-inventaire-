@@ -142,9 +142,16 @@ async function tenantOf(env){
   if(tenantCache) return tenantCache;
   if(!env.ZR_API_KEY) return '';
   try{
-    const r = await fetch(ZR + '/users/profile', {headers: {Accept: 'application/json', 'X-Api-Key': env.ZR_API_KEY}});
-    const raw = await r.text();
-    if(!r.ok){ tenantDiag = 'profile HTTP ' + r.status + ' ' + raw.slice(0, 200); return ''; }
+    // essaie la clé en X-Api-Key, puis en Bearer (les deux sont acceptés par l'API selon la doc)
+    const key = String(env.ZR_API_KEY).trim().replace(/^"+|"+$/g, '');
+    let r = await fetch(ZR + '/users/profile', {headers: {Accept: 'application/json', 'X-Api-Key': key}});
+    let raw = await r.text();
+    if(!r.ok){
+      const r2 = await fetch(ZR + '/users/profile', {headers: {Accept: 'application/json', Authorization: 'Bearer ' + key}});
+      const raw2 = await r2.text();
+      if(r2.ok){ r = r2; raw = raw2; }
+      else{ tenantDiag = 'profile HTTP ' + r.status + ' / bearer ' + r2.status + ' — clé de ' + key.length + ' caractères'; return ''; }
+    }
     let me = {}; try{ me = JSON.parse(raw); }catch(e){}
     const ms = (me && me.memberships) || [];
     const m = ms.find(x => x.isDefault && x.isActive && x.tenantId) || ms.find(x => x.isActive && x.tenantId) || ms.find(x => x.tenantId);
@@ -348,7 +355,7 @@ export default {
     const path = new URL(req.url).pathname.replace(/\/+$/, '') || '/';
     if(path === '/' ){
       const t = await tenantOf(env);
-      return json({ok: true, service: 'atelier-zr', version: 4, configured: !!env.ZR_API_KEY, tenant: t ? 'ok' : 'manquant',
+      return json({ok: true, service: 'atelier-zr', version: 5, configured: !!env.ZR_API_KEY, tenant: t ? 'ok' : 'manquant',
         boutique: tenantName || undefined, info: t ? undefined : (tenantDiag || undefined)});
     }
     if(req.method !== 'POST') return json({error: 'POST attendu'}, 405);
