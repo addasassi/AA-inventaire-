@@ -179,7 +179,7 @@
 
   /* ---------- Réglages (admin) ---------- */
   function ensureUI(){
-    if(document.getElementById('zrModal')) return;
+    if(document.getElementById('zrSyncModal')) return;
     const css = document.createElement('style');
     css.textContent = `
       .zr-badges{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 6px;}
@@ -197,18 +197,18 @@
       .zr-btn{flex:1;min-width:120px;border:none;border-radius:10px;padding:10px;font-weight:800;font-size:13px;background:#1a1a1a;color:#ffd200;cursor:pointer;}
       .zr-btn.ghost{background:var(--card,#fff);color:inherit;border:1px solid var(--line,#ddd);}
       .zr-mini{border:1px solid var(--line,#ddd);background:var(--card,#fff);color:inherit;border-radius:8px;padding:4px 9px;font-size:12px;font-weight:700;cursor:pointer;}
-      #zrModal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:flex-end;justify-content:center;z-index:9999;}
-      #zrModal.show{display:flex;}
-      #zrModal .zm-card{background:var(--card,#fff);color:var(--plum,#222);width:100%;max-width:520px;max-height:88vh;overflow:auto;border-radius:20px 20px 0 0;padding:18px 16px 22px;box-sizing:border-box;}
-      #zrModal h3{margin:0 0 6px;font-size:18px;}
-      #zrModal input{width:100%;box-sizing:border-box;padding:11px 12px;border:1px solid var(--line,#ddd);border-radius:10px;font-size:14px;margin-top:4px;background:var(--card,#fff);color:inherit;}
-      #zrModal label{font-size:12.5px;font-weight:700;display:block;margin-top:10px;}
-      #zrModal .zm-row{display:flex;gap:8px;margin-top:14px;}
-      #zrModal .zm-row button{flex:1;margin-top:0;}
-      #zrModal .zm-msg{font-size:13px;margin-top:10px;white-space:pre-wrap;}`;
+      #zrSyncModal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:flex-end;justify-content:center;z-index:9999;}
+      #zrSyncModal.show{display:flex;}
+      #zrSyncModal .zm-card{background:var(--card,#fff);color:var(--plum,#222);width:100%;max-width:520px;max-height:88vh;overflow:auto;border-radius:20px 20px 0 0;padding:18px 16px 22px;box-sizing:border-box;}
+      #zrSyncModal h3{margin:0 0 6px;font-size:18px;}
+      #zrSyncModal input{width:100%;box-sizing:border-box;padding:11px 12px;border:1px solid var(--line,#ddd);border-radius:10px;font-size:14px;margin-top:4px;background:var(--card,#fff);color:inherit;}
+      #zrSyncModal label{font-size:12.5px;font-weight:700;display:block;margin-top:10px;}
+      #zrSyncModal .zm-row{display:flex;gap:8px;margin-top:14px;}
+      #zrSyncModal .zm-row button{flex:1;margin-top:0;}
+      #zrSyncModal .zm-msg{font-size:13px;margin-top:10px;white-space:pre-wrap;}`;
     document.head.appendChild(css);
     const m = document.createElement('div');
-    m.id = 'zrModal';
+    m.id = 'zrSyncModal';
     m.innerHTML = `<div class="zm-card">
       <h3>🚚 ZR Express</h3>
       <div class="note">Les nouvelles commandes sont envoyées automatiquement à ZR Express. Les commandes reportées partent le jour prévu.</div>
@@ -246,7 +246,7 @@
     ensureUI();
     document.getElementById('zm-url').value = relay;
     document.getElementById('zm-msg').textContent = relay ? 'Relais configuré ✅' : 'Pas encore configuré.';
-    document.getElementById('zrModal').classList.add('show');
+    document.getElementById('zrSyncModal').classList.add('show');
   }
   function injectButton(){
     const actions = document.querySelector('#view-accueil .dash-actions');
