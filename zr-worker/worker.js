@@ -135,11 +135,23 @@ async function activeOrders(){
   });
 }
 
+/* ---------- Tenant : secret ZR_TENANT, sinon lu dans le jeton s'il en contient un (JWT) ---------- */
+function tenantFromKey(key){
+  try{
+    const part = String(key || '').split('.')[1];
+    if(!part) return '';
+    const p = JSON.parse(atob(part.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(part.length / 4) * 4, '=')));
+    for(const k of Object.keys(p)) if(/tenant/i.test(k) && p[k]) return String(Array.isArray(p[k]) ? p[k][0] : p[k]);
+  }catch(e){}
+  return '';
+}
+const tenantOf = env => (env.ZR_TENANT || '').trim() || tenantFromKey(env.ZR_API_KEY);
+
 /* ---------- ZR Express ---------- */
 class ZrError extends Error { constructor(msg, permanent){ super(msg); this.permanent = permanent; } }
 async function zr(env, path, init = {}){
   const r = await fetch(ZR + path, {...init, headers: {'Content-Type': 'application/json', Accept: 'application/json',
-    'X-Api-Key': env.ZR_API_KEY || '', 'X-Tenant': env.ZR_TENANT || ''}});
+    'X-Api-Key': env.ZR_API_KEY || '', 'X-Tenant': tenantOf(env)}});
   let body = null; try{ body = await r.json(); }catch(e){}
   if(!r.ok){
     const b = body || {};
@@ -326,9 +338,10 @@ export default {
   async fetch(req, env){
     if(req.method === 'OPTIONS') return new Response(null, {headers: CORS});
     const path = new URL(req.url).pathname.replace(/\/+$/, '') || '/';
-    if(path === '/' ) return json({ok: true, service: 'atelier-zr', configured: !!(env.ZR_API_KEY && env.ZR_TENANT)});
+    if(path === '/' ) return json({ok: true, service: 'atelier-zr', configured: !!env.ZR_API_KEY, tenant: tenantOf(env) ? 'ok' : 'manquant'});
     if(req.method !== 'POST') return json({error: 'POST attendu'}, 405);
-    if(!env.ZR_API_KEY || !env.ZR_TENANT) return json({ok: false, error: 'Secrets ZR_API_KEY / ZR_TENANT manquants dans Cloudflare'}, 500);
+    if(!env.ZR_API_KEY) return json({ok: false, error: 'Secret ZR_API_KEY manquant dans Cloudflare'}, 500);
+    if(!tenantOf(env)) return json({ok: false, error: 'Tenant ID introuvable : ajoutez le secret ZR_TENANT'}, 500);
     let body = {}; try{ body = await req.json(); }catch(e){}
     const id = String(body.id || '').trim();
     try{
@@ -366,6 +379,6 @@ export default {
     }
   },
   async scheduled(event, env, ctx){
-    if(env.ZR_API_KEY && env.ZR_TENANT) ctx.waitUntil(cron(env));
+    if(env.ZR_API_KEY && tenantOf(env)) ctx.waitUntil(cron(env));
   }
 };
