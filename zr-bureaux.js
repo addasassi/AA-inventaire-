@@ -85,6 +85,9 @@
   function norm(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[أإآ]/g,'ا').replace(/ة/g,'ه').replace(/ى/g,'ي').replace(/['’\-]/g,' ').replace(/\s+/g,' ').trim(); }
   function phones(s){ return String(s||'').split(/[\/,]/).map(x=>x.trim()).filter(Boolean); }
   function telHref(p){ return 'tel:' + p.replace(/[^\d+]/g,''); }
+  // WhatsApp : 0662… → 213662…
+  function waHref(p){ let d = p.replace(/\D/g,''); if(d.startsWith('00')) d = d.slice(2); else if(d.startsWith('0')) d = '213' + d.slice(1); return 'https://wa.me/' + d; }
+  const WA_ICON = '<svg width="20" height="20" viewBox="0 0 24 24" fill="#fff" aria-hidden="true"><path d="M17.47 14.38c-.3-.15-1.75-.86-2.02-.96-.27-.1-.47-.15-.67.15-.2.3-.77.96-.94 1.16-.17.2-.35.22-.64.07-.3-.15-1.25-.46-2.38-1.47-.88-.78-1.47-1.75-1.64-2.05-.17-.3-.02-.46.13-.6.13-.14.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.03-.52-.07-.15-.67-1.6-.92-2.2-.24-.58-.49-.5-.67-.5h-.57c-.2 0-.52.07-.79.37-.27.3-1.04 1.02-1.04 2.48s1.07 2.88 1.21 3.08c.15.2 2.1 3.2 5.08 4.49.71.31 1.26.49 1.7.62.71.23 1.36.2 1.87.12.57-.08 1.75-.72 2-1.41.25-.69.25-1.29.17-1.41-.07-.12-.27-.2-.57-.35zM12.04 21.5h-.01a9.4 9.4 0 01-4.8-1.32l-.34-.2-3.57.94.95-3.48-.22-.36a9.42 9.42 0 1117.4-5.02 9.43 9.43 0 01-9.41 9.44zm8.03-17.46A11.27 11.27 0 0012.04.75C5.8.75.72 5.83.72 12.07c0 2 .52 3.94 1.51 5.65L.62 23.6l6.03-1.58a11.3 11.3 0 005.39 1.37h.01c6.24 0 11.32-5.08 11.32-11.32 0-3.02-1.18-5.87-3.3-8.03z"/></svg>';
 
   async function load(){
     try{
@@ -125,6 +128,8 @@
       .zr-ph{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px;}
       .zr-ph a{display:inline-flex;align-items:center;gap:4px;text-decoration:none;font-size:12.5px;font-weight:700;padding:5px 9px;border-radius:999px;background:#fff7d1;color:${DARK};border:1px solid #f1df8a;}
       .zr-ph a.desk{background:${YELLOW};border-color:${YELLOW};}
+      .zr-rec{display:inline-flex;align-items:center;gap:6px;}
+      .zr-ph a.wa{width:36px;height:36px;padding:0;justify-content:center;border-radius:50%;background:#25D366;border-color:#25D366;box-shadow:0 2px 6px rgba(37,211,102,.35);}
       .zr-ph .lbl{font-size:10.5px;font-weight:800;opacity:.65;}
       .zr-act{display:flex;gap:6px;margin-top:10px;}
       .zr-act button{flex:1;border:none;border-radius:11px;padding:11px 8px;font-weight:800;font-size:13.5px;}
@@ -192,7 +197,7 @@
         const ph = [];
         phones(b.desk).forEach(p=> ph.push(`<a class="desk" href="${telHref(p)}"><span class="lbl">STOP DESK</span> ${esc(p)}</a>`));
         phones(b.com).forEach(p=> ph.push(`<a href="${telHref(p)}"><span class="lbl">COMMERCIAL</span> ${esc(p)}</a>`));
-        phones(b.rec).forEach(p=> ph.push(`<a href="${telHref(p)}"><span class="lbl">RÉCLAMATION</span> ${esc(p)}</a>`));
+        phones(b.rec).forEach(p=> ph.push(`<span class="zr-rec"><a href="${telHref(p)}"><span class="lbl">RÉCLAMATION</span> ${esc(p)}</a><a class="wa" href="${waHref(p)}" target="_blank" rel="noopener" title="WhatsApp" aria-label="WhatsApp ${esc(p)}">${WA_ICON}</a></span>`));
         html += `<div class="zr-card">
           <div class="zr-bn"><span>${esc(b.name)}</span><small>${esc(b.nameAr)}</small></div>
           ${b.addr ? `<div class="zr-addr">${esc(b.addr)}</div>` : ''}
