@@ -135,23 +135,28 @@ async function activeOrders(){
   });
 }
 
-/* ---------- Tenant : secret ZR_TENANT, sinon lu dans le jeton s'il en contient un (JWT) ---------- */
-function tenantFromKey(key){
+/* ---------- Tenant : secret ZR_TENANT, sinon trouvé tout seul via GET /users/profile ---------- */
+let tenantCache = '', tenantName = '';
+async function tenantOf(env){
+  if((env.ZR_TENANT || '').trim()) return env.ZR_TENANT.trim();
+  if(tenantCache) return tenantCache;
+  if(!env.ZR_API_KEY) return '';
   try{
-    const part = String(key || '').split('.')[1];
-    if(!part) return '';
-    const p = JSON.parse(atob(part.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(part.length / 4) * 4, '=')));
-    for(const k of Object.keys(p)) if(/tenant/i.test(k) && p[k]) return String(Array.isArray(p[k]) ? p[k][0] : p[k]);
+    const r = await fetch(ZR + '/users/profile', {headers: {Accept: 'application/json', 'X-Api-Key': env.ZR_API_KEY}});
+    if(!r.ok) return '';
+    const me = await r.json();
+    const ms = (me && me.memberships) || [];
+    const m = ms.find(x => x.isDefault && x.isActive && x.tenantId) || ms.find(x => x.isActive && x.tenantId) || ms.find(x => x.tenantId);
+    if(m){ tenantCache = m.tenantId; tenantName = m.tenantName || ''; }
   }catch(e){}
-  return '';
+  return tenantCache;
 }
-const tenantOf = env => (env.ZR_TENANT || '').trim() || tenantFromKey(env.ZR_API_KEY);
 
 /* ---------- ZR Express ---------- */
 class ZrError extends Error { constructor(msg, permanent){ super(msg); this.permanent = permanent; } }
 async function zr(env, path, init = {}){
   const r = await fetch(ZR + path, {...init, headers: {'Content-Type': 'application/json', Accept: 'application/json',
-    'X-Api-Key': env.ZR_API_KEY || '', 'X-Tenant': tenantOf(env)}});
+    'X-Api-Key': env.ZR_API_KEY || '', 'X-Tenant': await tenantOf(env)}});
   let body = null; try{ body = await r.json(); }catch(e){}
   if(!r.ok){
     const b = body || {};
@@ -306,7 +311,8 @@ async function trackOrder(env, o){
   const sit = situationOf(p);
   const nz = {...z, tracking: p.trackingNumber || z.tracking,
     state: (p.state && (p.state.description || p.state.name)) || z.state, stage,
-    situation: isNoSituation(sit) ? '' : sit, keys: Object.keys(p || {}).join(',').slice(0, 400),
+    situation: isNoSituation(sit) ? '' : sit,
+    deliveryPrice: Number(p.deliveryPrice) || z.deliveryPrice || 0, returnPrice: Number(p.returnPrice) || z.returnPrice || 0,
     status: final ? stage : 'sent', active: !final, lastCheck: Date.now(), updatedAt: new Date().toISOString()};
   await saveZr(o.id, nz);
   return nz;
@@ -338,10 +344,13 @@ export default {
   async fetch(req, env){
     if(req.method === 'OPTIONS') return new Response(null, {headers: CORS});
     const path = new URL(req.url).pathname.replace(/\/+$/, '') || '/';
-    if(path === '/' ) return json({ok: true, service: 'atelier-zr', configured: !!env.ZR_API_KEY, tenant: tenantOf(env) ? 'ok' : 'manquant'});
+    if(path === '/' ){
+      const t = await tenantOf(env);
+      return json({ok: true, service: 'atelier-zr', configured: !!env.ZR_API_KEY, tenant: t ? 'ok' : 'manquant', boutique: tenantName || undefined});
+    }
     if(req.method !== 'POST') return json({error: 'POST attendu'}, 405);
     if(!env.ZR_API_KEY) return json({ok: false, error: 'Secret ZR_API_KEY manquant dans Cloudflare'}, 500);
-    if(!tenantOf(env)) return json({ok: false, error: 'Tenant ID introuvable : ajoutez le secret ZR_TENANT'}, 500);
+    if(!(await tenantOf(env))) return json({ok: false, error: 'Tenant ID introuvable : ajoutez le secret ZR_TENANT'}, 500);
     let body = {}; try{ body = await req.json(); }catch(e){}
     const id = String(body.id || '').trim();
     try{
@@ -379,6 +388,6 @@ export default {
     }
   },
   async scheduled(event, env, ctx){
-    if(env.ZR_API_KEY && tenantOf(env)) ctx.waitUntil(cron(env));
+    if(env.ZR_API_KEY) ctx.waitUntil(tenantOf(env).then(t => t && cron(env)));
   }
 };
