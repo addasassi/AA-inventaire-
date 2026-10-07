@@ -668,6 +668,9 @@
       <button class="tab-btn" data-tab="clients" title="Clients">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4" width="17" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M6.5 15c0-1.5 1.1-2.5 2.5-2.5s2.5 1 2.5 2.5"/><line x1="14" y1="9" x2="17.5" y2="9"/><line x1="14" y1="12" x2="17.5" y2="12"/><line x1="14" y1="15" x2="16" y2="15"/></svg>
       </button>
+      <button class="tab-btn" data-tab="zr" title="Bureaux ZR Express">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#FFCC00" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 6.5h11v9h-11z"/><path d="M13.5 9.5h4l3 3v3h-7z"/><circle cx="6.5" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></svg>
+      </button>
       <button class="tab-btn admin-only" data-tab="statistiques" title="Statistiques">
         <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="20" x2="20" y2="20" stroke="currentColor" stroke-width="1.8"/><rect x="5.5" y="11" width="3" height="7.2" rx="0.8" fill="#4cc38a"/><rect x="10.5" y="6" width="3" height="12.2" rx="0.8" fill="#f06fa8"/><rect x="15.5" y="9" width="3" height="9.2" rx="0.8" fill="#f7b538"/></svg>
       </button>
@@ -819,6 +822,8 @@
     <div class="note" id="vs-status" style="display:none;margin-top:14px;"></div>
     <div id="vs-results" style="margin-top:16px;"></div>
   </section>
+
+  <section class="view" id="view-zr"><div id="zrPage"></div></section>
 
   <section class="view" id="view-statistiques">
     <div class="cat-title">Statistiques</div>
@@ -2177,6 +2182,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     if(btn.dataset.tab === 'scan') setTimeout(()=>document.getElementById('manualCode').focus(), 60);
     if(btn.dataset.tab === 'equipe'){ renderTeam(); renderAdminList(); }
     if(btn.dataset.tab === 'statistiques' && typeof renderStatsPage === 'function'){ loadOrders().then(renderStatsPage); }
+    if(btn.dataset.tab === 'zr' && typeof renderZrPage === 'function'){ renderZrPage(); }
     if(btn.dataset.tab === 'liste') showCatFolders();
     if(btn.dataset.tab === 'accueil'){ loadProducts().then(renderDashboard); loadOrders().then(renderDashboard); }
     if(btn.dataset.tab === 'clients'){
@@ -5431,5 +5437,6 @@ document.getElementById('text-import-btn').addEventListener('click', ()=>{
 boot();
 </script>
 <script>document.write('<script src="shopify-sync.js?t='+Date.now()+'"><\/script>');</script>
+<script>document.write('<script src="zr-bureaux.js?t='+Date.now()+'"><\/script>');</script>
 </body>
 </html>
