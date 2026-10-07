@@ -497,8 +497,31 @@ document.getElementById('search').addEventListener('input', (e)=>{
   renderGrid();
 });
 
+// Une carte par pièce EN STOCK : la photo de vitrine + chaque couleur (qty > 0)
+function inStockPieces(products){
+  const out = [];
+  products.sort((a,b)=>(a.order||0)-(b.order||0)).forEach(p=>{
+    const pieces = [{img:p.img, qty:p.qty, price:p.price, code:p.code, colorName:p.colorName}];
+    (p.colors||[]).forEach((c,i)=>{
+      if(!c) return;
+      pieces.push({img:c.img, qty:c.qty, price:(c.price!=null && c.price!=='') ? c.price : p.price,
+        code:c.code || (p.id+'-'+(i+1)), colorName:c.name||''});
+    });
+    pieces.forEach((pc,i)=>{
+      if(!pc.img || (Number(pc.qty)||0) <= 0) return;
+      out.push({
+        id:p.id, cat:p.cat, order:(p.order||0)*100 + i,
+        name: pc.colorName ? (p.name + ' — ' + pc.colorName) : p.name,
+        img:pc.img, qty:Number(pc.qty)||0, price:pc.price, code:String(pc.code||'')
+      });
+    });
+  });
+  return out;
+}
+
 db.collection('products').onSnapshot(snap=>{
-  allProducts = snap.docs.map(d=> d.data());
+  allProducts = inStockPieces(snap.docs.map(d=> d.data()));
+  if(activeCat !== 'ALL' && !allProducts.some(p=>p.cat===activeCat)) activeCat = 'ALL';
   renderChips();
   renderGrid();
 }, err=>{
