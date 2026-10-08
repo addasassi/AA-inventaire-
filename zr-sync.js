@@ -312,6 +312,21 @@
     box.querySelector('.oc-actions-btn').onclick = openActions;
     box.querySelector('.oc-cut-btn').onclick = addCut;
     updateBar();
+    newCountInSummary();
+  }
+  // dans le cadre « N commandes au total » : combien sont arrivées depuis la dernière ligne ✂️
+  function newCountInSummary(){
+    const sum = document.getElementById('ordersSummary'); if(!sum) return;
+    let el = sum.querySelector('.os-new');
+    if(!cuts.length || !shown.length){ if(el) el.remove(); return; }
+    const last = cuts[0].at;
+    const fresh = shown.filter(o => (o.createdAt || '') > last);
+    const tot = fresh.reduce((t, o) => t + (Number(o.total) || 0), 0);
+    if(!el){ el = document.createElement('div'); el.className = 'os-new'; sum.appendChild(el); }
+    el.innerHTML = fresh.length
+      ? `🆕 <b>${fresh.length}</b> nouvelle${fresh.length > 1 ? 's' : ''} depuis la ligne ✂️ · ${tot.toLocaleString('fr-FR').replace(/[\u202f\u00a0]/g, ' ')} DA`
+      : '✂️ Aucune nouvelle commande depuis la ligne';
+    el.classList.toggle('zero', !fresh.length);
   }
 
   /* ---------- Ligne de séparation (lots) ----------
@@ -571,6 +586,9 @@
     .oc-cut-btn{margin-left:auto;border:1.5px dashed var(--mauve,#b48aa3);background:transparent;color:inherit;border-radius:12px;padding:10px 14px;font:inherit;font-size:14px;font-weight:700;cursor:pointer;}
     .oc-cut-btn + .oc-actions-btn{margin-left:0;}
     .oc-cut{margin:16px 0;cursor:pointer;}
+    #ordersSummary .os-new{margin:10px auto 0;display:table;padding:7px 14px;border-radius:999px;background:#e3f4ea;color:#1f8a4c;font-size:14px;font-weight:700;}
+    #ordersSummary .os-new b{font-size:16px;}
+    #ordersSummary .os-new.zero{background:rgba(255,255,255,.55);color:var(--mauve-dark,#6b4a5e);font-weight:600;}
     .oc-cut-line{display:flex;align-items:center;gap:10px;font-size:12px;font-weight:700;color:var(--mauve-dark,#6b4a5e);}
     .oc-cut-line::before,.oc-cut-line::after{content:'';flex:1;border-top:2px dashed var(--mauve,#b48aa3);}
     .oc-cut-line span{white-space:nowrap;padding:5px 10px;border-radius:999px;background:var(--card,#fff);border:1px solid var(--line,#e5d6d0);}
