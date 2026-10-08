@@ -68,26 +68,21 @@
     return 'handled';
   }
 
-  /* Historique : base (0) + quelques « marches » (1..DEPTH) au-dessus.
-     Chrome ignore les marches ajoutées sans geste de l'utilisateur (sur téléphone, un toucher
-     ne compte qu'à la fin : click / touchend). On n'ajoute donc des marches QUE pendant un geste,
-     jamais dans le gestionnaire « retour », et on en garde plusieurs d'avance pour enchaîner
-     plusieurs « retour » sans toucher l'écran entre deux. */
-  const DEPTH = 4;
+  /* Historique : Chrome n'accepte qu'UNE marche « retour » par geste de l'utilisateur
+     (et ignore celles ajoutées sans geste). On ajoute donc une marche à CHAQUE toucher :
+     chaque écran ouvert par un toucher peut être refermé par un « retour ». */
   const level = () => (history.state && history.state.atelierLvl) || 0;
 
-  function topUp(){
+  function step(){
     try{
       if(!(history.state && 'atelierLvl' in history.state)) history.replaceState({atelierLvl: 0}, '');
-      for(let l = level() + 1; l <= DEPTH; l++) history.pushState({atelierLvl: l}, '');
+      history.pushState({atelierLvl: level() + 1}, '');
     }catch(e){}
   }
 
   window.addEventListener('popstate', () => {
     if(onBack() === 'exit'){ history.go(-(level() + 1)); return; }   // quitte l'application
-    // pas de pushState ici (il serait ignoré par Chrome) : on recomplète au prochain toucher
   });
 
-  ['click', 'touchend', 'keydown'].forEach(ev =>
-    document.addEventListener(ev, () => { if(level() < DEPTH) topUp(); }, true));
+  ['click', 'keydown'].forEach(ev => document.addEventListener(ev, step, true));
 })();
