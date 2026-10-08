@@ -224,16 +224,21 @@ async function hubs(env){
   hubCache = out; hubTime = Date.now();
   return out;
 }
-async function resolveHub(env, city, commune){
+const officeName = c => String(c || '').replace(/\s*\([^)]*\)\s*$/, '').trim();
+async function resolveHub(env, city, communeRaw){
+  const commune = officeName(communeRaw);
   const list = (await hubs(env)).filter(h => h.isPickupPoint !== false);
   let district = null;
   try{ district = await resolveDistrict(env, commune, city, true); }catch(e){}
   const inCity = list.filter(h => h.address && h.address.cityTerritoryId === city.id);
+  const n = norm(commune);
   const h = (district && list.find(x => x.address && x.address.districtTerritoryId === district.id))
-         || inCity.find(x => norm(x.name).includes(norm(commune)))
+         || inCity.find(x => norm(x.name) === n)
+         || inCity.find(x => norm(x.name).split(' ').includes(n) || norm(x.name).startsWith(n))
+         || inCity.find(x => norm(x.name).includes(n))
          || list.find(x => norm(x.name).includes(norm(commune)))
          || (inCity.length === 1 ? inCity[0] : null);
-  if(!h) throw new ZrError(`Bureau Stop Desk « ${commune} » introuvable chez ZR`, true);
+  if(!h) throw new ZrError(`Bureau Stop Desk « ${commune} » introuvable chez ZR (bureaux de la wilaya : ${inCity.map(x => x.name).join(', ') || 'aucun'})`, true);
   return h;
 }
 function phoneIntl(p){
@@ -267,7 +272,7 @@ async function createParcel(env, o){
     hubId = h.id;
     cityId = (h.address && h.address.cityTerritoryId) || city.id;
     districtId = h.address && h.address.districtTerritoryId;
-    if(!districtId) districtId = (await resolveDistrict(env, c.commune, city, true)).id;
+    if(!districtId) districtId = (await resolveDistrict(env, officeName(c.commune), city, true)).id;
   }else{
     cityId = city.id;
     districtId = (await resolveDistrict(env, c.commune, city, false)).id;
@@ -366,6 +371,13 @@ export default {
     const path = new URL(req.url).pathname.replace(/\/+$/, '') || '/';
     if(path === '/' ){
       const t = await tenantOf(env);
+      const hq = new URL(req.url).searchParams.get('hubs');
+      if(hq && t){
+        const all = await hubs(env);
+        const q = norm(hq);
+        return json({ok: true, total: all.length, hubs: all.filter(h => !q || norm(JSON.stringify([h.name, h.address])).includes(q))
+          .slice(0, 30).map(h => ({name: h.name, pickup: h.isPickupPoint, city: h.address && h.address.cityTerritoryId, district: h.address && h.address.districtTerritoryId}))});
+      }
       if(new URL(req.url).searchParams.get('test') && t){
         try{ const x = await territories(env, 'alger'); return json({ok: true, test: 'connexion ZR OK', territoires: x.length, auth: authMode}); }
         catch(e){ return json({ok: false, test: 'échec', error: e.message, auth: authMode}); }
