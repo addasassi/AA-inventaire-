@@ -3088,6 +3088,12 @@ document.getElementById('btn-save').addEventListener('click', async ()=>{
   document.getElementById('f-qty').value = '';
   document.getElementById('f-image').value = '';
   document.getElementById('f-preview').src = placeholderImg();
+  // on revient dans la catégorie du produit (pas à l'accueil), le nouveau produit visible en bas
+  try{
+    document.querySelector('.tab-btn[data-tab="liste"]').click();
+    openCategory(cat);
+    setTimeout(()=> window.scrollTo({top: document.body.scrollHeight, behavior: 'smooth'}), 150);
+  }catch(e){}
   showBarcode(product.id);
 });
 
