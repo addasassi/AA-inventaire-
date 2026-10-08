@@ -259,6 +259,8 @@
     color:var(--mauve-dark);border:none;border-radius:20px;font-size:10px;font-weight:800;
     padding:4px 8px;cursor:pointer;}
   .order-pick.out-pick{opacity:0.5;pointer-events:none;}
+  .bundle-badge{display:inline-block;background:#fde7f1;color:#b0245e;font-weight:800;font-size:11px;padding:2px 8px;border-radius:999px;margin-top:3px;}
+  .bundle-line{margin:6px 0 2px;padding:9px 12px;border-radius:12px;background:#fde7f1;color:#b0245e;font-size:13px;font-weight:600;}
   @keyframes eoFlash{0%{background:#e3f4ea;border-color:#1f8a4c;}100%{}}
   #eo-total.eo-flash{animation:eoFlash 1.2s ease;}
   .order-pick.vitrine-out img{opacity:0.45;filter:grayscale(60%);}   /* couleur de la vitrine épuisée, d'autres couleurs en stock */
@@ -1183,6 +1185,13 @@
         <input type="number" id="pm-setcost-input" min="0" step="0.01">
         <button id="pm-setcost-btn">Valider</button>
       </div>
+      <label class="admin-only" style="margin-top:10px;">🎁 Offre lot (ex : 4 pièces pour 1000 DA) — vide = pas d'offre</label>
+      <div class="manual-row admin-only">
+        <input type="number" id="pm-bundle-n" min="2" step="1" placeholder="Nb" style="max-width:70px;">
+        <span style="align-self:center;font-weight:700;">pour</span>
+        <input type="number" id="pm-bundle-price" min="0" step="1" placeholder="DA">
+        <button id="pm-bundle-btn">Valider</button>
+      </div>
     </div>
     <div id="pm-scan-wrap" class="pm-scan-wrap" style="display:none;">
       <label>Scanner pour ajouter +1</label>
@@ -1524,6 +1533,7 @@ async function publishStockLight(){
         p: Number((c.price!=null && c.price!=='') ? c.price : p.price)||0, c: c.name||''});
     });
     items[p.id] = {n: p.name||'', cat: p.cat||'', o: p.order||0, pieces};
+    if(p.bundle && p.bundle.n >= 2 && p.bundle.price > 0) items[p.id].b = {n: p.bundle.n, p: p.bundle.price};
   });
   const json = JSON.stringify({items, cats: CATS});
   if(json === stockLightLast) return;
@@ -2834,7 +2844,7 @@ function stockCardHtml(p, c, i, isOut, t, by){
       </div>
       <div class="info">
         <div class="name">${escapeHtml(p.name)}</div>
-        <div class="meta">${Number(p.price).toFixed(2)} DA</div>
+        <div class="meta">${Number(p.price).toFixed(2)} DA</div>${bundleBadge(p)}
         <div class="code">#${p.code}</div>
         <div class="code" style="color:var(--mauve-dark);">${escapeHtml(p.cat)}</div>
         ${when}
@@ -2873,7 +2883,7 @@ function renderList(cat){
       </div>
       <div class="info">
         <div class="name">${escapeHtml(p.name)}</div>
-        <div class="meta">${Number(p.price).toFixed(2)} DA</div>
+        <div class="meta">${Number(p.price).toFixed(2)} DA</div>${bundleBadge(p)}
         <div class="code">#${p.code}</div>
         <button class="colors-link" onclick="event.stopPropagation(); openColorsModal('${p.id}')">🎨 ${colorCount>0 ? colorCount+' couleur'+(colorCount>1?'s':'') : 'Voir les couleurs'}</button>
       </div>
@@ -3150,6 +3160,8 @@ function openProductModal(id){
     document.getElementById('pm-setqty-input').value = p.qty;
     document.getElementById('pm-setprice-input').value = p.price;
     document.getElementById('pm-setcost-input').value = p.cost || '';
+    document.getElementById('pm-bundle-n').value = (p.bundle && p.bundle.n) || '';
+    document.getElementById('pm-bundle-price').value = (p.bundle && p.bundle.price) || '';
     photoWrap.style.display = 'block';
     photoWrap.dataset.productId = p.id;
     document.getElementById('pm-photo-input').value = '';
@@ -3700,6 +3712,47 @@ document.getElementById('pm-setprice-btn').addEventListener('click', async ()=>{
   }
   toast('Prix mis à jour');
 });
+document.getElementById('pm-bundle-btn').addEventListener('click', async ()=>{
+  const id = document.getElementById('pm-setqty-wrap').dataset.productId;
+  const n = parseInt(document.getElementById('pm-bundle-n').value, 10);
+  const price = parseFloat(document.getElementById('pm-bundle-price').value);
+  const off = !n && !price;
+  if(!off && (!(n >= 2) || !(price > 0))){ toast('Entrez le nombre de pièces (2 ou plus) et le prix du lot', true); return; }
+  await loadProducts();
+  const p = products.find(x=>x.id===id);
+  if(!p) return;
+  const prev = p.bundle;
+  if(off) delete p.bundle; else p.bundle = {n, price};
+  refreshCurrentInventoryView();
+  openProductModal(id);
+  const ok = await saveProductDoc(p);
+  if(!ok){ p.bundle = prev; refreshCurrentInventoryView(); openProductModal(id); toast('Échec — offre NON enregistrée, réessayez', true); return; }
+  toast(off ? 'Offre retirée' : '🎁 Offre : ' + n + ' pièces pour ' + price + ' DA');
+});
+/* ---------- Offre lot (ex : 4 pièces du même modèle, couleurs au choix, pour 1000 DA) ----------
+   lines : [{productId, price, qty}] → remise totale + détail par modèle */
+function bundleDiscount(lines){
+  const by = {};
+  (lines || []).forEach(l=>{ if(!l || !l.productId) return; (by[l.productId] = by[l.productId] || []).push(l); });
+  let total = 0; const details = [];
+  Object.keys(by).forEach(pid=>{
+    const p = products.find(x=>x.id===pid);
+    const b = p && p.bundle;
+    if(!b || !(b.n >= 2) || !(b.price > 0)) return;
+    const units = [];
+    by[pid].forEach(l=>{ for(let i=0;i<(Number(l.qty)||0);i++) units.push(Number(l.price)||0); });
+    const groups = Math.floor(units.length / b.n);
+    if(!groups) return;
+    units.sort((a,c)=> c-a);                       // les pièces les plus chères vont dans le lot
+    const normal = units.slice(0, groups * b.n).reduce((t,v)=> t+v, 0);
+    const disc = Math.max(0, normal - groups * b.price);
+    if(disc > 0){ total += disc; details.push({name: p.name, n: b.n, price: b.price, groups, disc}); }
+  });
+  return {total, details};
+}
+function bundleBadge(p){
+  return (p && p.bundle && p.bundle.n >= 2 && p.bundle.price > 0) ? `<span class="bundle-badge">🎁 ${p.bundle.n} = ${Number(p.bundle.price)} DA</span>` : '';
+}
 document.getElementById('pm-setcost-btn').addEventListener('click', async ()=>{
   const wrap = document.getElementById('pm-setqty-wrap');
   const id = wrap.dataset.productId;
@@ -4659,7 +4712,10 @@ function openEditOrderModal(id){
 // Total recalculé tout seul : on ajoute / retire seulement la différence des articles,
 // donc la livraison ou une remise saisie à la main restent comprises dans le total.
 let eoItemsSum = 0;
-function eoSum(){ return editingOrderItems.reduce((t,it)=> t + (Number(it.price)||0) * (Number(it.qty)||0), 0); }
+function eoSum(){
+  const raw = editingOrderItems.reduce((t,it)=> t + (Number(it.price)||0) * (Number(it.qty)||0), 0);
+  return raw - bundleDiscount(editingOrderItems).total;
+}
 function syncEoTotal(){
   const now = eoSum(), diff = now - eoItemsSum;
   eoItemsSum = now;
@@ -4951,7 +5007,7 @@ function renderOrderProducts(cat){
       ${inCart>0 ? `<div class="op-badge">${inCart}</div>` : ''}
       <div class="op-info">
         <div class="op-name">${escapeHtml(p.name)}</div>
-        <div class="op-price">${Number(p.price).toFixed(2)} DA</div>
+        <div class="op-price">${Number(p.price).toFixed(2)} DA</div>${bundleBadge(p)}
         <div class="op-stock ${pillClass}">${pillText}</div>
       </div>
       <button class="op-colors" onclick="event.stopPropagation(); openColorsModal('${p.id}','order')">🎨 ${colorCount>0 ? colorCount+' couleur'+(colorCount>1?'s':'') : 'Couleurs'}</button>
@@ -5093,6 +5149,11 @@ function renderCart(){
       </div>
     </div>`;
   }).join('');
+  const bd = bundleDiscount(keys.map(k=>{ const {productId} = parseCartKey(k); const i = cartLineInfo(k); return i ? {productId, price:i.price, qty:cart[k]} : null; }));
+  if(bd.total > 0){
+    total -= bd.total;
+    wrap.innerHTML += bd.details.map(d=> `<div class="bundle-line">🎁 Offre ${escapeHtml(d.name)} : ${d.n} pour ${d.price} DA ×${d.groups} <b>−${d.disc.toFixed(0)} DA</b></div>`).join('');
+  }
   if(!totalManuallyEdited) document.getElementById('o-total').value = total.toFixed(2);
 }
 
@@ -5140,6 +5201,7 @@ document.getElementById('btn-save-order').addEventListener('click', async ()=>{
       p.qty = Math.max(0, p.qty - qty);
     }
   });
+  computedTotal -= bundleDiscount(items).total;   // offre lot (ex : 4 pour 1000 DA)
   const total = totalInput !== '' ? parseFloat(totalInput) : computedTotal;
   refreshCurrentInventoryView();
   const touchedProducts = products.filter(p=> touchedIds.has(p.id));
