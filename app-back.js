@@ -68,17 +68,26 @@
     return 'handled';
   }
 
-  function arm(){ history.pushState({atelierGuard: Date.now()}, ''); }
+  /* Historique : base (0) + quelques « marches » (1..DEPTH) au-dessus.
+     Chrome ignore les marches ajoutées sans geste de l'utilisateur (sur téléphone, un toucher
+     ne compte qu'à la fin : click / touchend). On n'ajoute donc des marches QUE pendant un geste,
+     jamais dans le gestionnaire « retour », et on en garde plusieurs d'avance pour enchaîner
+     plusieurs « retour » sans toucher l'écran entre deux. */
+  const DEPTH = 4;
+  const level = () => (history.state && history.state.atelierLvl) || 0;
+
+  function topUp(){
+    try{
+      if(!(history.state && 'atelierLvl' in history.state)) history.replaceState({atelierLvl: 0}, '');
+      for(let l = level() + 1; l <= DEPTH; l++) history.pushState({atelierLvl: l}, '');
+    }catch(e){}
+  }
 
   window.addEventListener('popstate', () => {
-    if(onBack() === 'exit'){ history.back(); return; }   // quitte l'application
-    arm();                                                // garde une étape « retour » disponible
+    if(onBack() === 'exit'){ history.go(-(level() + 1)); return; }   // quitte l'application
+    // pas de pushState ici (il serait ignoré par Chrome) : on recomplète au prochain toucher
   });
 
-  // Une « marche » d'historique pour que le geste retour arrive ici au lieu de fermer l'app.
-  // Chrome ignore les marches créées sans action de l'utilisateur : on (ré)arme aussi au premier toucher.
-  const guarded = () => !!(history.state && history.state.atelierGuard);
-  const start = () => { try{ if(!guarded()){ history.replaceState({atelierBase: 1}, ''); arm(); } }catch(e){} };
-  ['pointerdown', 'keydown'].forEach(ev => document.addEventListener(ev, () => { try{ if(!guarded()) arm(); }catch(e){} }, true));
-  if(document.readyState === 'complete') start(); else window.addEventListener('load', start);
+  ['click', 'touchend', 'keydown'].forEach(ev =>
+    document.addEventListener(ev, () => { if(level() < DEPTH) topUp(); }, true));
 })();
