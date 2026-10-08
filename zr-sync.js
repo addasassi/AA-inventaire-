@@ -267,12 +267,12 @@
   }
 
   ensureUI();
-  const start = () => { loadCfg(); injectButton(); };
+  const start = () => { loadCfg(); injectButton(); try{ listenCuts(); }catch(e){} };
   const origEnter = window.enterApp;
   if(typeof origEnter === 'function'){
     window.enterApp = function(){ const r = origEnter.apply(this, arguments); try{ start(); }catch(e){} return r; };
   }
-  setTimeout(() => { try{ if(typeof db !== 'undefined' && db) loadCfg(); if(typeof currentUser !== 'undefined' && currentUser) injectButton(); }catch(e){} }, 1500);
+  setTimeout(() => { try{ if(typeof db !== 'undefined' && db){ loadCfg(); listenCuts(); } if(typeof currentUser !== 'undefined' && currentUser) injectButton(); }catch(e){} }, 1500);
 
   /* ---------- Sélection des commandes + menu « Actions » (bordereaux A6 / A4, supprimer) ---------- */
   const selected = new Set();
@@ -300,7 +300,8 @@
     [...selected].forEach(id => { if(!ids.has(id)) selected.delete(id); });   // garde seulement les commandes visibles
     if(!shown.length){ box.innerHTML = ''; return; }
     box.innerHTML = `<div class="oc-bar">
-        <label class="oc-all"><input type="checkbox" id="oc-all"> Tout sélectionner</label>
+        <label class="oc-all"><input type="checkbox" id="oc-all"> Tout</label>
+        <button class="oc-cut-btn" type="button" title="Tracer une ligne : séparer les commandes déjà traitées des nouvelles">✂️ Ligne</button>
         <button class="oc-actions-btn" disabled>⚡ Actions</button>
       </div>`;
     box.querySelector('#oc-all').onchange = e => {
@@ -309,8 +310,79 @@
       updateBar();
     };
     box.querySelector('.oc-actions-btn').onclick = openActions;
+    box.querySelector('.oc-cut-btn').onclick = addCut;
     updateBar();
   }
+
+  /* ---------- Ligne de séparation (lots) ----------
+     « ✂️ Ligne » trace un trait : tout ce qui est déjà enregistré passe sous la ligne
+     (lot traité / envoyé), les nouvelles commandes s'affichent au-dessus.
+     Partagé avec toute l'équipe (meta/orderCuts). Toucher une ligne propose de la retirer. */
+  let cuts = [];
+  function listenCuts(){
+    if(typeof db === 'undefined' || !db || listenCuts.on) return;
+    listenCuts.on = true;
+    db.collection('meta').doc('orderCuts').onSnapshot(d => {
+      cuts = ((d.exists && d.data().list) || []).filter(c => c && c.at).sort((a, b) => b.at.localeCompare(a.at));
+      const v = document.getElementById('view-commandes');
+      if(v && v.classList.contains('active') && typeof renderOrdersHistory === 'function') renderOrdersHistory();
+    }, () => {});
+  }
+  async function saveCuts(list){
+    await db.collection('meta').doc('orderCuts').set({list: list.slice(0, 80), updatedAt: Date.now()});
+  }
+  async function addCut(){
+    const all = (typeof orders !== 'undefined' ? orders : []);
+    const last = cuts[0] ? cuts[0].at : '';
+    const n = all.filter(o => (o.createdAt || '') > last).length;
+    const ok = typeof confirmDialog === 'function' ? await confirmDialog({
+      title: '✂️ Tracer une ligne maintenant ?',
+      text: (n ? n + ' commande' + (n > 1 ? 's' : '') + ' passe' + (n > 1 ? 'nt' : '') + ' sous la ligne (lot terminé). ' : '') + 'Les prochaines commandes s\'afficheront au-dessus.',
+      ok: 'Oui, tracer la ligne', cancel: 'Annuler'}) : confirm('Tracer une ligne ?');
+    if(!ok) return;
+    const me = (typeof currentUser !== 'undefined' && currentUser) ? currentUser.name : '';
+    try{
+      await saveCuts([{at: new Date().toISOString(), by: me, n}].concat(cuts));
+      toast('✂️ Ligne tracée — les nouvelles commandes seront au-dessus');
+    }catch(e){ toast('Échec — ligne non enregistrée', true); }
+  }
+  window.ocRemoveCut = async at => {
+    const c = cuts.find(x => x.at === at); if(!c) return;
+    const ok = typeof confirmDialog === 'function' ? await confirmDialog({title: 'Retirer cette ligne ?',
+      text: 'Ligne du ' + new Date(at).toLocaleString('fr-FR', {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'}) + '. Les commandes ne changent pas.',
+      ok: 'Retirer la ligne', cancel: 'Garder'}) : confirm('Retirer cette ligne ?');
+    if(!ok) return;
+    try{ await saveCuts(cuts.filter(x => x.at !== at)); toast('Ligne retirée'); }catch(e){ toast('Échec', true); }
+  };
+  // insère les lignes entre les cartes (liste triée de la plus récente à la plus ancienne)
+  window.ocInsertCuts = (wrap, sorted) => {
+    if(!wrap || !sorted || !sorted.length || !cuts.length) return;
+    const cards = [...wrap.children];
+    if(cards.length !== sorted.length) return;
+    const fmt = iso => new Date(iso).toLocaleString('fr-FR', {weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'});
+    const oldest = sorted[sorted.length - 1].createdAt;
+    cuts.forEach((c, k) => {
+      if(c.at < oldest) return;                                // ligne plus ancienne que la liste affichée
+      const i = sorted.findIndex(o => (o.createdAt || '') < c.at);
+      const newer = cuts[k - 1] ? cuts[k - 1].at : '9999';
+      const below = sorted.filter(o => o.createdAt < c.at && (!cuts[k + 1] || o.createdAt > cuts[k + 1].at)).length;
+      const above = k === 0 ? sorted.filter(o => o.createdAt > c.at).length : 0;
+      const el = document.createElement('div');
+      el.className = 'oc-cut';
+      el.onclick = () => window.ocRemoveCut(c.at);
+      el.innerHTML = (k === 0 ? `<div class="oc-cut-new">${above ? `⬆️ ${above} nouvelle${above > 1 ? 's' : ''} commande${above > 1 ? 's' : ''} <button type="button" onclick="event.stopPropagation(); ocSelectNew()">Sélectionner</button>` : '⬆️ Les nouvelles commandes s\'afficheront ici'}</div>` : '')
+        + `<div class="oc-cut-line"><span>✂️ ${fmt(c.at)}${c.by ? ' · ' + esc(c.by) : ''}${below ? ' · ' + below + ' cmd' : ''}</span></div>`;
+      const ref = i === -1 ? null : cards[i];
+      if(ref) wrap.insertBefore(el, ref); else wrap.appendChild(el);
+    });
+  };
+  // sélection rapide : seulement les commandes au-dessus de la dernière ligne
+  window.ocSelectNew = () => {
+    const last = cuts[0] ? cuts[0].at : '';
+    shown.forEach(o => (o.createdAt || '') > last ? selected.add(o.id) : selected.delete(o.id));
+    document.querySelectorAll('.oc-check input').forEach(c => { const m = (c.getAttribute('onchange') || '').match(/zrToggle\('([^']+)'/); if(m) c.checked = selected.has(m[1]); });
+    updateBar();
+  };
 
   function openActions(){
     const list = sel(); if(!list.length) return;
@@ -466,6 +538,14 @@
   const cssP = document.createElement('style');
   cssP.textContent = `
     .oc-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:12px 2px 4px;}
+    .oc-cut-btn{margin-left:auto;border:1.5px dashed var(--mauve,#b48aa3);background:transparent;color:inherit;border-radius:12px;padding:10px 14px;font:inherit;font-size:14px;font-weight:700;cursor:pointer;}
+    .oc-cut-btn + .oc-actions-btn{margin-left:0;}
+    .oc-cut{margin:16px 0;cursor:pointer;}
+    .oc-cut-line{display:flex;align-items:center;gap:10px;font-size:12px;font-weight:700;color:var(--mauve-dark,#6b4a5e);}
+    .oc-cut-line::before,.oc-cut-line::after{content:'';flex:1;border-top:2px dashed var(--mauve,#b48aa3);}
+    .oc-cut-line span{white-space:nowrap;padding:5px 10px;border-radius:999px;background:var(--card,#fff);border:1px solid var(--line,#e5d6d0);}
+    .oc-cut-new{display:flex;align-items:center;justify-content:center;gap:10px;font-size:12.5px;font-weight:700;color:#1f8a4c;margin-bottom:8px;}
+    .oc-cut-new button{border:none;background:#e3f4ea;color:#1f8a4c;border-radius:999px;padding:6px 12px;font:inherit;font-size:12px;font-weight:800;cursor:pointer;}
     .oc-all{display:flex;align-items:center;gap:8px;font-weight:700;font-size:14px;}
     .oc-all input,.oc-check input{width:22px;height:22px;accent-color:var(--plum,#3a2632);margin:0;}
     .oc-check{display:flex;align-items:center;padding:2px;flex-shrink:0;}

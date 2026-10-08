@@ -4514,6 +4514,7 @@ function renderOrdersHistory(){
       ${(isAdmin || (currentUser && o.createdBy === currentUser.name)) ? `<button class="oc-del" onclick="event.stopPropagation(); deleteOrder('${o.id}')">Supprimer la commande</button>` : ''}
     </div>`;
   }).join('');
+  if(window.ocInsertCuts) window.ocInsertCuts(wrap, sorted);   // lignes de séparation entre les lots
 }
 /* Photos rondes des articles d'une commande (on voit d'un coup d'œil ce qui a été commandé) */
 function orderThumbs(o){
