@@ -5280,9 +5280,20 @@ async function loadAlgeriaData(){
         communeArByCode[code].push({ar: c.commune_name_ar, fr: c.commune_name_fr});
       }
     });
+    // + les communes de ZR Express (la liste geoalgeria en oublie : Boughzoul, …).
+    // zr-communes.json est mis à jour chaque semaine depuis ZR (tools/zr-communes.mjs).
+    try{
+      const zr = await (await fetch('zr-communes.json', {cache:'no-cache'})).json();
+      const key = s=> String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'');
+      Object.entries(zr.communes || {}).forEach(([code, list])=>{
+        if(!communesByWilaya[code]) return;              // wilaya inconnue de l'app : on ignore
+        const have = new Set(communesByWilaya[code].map(key));
+        list.forEach(n=>{ const k = key(n); if(k && !have.has(k)){ have.add(k); communesByWilaya[code].push(n); } });
+      });
+    }catch(e){ /* pas grave : on garde la liste de base */ }
     wilayasList.sort((a,b)=> a.code - b.code);
     wilayaArList.sort((a,b)=> b.ar.length - a.ar.length);
-    Object.keys(communesByWilaya).forEach(code=> communesByWilaya[code].sort());
+    Object.keys(communesByWilaya).forEach(code=> communesByWilaya[code].sort((a,b)=> a.localeCompare(b,'fr')));
     algeriaDataLoaded = true;
     populateWilayaSelect();
   }catch(e){
