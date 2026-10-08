@@ -1646,12 +1646,32 @@ function getSavedSession(){
 }
 
 async function boot(){
+  const saved = getSavedSession();
+  // Déjà connecté : on lit les comptes depuis la copie du téléphone (instantané)
+  // et on entre tout de suite ; la vérification avec le serveur se fait ensuite.
+  if(saved && FIREBASE_OK){
+    try{
+      const snap = await withTimeout(db.collection('users').get({source:'cache'}), 1500);
+      const cached = snap.docs.map(d=>d.data());
+      const u = cached.find(x=>x.id===saved.id);
+      if(u){
+        users = cached;
+        currentUser = u;
+        enterApp();
+        withTimeout(loadUsers(), 15000).then(()=>{
+          const fresh = users.find(x=>x.id===saved.id);
+          if(users.length && !fresh){ clearSession(); location.reload(); }   // compte supprimé entre-temps
+          else if(fresh) currentUser = Object.assign(currentUser, fresh);
+        }).catch(()=>{});
+        return;
+      }
+    }catch(e){}
+  }
   try{
     await withTimeout(loadUsers(), 5000);
   }catch(e){ users = users || []; }
   const admin = users.find(u=>u.role==='admin');
 
-  const saved = getSavedSession();
   if(saved){
     const u = users.find(x=>x.id===saved.id);
     if(u){
