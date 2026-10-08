@@ -68,7 +68,36 @@
     return 'handled';
   }
 
-  /* Historique : Chrome n'accepte qu'UNE marche « retour » par geste de l'utilisateur
+  /* ---- Méthode 1 (Chrome récent) : CloseWatcher, prévu exactement pour le bouton retour d'Android.
+     Chrome autorise un « retour » intercepté par geste de l'utilisateur : on crée donc un
+     surveillant à chaque toucher. À l'Accueil (« Appuyez encore pour quitter ») on les retire
+     tous pour que le retour suivant ferme vraiment l'application. ---- */
+  if('CloseWatcher' in window){
+    let watchers = [], last = 0;
+    const clearAll = () => { watchers.forEach(w => { try{ w.destroy(); }catch(e){} }); watchers = []; };
+    const add = () => {
+      try{
+        const w = new CloseWatcher();
+        w.onclose = () => {
+          watchers = watchers.filter(x => x !== w);
+          const now = Date.now();
+          if(now - last < 120) return;              // un groupe fermé d'un coup = un seul « retour »
+          last = now;
+          const r = onBack();
+          if(r === 'exit' || exitArmed) clearAll(); // le prochain « retour » quitte l'application
+        };
+        watchers.push(w);
+        if(watchers.length > 40){ try{ watchers.shift().destroy(); }catch(e){} }
+      }catch(e){}
+    };
+    document.addEventListener('click', add, true);
+    document.addEventListener('keydown', e => { if(e.key !== 'Escape' && e.key !== 'BrowserBack') add(); }, true);
+    add();                                           // un premier surveillant est permis sans toucher
+    return;
+  }
+
+  /* ---- Méthode 2 (anciens navigateurs) : marches d'historique, une par toucher ---- */
+  /* Chrome n'accepte qu'UNE marche « retour » par geste de l'utilisateur
      (et ignore celles ajoutées sans geste). On ajoute donc une marche à CHAQUE toucher :
      chaque écran ouvert par un toucher peut être refermé par un « retour ». */
   const level = () => (history.state && history.state.atelierLvl) || 0;
