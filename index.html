@@ -168,6 +168,10 @@
   .rupt-filter .chip.active{background:var(--plum);color:#fff;border-color:var(--plum);}
   .rupt-when{font-size:12px;font-weight:700;color:var(--mauve-dark);margin:4px 0 2px;}
   .rupt-when.today{color:#c0392b;}
+  .oc-thumbs{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 2px;}
+  .oc-th{position:relative;width:54px;height:54px;flex-shrink:0;}
+  .oc-th img{width:54px;height:54px;border-radius:50%;object-fit:cover;border:2px solid var(--card,#fff);box-shadow:0 0 0 1.5px var(--line),0 2px 6px rgba(0,0,0,.12);display:block;}
+  .oc-th span{position:absolute;top:-4px;right:-4px;background:var(--plum);color:#fff;font-size:11px;font-weight:800;min-width:20px;height:20px;border-radius:10px;display:flex;align-items:center;justify-content:center;padding:0 5px;border:2px solid var(--card,#fff);}
   section.view{display:none;padding:14px;padding-top:62px;}
   section.view.active{display:block;}
 
@@ -4194,7 +4198,7 @@ function showClientDetail(id){
           <div class="oc-name">${dateTxt}</div>
           <div class="oc-total">${Number(o.total).toFixed(2)} DA</div>
         </div>
-        <div class="oc-items">${itemsTxt}</div>
+        ${orderThumbs(o)}<div class="oc-items">${itemsTxt}</div>
       </div>`;
     }).join('');
   }
@@ -4326,11 +4330,16 @@ function renderOrdersHistory(){
       </div>
       <div class="oc-line">📦 ${dtLabel}</div>
       ${o.customer.address ? `<div class="oc-line">${escapeHtml(o.customer.address)}</div>` : ''}
-      <div class="oc-items">${itemsTxt}</div>
+      ${orderThumbs(o)}<div class="oc-items">${itemsTxt}</div>
       <div class="oc-line" style="margin-top:6px;">${dateTxt} • par ${escapeHtml(o.createdBy||'')}</div>
       ${(isAdmin || (currentUser && o.createdBy === currentUser.name)) ? `<button class="oc-del" onclick="event.stopPropagation(); deleteOrder('${o.id}')">Supprimer la commande</button>` : ''}
     </div>`;
   }).join('');
+}
+/* Photos rondes des articles d'une commande (on voit d'un coup d'œil ce qui a été commandé) */
+function orderThumbs(o){
+  return '<div class="oc-thumbs">' + (o.items||[]).map(it=>
+    `<div class="oc-th" title="${escapeHtml(it.name)}"><img src="${it.img || placeholderImg()}" loading="lazy">${it.qty>1?`<span>${it.qty}</span>`:''}</div>`).join('') + '</div>';
 }
 function showOrderDetail(id){
   const o = orders.find(x=>x.id===id);
