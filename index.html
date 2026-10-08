@@ -496,6 +496,11 @@
   .name-row input{flex:1 1 auto;min-width:0;width:auto !important;box-sizing:border-box;padding:8px 10px;border:1px solid var(--line);border-radius:9px;font-size:14px;background:var(--card,#fff);color:inherit;}
   .name-row button{flex:0 0 auto;padding:0 10px !important;min-width:0;}
   .manual-row input{flex:1;}
+  .manual-row input{min-width:0;}
+  .bundle-row{align-items:center;}
+  .bundle-row #pm-bundle-n{flex:0 0 56px;width:56px;text-align:center;}
+  .bundle-row span{font-weight:700;font-size:13px;white-space:nowrap;}
+  .bundle-row button{flex-shrink:0;padding:0 14px;align-self:stretch;}
   .manual-row button{padding:0 18px;background:var(--plum);color:var(--cream);border:none;border-radius:9px;font-weight:700;cursor:pointer;}
 
   .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);
@@ -1185,13 +1190,14 @@
         <input type="number" id="pm-setcost-input" min="0" step="0.01">
         <button id="pm-setcost-btn">Valider</button>
       </div>
-      <label class="admin-only" style="margin-top:10px;">🎁 Offre lot (ex : 4 pièces pour 1000 DA) — vide = pas d'offre</label>
-      <div class="manual-row admin-only">
-        <input type="number" id="pm-bundle-n" min="2" step="1" placeholder="Nb" style="max-width:70px;">
-        <span style="align-self:center;font-weight:700;">pour</span>
-        <input type="number" id="pm-bundle-price" min="0" step="1" placeholder="DA">
+      <label class="admin-only" style="margin-top:10px;">🎁 Offre lot (ex : 4 pièces pour 1000 DA)</label>
+      <div class="manual-row admin-only bundle-row">
+        <input type="number" id="pm-bundle-n" min="2" step="1" placeholder="4" inputmode="numeric">
+        <span>pour</span>
+        <input type="number" id="pm-bundle-price" min="0" step="1" placeholder="1000 DA" inputmode="numeric">
         <button id="pm-bundle-btn">Valider</button>
       </div>
+      <div class="admin-only" style="margin-top:4px;font-size:11.5px;color:var(--mauve-dark);">Laisser vide puis Valider = pas d'offre</div>
     </div>
     <div id="pm-scan-wrap" class="pm-scan-wrap" style="display:none;">
       <label>Scanner pour ajouter +1</label>
