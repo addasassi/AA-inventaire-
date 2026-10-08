@@ -382,6 +382,24 @@ export default {
     const path = new URL(req.url).pathname.replace(/\/+$/, '') || '/';
     if(path === '/' ){
       const t = await tenantOf(env);
+      // liste complète des wilayas / communes livrées par ZR (pour compléter les listes de l'app)
+      if(new URL(req.url).searchParams.get('territories') && t){
+        const all = [];
+        for(let page = 1; page <= 10; page++){
+          const b = await zr(env, '/territories/search', {method: 'POST', body: JSON.stringify({pageSize: 1000, pageNumber: page})});
+          const items = (b && b.items) || [];
+          all.push(...items);
+          if(items.length < 1000 || page >= ((b && b.totalPages) || 1)) break;
+        }
+        const wil = all.filter(x => x.level === 'wilaya');
+        const byId = {}; wil.forEach(w => byId[w.id] = w);
+        const communes = {};
+        all.filter(x => x.level === 'commune' && byId[x.parentId]).forEach(c => {
+          const code = String(Number(byId[c.parentId].code));
+          (communes[code] = communes[code] || []).push(c.name);
+        });
+        return json({ok: true, total: all.length, wilayas: wil.map(w => ({code: Number(w.code), name: w.name})).sort((a, b) => a.code - b.code), communes});
+      }
       const hq = new URL(req.url).searchParams.get('hubs');
       if(hq && t){
         const all = await hubs(env);
@@ -393,7 +411,7 @@ export default {
         try{ const x = await territories(env, 'alger'); return json({ok: true, test: 'connexion ZR OK', territoires: x.length, auth: authMode}); }
         catch(e){ return json({ok: false, test: 'échec', error: e.message, auth: authMode}); }
       }
-      return json({ok: true, service: 'atelier-zr', version: 9, configured: !!env.ZR_API_KEY, tenant: t ? 'ok' : 'manquant',
+      return json({ok: true, service: 'atelier-zr', version: 10, configured: !!env.ZR_API_KEY, tenant: t ? 'ok' : 'manquant',
         boutique: tenantName || undefined, info: t ? undefined : (tenantDiag || undefined)});
     }
     // GET /pdf?u=… : renvoie le PDF de ZR avec CORS → l'app peut l'afficher et l'imprimer elle-même
