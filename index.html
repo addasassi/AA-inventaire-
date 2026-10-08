@@ -4284,6 +4284,7 @@ document.getElementById('of-filter-deferred').addEventListener('click', ()=>{
 
 function renderOrdersHistory(){
   populateOrderEmployeeFilter();
+  if(window.zrLabelsButton) window.zrLabelsButton([]);
   const wrap = document.getElementById('ordersHistory');
   const summaryEl = document.getElementById('ordersSummary');
   const filtered = getFilteredOrders();
@@ -4305,6 +4306,8 @@ function renderOrdersHistory(){
   }
   const isAdmin = currentUser && currentUser.role === 'admin';
   const sorted = filtered.slice().sort((a,b)=> b.createdAt.localeCompare(a.createdAt));
+  window.ordersShown = sorted;   // ordre affiché (utilisé pour imprimer les bordereaux ZR)
+  if(window.zrLabelsButton) window.zrLabelsButton(sorted);
   wrap.innerHTML = sorted.map(o=>{
     const itemsTxt = o.items.map(it=> it.qty+'x '+escapeHtml(it.name)).join(', ');
     const d = new Date(o.createdAt);

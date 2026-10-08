@@ -21,6 +21,7 @@
       const d = await db.collection('meta').doc('zr').get();
       relay = (d.exists && d.data().url || '').replace(/\/+$/, '');
     }catch(e){}
+    if(window.ordersShown && window.zrLabelsButton) window.zrLabelsButton(window.ordersShown);
     loaded = true;
   }
 
@@ -269,6 +270,64 @@
     window.enterApp = function(){ const r = origEnter.apply(this, arguments); try{ start(); }catch(e){} return r; };
   }
   setTimeout(() => { try{ if(typeof db !== 'undefined' && db) loadCfg(); if(typeof currentUser !== 'undefined' && currentUser) injectButton(); }catch(e){} }, 1500);
+
+  /* ---------- Imprimer les bordereaux ZR de la liste affichée (même ordre) ---------- */
+  function labelsButton(shown){
+    const sum = document.getElementById('ordersSummary');
+    if(!sum) return;
+    let box = document.getElementById('zr-labels-box');
+    if(!box){
+      box = document.createElement('div'); box.id = 'zr-labels-box';
+      sum.insertAdjacentElement('afterend', box);
+    }
+    const withTrack = (shown || []).filter(o => o.zr && o.zr.tracking);
+    if(!relay || !withTrack.length){ box.innerHTML = ''; return; }
+    box.innerHTML = `<button class="zr-print-btn">🖨️ Imprimer les bordereaux ZR (${withTrack.length})</button>`;
+    box.querySelector('button').onclick = () => chooseFormat(withTrack);
+  }
+  function chooseFormat(list){
+    confirmChoice(list).catch(()=>{});
+  }
+  async function confirmChoice(list){
+    let m = document.getElementById('zrPrintModal');
+    if(!m){
+      m = document.createElement('div'); m.id = 'zrPrintModal';
+      m.innerHTML = `<div class="zp-card"><h3>🖨️ Bordereaux ZR Express</h3><p class="zp-sub"></p>
+        <button class="zp-btn" data-f="a4">📄 A4 — 4 bordereaux par page</button>
+        <button class="zp-btn" data-f="a6">🏷️ A6 — 1 bordereau par page (imprimante étiquettes)</button>
+        <button class="zp-cancel" id="zp-cancel">Annuler</button></div>`;
+      document.body.appendChild(m);
+      m.addEventListener('click', e => { if(e.target === m) m.classList.remove('show'); });
+      m.querySelector('#zp-cancel').onclick = () => m.classList.remove('show');
+    }
+    m.querySelector('.zp-sub').textContent = list.length + ' bordereau' + (list.length > 1 ? 'x' : '') + ', dans l\'ordre de la liste.' + (list.length > 250 ? ' (250 maximum par impression)' : '');
+    m.querySelectorAll('.zp-btn').forEach(b => b.onclick = async () => {
+      const old = b.textContent; b.disabled = true; b.textContent = '⏳ Préparation du PDF…';
+      const w = window.open('', '_blank');
+      try{
+        const j = await call('/labels', {ids: list.slice(0, 250).map(o => o.id), format: b.dataset.f});
+        if(!j.ok || !j.url) throw new Error(j.error || 'PDF indisponible');
+        if(w) w.location = j.url; else location.href = j.url;
+        m.classList.remove('show');
+        toast('🖨️ ' + j.count + ' bordereau(x) prêts' + (j.failed && j.failed.length ? ' — ' + j.failed.length + ' en échec' : ''));
+      }catch(e){ if(w) w.close(); toast('ZR Express : ' + (e.message || e), true); }
+      b.disabled = false; b.textContent = old;
+    });
+    m.classList.add('show');
+  }
+  const cssP = document.createElement('style');
+  cssP.textContent = `
+    .zr-print-btn{width:100%;margin:10px 0 4px;border:none;border-radius:14px;padding:14px;font:inherit;font-size:15px;font-weight:800;background:#1a1a1a;color:#ffd200;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.18);}
+    #zrPrintModal{position:fixed;inset:0;z-index:10040;background:rgba(0,0,0,.45);display:none;align-items:flex-end;justify-content:center;}
+    #zrPrintModal.show{display:flex;}
+    #zrPrintModal .zp-card{background:var(--card,#fff);color:var(--plum,#222);width:100%;max-width:520px;border-radius:20px 20px 0 0;padding:20px 16px 24px;box-sizing:border-box;}
+    #zrPrintModal h3{margin:0 0 4px;font-size:18px;}
+    #zrPrintModal .zp-sub{margin:0 0 14px;font-size:13.5px;opacity:.75;}
+    #zrPrintModal button{width:100%;border-radius:14px;padding:14px;font:inherit;font-size:15px;font-weight:800;cursor:pointer;margin-top:8px;}
+    #zrPrintModal .zp-btn{border:none;background:#1a1a1a;color:#ffd200;}
+    #zrPrintModal .zp-cancel{border:1px solid var(--line,#ddd);background:var(--card,#fff);color:inherit;}`;
+  document.head.appendChild(cssP);
+  window.zrLabelsButton = labelsButton;
 
   window.zrPrepareOrder = prepare;
   window.zrAfterSave = afterSave;

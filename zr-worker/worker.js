@@ -395,6 +395,21 @@ export default {
         const t = await territories(env, 'alger');
         return json({ok: true, message: 'Connexion ZR Express OK', sample: t.length});
       }
+      if(path === '/labels'){
+        const ids = Array.isArray(body.ids) ? body.ids.map(String).slice(0, 250) : [];
+        if(!ids.length) return json({ok: false, error: 'Aucune commande'}, 400);
+        const format = body.format === 'a4' ? 'a4' : 'a6';
+        const list = [];
+        for(let k = 0; k < ids.length; k += 10){                      // lecture par paquets de 10
+          const part = await Promise.all(ids.slice(k, k + 10).map(x => getOrder(x).catch(() => null)));
+          list.push(...part);
+        }
+        const trackings = list.map(o => o && o.zr && o.zr.tracking).filter(Boolean);   // même ordre que l'app
+        if(!trackings.length) return json({ok: false, error: 'Aucune de ces commandes n\'a encore de numéro ZR'}, 400);
+        const b = await zr(env, '/parcels/labels/multiple/pdf', {method: 'POST', body: JSON.stringify({trackingNumbers: trackings, format})});
+        if(!b || !b.fileUrl) return json({ok: false, error: 'ZR n\'a pas généré le PDF'}, 502);
+        return json({ok: true, url: b.fileUrl, count: trackings.length, failed: b.failedTrackingNumbers || []});
+      }
       if(!id) return json({ok: false, error: 'id manquant'}, 400);
       if(path === '/send') return json(await sendOrder(env, id, !!body.force));
       if(path === '/track'){
