@@ -318,12 +318,6 @@
 
       ${section('😴 Modèles qui dorment', S.dormant.length ? hbars(S.dormant, v => v + ' en stock', {cls: 'muted'}) : '<div class="st-empty ok">✅ Tout se vend</div>', 'En stock mais aucune vente depuis 30 jours — pensez à une promo ou une nouvelle photo.' + (S.historyDays < 30 ? ' (Historique de commandes encore court : liste plus fiable dans quelques semaines.)' : ''))}
 
-      ${section('📦 Valeur du stock', `<div class="st-grid">
-        ${tile('Pièces en stock', num(S.stockN))}
-        ${tile('Au prix de vente', money(S.stockPrice))}
-        ${tile("Au coût d'achat", money(S.stockCost), S.noCost ? S.noCost + ' produit(s) sans coût' : '', 'wide')}
-      </div>`)}
-
       ${section('🗺️ Wilayas', hbars(wilRows.slice(0, 15).map(([w, x]) => ({label: w, v: x.ca, note: x.n + ' cmd'})), money))}
 
       ${section('👥 Clientes', `<div class="st-grid">
