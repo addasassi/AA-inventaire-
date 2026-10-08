@@ -202,12 +202,58 @@ async function resolveCity(env, code, name){
   cityCache.set(code, c);
   return c;
 }
+// clé tolérante : accents, espaces, tirets, lettres doublées, ou/u, y/i, e muet…
+// « Honaïne » = « Honnaine », « Beni-Slimane » = « Béni Slimane », « Ouled » = « Oulad »
+function fuzzyKey(s){
+  return strip(s).toLowerCase()
+    .replace(/[^a-z]/g, '')
+    .replace(/oul[ae]d/g, 'uld').replace(/ou/g, 'u').replace(/y/g, 'i')
+    .replace(/(.)\1+/g, '$1')
+    .replace(/e(?=[^aeiou]|$)/g, '')
+    .replace(/^el|^al/, '');
+}
+function lev(a, b){
+  const m = a.length, n = b.length; if(!m || !n) return Math.max(m, n);
+  let prev = Array.from({length: n + 1}, (_, j) => j);
+  for(let i = 1; i <= m; i++){
+    const cur = [i];
+    for(let j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[n];
+}
+let allTerr = null, allTerrAt = 0;
+async function allTerritories(env){
+  if(allTerr && Date.now() - allTerrAt < 6 * 3600 * 1000) return allTerr;
+  const all = [];
+  for(let page = 1; page <= 10; page++){
+    const b = await zr(env, '/territories/search', {method: 'POST', body: JSON.stringify({pageSize: 1000, pageNumber: page})});
+    const items = (b && b.items) || [];
+    all.push(...items);
+    if(items.length < 1000 || page >= ((b && b.totalPages) || 1)) break;
+  }
+  allTerr = all; allTerrAt = Date.now();
+  return all;
+}
 async function resolveDistrict(env, commune, city, pickup){
   const items = (await territories(env, strip(commune), pickup ? {deliveryType: {value: 'pickup-point'}} : {}))
     .filter(t => t.level === 'commune');
-  const d = items.find(t => t.parentId === city.id && norm(t.name) === norm(commune))
-         || items.find(t => t.parentId === city.id)
-         || items.find(t => norm(t.name) === norm(commune));
+  let d = items.find(t => t.parentId === city.id && norm(t.name) === norm(commune))
+       || items.find(t => t.parentId === city.id);
+  if(!d){
+    // orthographe différente de celle de ZR : on compare avec toutes les communes de la wilaya
+    try{
+      const list = (await allTerritories(env)).filter(t => t.level === 'commune' && t.parentId === city.id);
+      const k = fuzzyKey(commune);
+      d = list.find(t => fuzzyKey(t.name) === k);
+      if(!d && k.length >= 4){
+        let best = null, bestD = 99;
+        list.forEach(t => { const dd = lev(fuzzyKey(t.name), k); if(dd < bestD){ bestD = dd; best = t; } });
+        if(best && bestD <= Math.max(1, Math.floor(k.length / 5))) d = best;     // 1 faute pour 5 lettres
+      }
+    }catch(e){}
+  }
+  if(!d) d = items.find(t => norm(t.name) === norm(commune) && t.parentId === city.id);
   if(!d) throw new ZrError(`Commune « ${commune} » introuvable chez ZR (wilaya ${city.name || ''})`, true);
   return d;
 }
@@ -411,7 +457,7 @@ export default {
         try{ const x = await territories(env, 'alger'); return json({ok: true, test: 'connexion ZR OK', territoires: x.length, auth: authMode}); }
         catch(e){ return json({ok: false, test: 'échec', error: e.message, auth: authMode}); }
       }
-      return json({ok: true, service: 'atelier-zr', version: 10, configured: !!env.ZR_API_KEY, tenant: t ? 'ok' : 'manquant',
+      return json({ok: true, service: 'atelier-zr', version: 11, configured: !!env.ZR_API_KEY, tenant: t ? 'ok' : 'manquant',
         boutique: tenantName || undefined, info: t ? undefined : (tenantDiag || undefined)});
     }
     // GET /pdf?u=… : renvoie le PDF de ZR avec CORS → l'app peut l'afficher et l'imprimer elle-même

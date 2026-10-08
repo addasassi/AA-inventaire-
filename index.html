@@ -5284,7 +5284,9 @@ async function loadAlgeriaData(){
     // zr-communes.json est mis à jour chaque semaine depuis ZR (tools/zr-communes.mjs).
     try{
       const zr = await (await fetch('zr-communes.json', {cache:'no-cache'})).json();
-      const key = s=> String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'');
+      // même clé tolérante que le relais ZR : « Honaïne » = « Honnaine » → pas de doublon
+      const key = s=> String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z]/g,'')
+        .replace(/oul[ae]d/g,'uld').replace(/ou/g,'u').replace(/y/g,'i').replace(/(.)\1+/g,'$1').replace(/e(?=[^aeiou]|$)/g,'').replace(/^el|^al/,'');
       Object.entries(zr.communes || {}).forEach(([code, list])=>{
         if(!communesByWilaya[code]) return;              // wilaya inconnue de l'app : on ignore
         const have = new Set(communesByWilaya[code].map(key));
