@@ -371,13 +371,25 @@
     m.innerHTML = `<div class="lp-bar">
         <button id="lp-close" type="button">← Retour</button>
         <span class="lp-info"></span>
-        <button id="lp-print" type="button">🖨️ Imprimer</button>
+        <button id="lp-share" type="button">📤 Partager</button>
+        <button id="lp-print" type="button">🖨️</button>
       </div>
       <div class="lp-pages"></div>
       <style id="lp-page-style"></style>`;
     document.body.appendChild(m);
     m.querySelector('#lp-close').onclick = () => m.classList.remove('show');
     m.querySelector('#lp-print').onclick = () => window.print();
+    // envoie le PDF original de ZR (taille exacte de l'étiquette) à l'appli de la machine thermique
+    m.querySelector('#lp-share').onclick = async () => {
+      const f = m._pdf;
+      if(!f) return;
+      try{
+        if(navigator.canShare && navigator.canShare({files: [f]})){ await navigator.share({files: [f], title: f.name}); return; }
+      }catch(e){ if(e && e.name === 'AbortError') return; }
+      const a = document.createElement('a'); a.href = URL.createObjectURL(f); a.download = f.name;
+      document.body.appendChild(a); a.click(); a.remove();
+      if(typeof toast === 'function') toast('📄 PDF téléchargé — ouvrez-le avec l\'appli de la machine');
+    };
     return m;
   }
 
@@ -388,6 +400,8 @@
     pages.innerHTML = '<div class="lp-wait">⏳ Préparation des bordereaux…</div>';
     info.textContent = '';
     m.querySelector('#lp-print').disabled = true;
+    m.querySelector('#lp-share').disabled = true;
+    m._pdf = null;
     m.dataset.url = url;
     m.classList.add('show');
     try{
@@ -398,6 +412,9 @@
           return r.arrayBuffer();
         })
       ]);
+      const stamp = new Date().toISOString().slice(0, 16).replace(/[-T:]/g, '');
+      m._pdf = new File([buf.slice(0)], 'bordereaux-' + (format === 'a4' ? 'A4' : 'A6') + '-' + stamp + '.pdf', {type: 'application/pdf'});
+      m.querySelector('#lp-share').disabled = false;
       const doc = await lib.getDocument({data: buf}).promise;
       pages.innerHTML = '';
       let wmm = 0, hmm = 0;
@@ -415,11 +432,11 @@
         pages.appendChild(img);
       }
       m.querySelector('#lp-page-style').textContent =
-        `@page{size:${wmm.toFixed(1)}mm ${hmm.toFixed(1)}mm;margin:0;}
-         @media print{#labelPrintModal .lp-page{width:${wmm.toFixed(1)}mm;height:${hmm.toFixed(1)}mm;}}`;
+        // pas de taille imposée : l'étiquette remplit la feuille choisie dans la fenêtre d'impression (A6, 4x6, A4…)
+        `@page{margin:0;}
+         @media print{#labelPrintModal .lp-page{width:100vw;height:100vh;object-fit:contain;}}`;   // remplit la feuille choisie (A6, 4x6…)
       info.textContent = doc.numPages + ' page' + (doc.numPages > 1 ? 's' : '') + ' · ' + (format === 'a4' ? 'A4' : 'A6');
       m.querySelector('#lp-print').disabled = false;
-      setTimeout(() => window.print(), 300);
     }catch(e){
       pages.innerHTML = `<div class="lp-wait">⚠️ ${e.message || e}<br><br><a href="${url}" target="_blank" rel="noopener">Ouvrir le PDF</a></div>`;
     }
@@ -457,8 +474,9 @@
     #labelPrintModal .lp-bar{display:flex;align-items:center;gap:10px;padding:12px;background:var(--plum,#3a2632);color:#fff;}
     #labelPrintModal .lp-bar button{border:none;border-radius:12px;padding:12px 16px;font:inherit;font-size:15px;font-weight:800;cursor:pointer;}
     #lp-close{background:rgba(255,255,255,.15);color:#fff;}
-    #lp-print{background:#2e9e5b;color:#fff;margin-inline-start:auto;font-size:16px !important;}
-    #lp-print:disabled{opacity:.5;}
+    #lp-share{background:#2e9e5b;color:#fff;margin-inline-start:auto;font-size:16px !important;}
+    #lp-print{background:rgba(255,255,255,.15);color:#fff;font-size:18px !important;padding:10px 14px !important;}
+    #lp-print:disabled,#lp-share:disabled{opacity:.5;}
     #labelPrintModal .lp-info{font-size:13px;opacity:.85;}
     #labelPrintModal .lp-pages{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;align-items:center;gap:14px;}
     #labelPrintModal .lp-page{width:100%;max-width:480px;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.15);}
