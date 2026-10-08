@@ -152,7 +152,7 @@
     const inProgress = cur.filter(o => o.zr && o.zr.parcelId && !isDelivered(o) && !isReturned(o));
     const fees = sum(delivered, o => o.zr.deliveryPrice) + sum(returned, o => o.zr.returnPrice);
     const net = sum(delivered, o => o.profit != null ? o.profit : o.total) - fees;
-    const atZr = ALL.filter(o => isDelivered(o) && !o.zr.paid);
+    const atZr = ALL.filter(o => isDelivered(o) && o.zr.finalAt && !o.zr.paid);   // suivi de l'encaissement depuis la v8 du relais
     const atZrMoney = sum(atZr, o => (Number(o.total) || 0) - (Number(o.zr.deliveryPrice) || 0));
     const noCost = P.filter(p => !(Number(p.cost) > 0)).length;
 
