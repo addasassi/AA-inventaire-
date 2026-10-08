@@ -1947,7 +1947,8 @@ if('serviceWorker' in navigator){
 }
 function notifPrefEnabled(){
   try{
-    return localStorage.getItem('notifPref') === 'on' && 'Notification' in window && Notification.permission === 'granted';
+    // le choix de l'utilisateur fait foi (le son marche même sans l'autorisation des notifications)
+    return localStorage.getItem('notifPref') === 'on';
   }catch(e){ return false; }
 }
 let sharedAudioCtx = null;
@@ -2101,6 +2102,7 @@ async function notifyNewOrder(o){
   const who = o.createdBy || 'Un membre de l\'équipe';
   const body = who + ' a ajouté une commande — ' + (o.customer && o.customer.name ? o.customer.name + ' — ' : '') + Number(o.total||0).toFixed(0) + ' DA';
   try{
+    if(!('Notification' in window) || Notification.permission !== 'granted') return;   // son seulement
     if('serviceWorker' in navigator && navigator.serviceWorker.ready){
       const reg = await navigator.serviceWorker.ready;
       reg.showNotification(title, {
@@ -2116,26 +2118,24 @@ const notifToggle = document.getElementById('notif-toggle');
 notifToggle.checked = notifPrefEnabled();
 notifToggle.addEventListener('change', async ()=>{
   if(notifToggle.checked){
-    if(!('Notification' in window)){
-      toast("Les notifications ne sont pas prises en charge sur cet appareil", true);
-      notifToggle.checked = false;
-      return;
-    }
-    let perm = Notification.permission;
-    if(perm === 'default'){ perm = await Notification.requestPermission(); }
-    if(perm !== 'granted'){
-      toast("Autorisation refusée — activez les notifications pour cette app dans les réglages du téléphone", true);
-      notifToggle.checked = false;
-      try{ localStorage.setItem('notifPref','off'); }catch(e){}
-      return;
-    }
+    // reste activé tant que l'utilisateur ne le désactive pas lui-même
     try{ localStorage.setItem('notifPref','on'); }catch(e){}
+    let perm = ('Notification' in window) ? Notification.permission : 'unsupported';
+    if(perm === 'default'){ try{ perm = await Notification.requestPermission(); }catch(e){} }
     if(!soundMuted) playNotifTone();
-    toast('Notifications activées');
+    if(perm === 'granted') toast('Notifications activées');
+    else toast("Son activé — pour voir aussi les notifications, autorisez-les pour l'app dans les réglages du téléphone");
   } else {
     try{ localStorage.setItem('notifPref','off'); }catch(e){}
   }
 });
+// activé mais autorisation pas encore demandée : on la demande au premier toucher
+document.addEventListener('click', function askNotif(){
+  document.removeEventListener('click', askNotif, true);
+  try{
+    if(notifPrefEnabled() && 'Notification' in window && Notification.permission === 'default') Notification.requestPermission();
+  }catch(e){}
+}, true);
 
 /* ---------- Mode sombre ---------- */
 const darkModeToggle = document.getElementById('dark-mode-toggle');
