@@ -334,11 +334,21 @@ async function trackOrder(env, o){
   if(p.isReturn === true) stage = 'returned';
   const final = stage === 'delivered' || stage === 'returned';
   const sit = situationOf(p);
+  const nowIso = new Date().toISOString();
+  // statistiques : date de fin (livré / retour), argent encaissé par ZR, nombre max de « Ne répond pas »
+  const stateKey = strip((p.state && (p.state.name || p.state.description)) || '').toLowerCase();
+  const paid = !!z.paid || (stage === 'delivered' && /encaiss|recouvert|paye|virement/.test(stateKey));
+  const finalAt = final ? (z.finalAt || nowIso) : '';
+  const nrpM = String(sit || '').match(/r[eé]pond\s+pas\D*(\d+)/i);
+  const nrp = Math.max(Number(z.nrp) || 0, nrpM ? Number(nrpM[1]) : (/r[eé]pond pas/i.test(sit || '') ? 1 : 0));
+  // un colis livré reste suivi (lentement) jusqu'à l'encaissement, 30 jours maximum
+  const keep = stage === 'delivered' && !paid && Date.now() - Date.parse(finalAt) < 30 * 86400000;
   const nz = {...z, tracking: p.trackingNumber || z.tracking,
     state: (p.state && (p.state.description || p.state.name)) || z.state, stage,
     situation: isNoSituation(sit) ? '' : sit,
     deliveryPrice: Number(p.deliveryPrice) || z.deliveryPrice || 0, returnPrice: Number(p.returnPrice) || z.returnPrice || 0,
-    status: final ? stage : 'sent', active: !final, lastCheck: Date.now(), updatedAt: new Date().toISOString()};
+    finalAt, paid, nrp,
+    status: final ? stage : 'sent', active: !final || keep, lastCheck: Date.now(), updatedAt: nowIso};
   await saveZr(o.id, nz);
   return nz;
 }
@@ -353,7 +363,8 @@ async function cron(env){
         const due = !z.sendAfter || z.sendAfter <= today;
         const old = Date.now() - Date.parse(z.updatedAt || o.createdAt || 0) > 2 * 60 * 1000;
         if(due && old) await sendOrder(env, o.id, false);
-      }else if(Date.now() - (z.lastCheck || 0) > ((z.stage === 'out_for_delivery' || z.situation) ? 10 * 60 * 1000 : TRACK_EVERY_MS)){
+      }else if(Date.now() - (z.lastCheck || 0) > (z.stage === 'delivered' ? 6 * 3600 * 1000
+          : (z.stage === 'out_for_delivery' || z.situation) ? 10 * 60 * 1000 : TRACK_EVERY_MS)){
         await trackOrder(env, o);
       }
     }catch(e){ /* on réessaiera au prochain passage */ }
@@ -382,7 +393,7 @@ export default {
         try{ const x = await territories(env, 'alger'); return json({ok: true, test: 'connexion ZR OK', territoires: x.length, auth: authMode}); }
         catch(e){ return json({ok: false, test: 'échec', error: e.message, auth: authMode}); }
       }
-      return json({ok: true, service: 'atelier-zr', version: 7, configured: !!env.ZR_API_KEY, tenant: t ? 'ok' : 'manquant',
+      return json({ok: true, service: 'atelier-zr', version: 8, configured: !!env.ZR_API_KEY, tenant: t ? 'ok' : 'manquant',
         boutique: tenantName || undefined, info: t ? undefined : (tenantDiag || undefined)});
     }
     // GET /pdf?u=… : renvoie le PDF de ZR avec CORS → l'app peut l'afficher et l'imprimer elle-même
