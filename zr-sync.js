@@ -271,53 +271,69 @@
   }
   setTimeout(() => { try{ if(typeof db !== 'undefined' && db) loadCfg(); if(typeof currentUser !== 'undefined' && currentUser) injectButton(); }catch(e){} }, 1500);
 
-  /* ---------- Imprimer les bordereaux ZR de la liste affichée (même ordre) ---------- */
+  /* ---------- Imprimer les bordereaux ZR : cases à cocher, ordre de la liste, A6 thermique ---------- */
+  const unchecked = new Set();          // commandes décochées (les nouvelles sont cochées d'office)
+  let shownWithTrack = [];
+  const printable = o => !!(o && o.zr && o.zr.tracking);
+  function selectedList(){ return shownWithTrack.filter(o => !unchecked.has(o.id)); }
+  function selectBox(o){
+    if(!relay || !printable(o)) return '';
+    return `<label class="zr-check" onclick="event.stopPropagation()"><input type="checkbox" ${unchecked.has(o.id) ? '' : 'checked'}
+      onchange="zrToggle('${o.id}', this.checked)"><span>Bordereau</span></label>`;
+  }
+  window.zrToggle = (id, on) => { if(on) unchecked.delete(id); else unchecked.add(id); updateBox(); };
+  function updateBox(){
+    const box = document.getElementById('zr-labels-box'); if(!box) return;
+    const n = selectedList().length, all = n === shownWithTrack.length;
+    const allBox = box.querySelector('#zr-all'); if(allBox){ allBox.checked = all; allBox.indeterminate = n > 0 && !all; }
+    const btn = box.querySelector('.zr-print-btn');
+    if(btn){ btn.textContent = `🖨️ Imprimer les bordereaux (${n})`; btn.disabled = !n; }
+    const a4 = box.querySelector('.zr-a4'); if(a4) a4.disabled = !n;
+  }
   function labelsButton(shown){
     const sum = document.getElementById('ordersSummary');
     if(!sum) return;
     let box = document.getElementById('zr-labels-box');
-    if(!box){
-      box = document.createElement('div'); box.id = 'zr-labels-box';
-      sum.insertAdjacentElement('afterend', box);
-    }
-    const withTrack = (shown || []).filter(o => o.zr && o.zr.tracking);
-    if(!relay || !withTrack.length){ box.innerHTML = ''; return; }
-    box.innerHTML = `<button class="zr-print-btn">🖨️ Imprimer les bordereaux ZR (${withTrack.length})</button>`;
-    box.querySelector('button').onclick = () => chooseFormat(withTrack);
+    if(!box){ box = document.createElement('div'); box.id = 'zr-labels-box'; sum.insertAdjacentElement('afterend', box); }
+    shownWithTrack = (shown || []).filter(printable);
+    if(!relay || !shownWithTrack.length){ box.innerHTML = ''; return; }
+    box.innerHTML = `<div class="zr-print-bar">
+        <label class="zr-all"><input type="checkbox" id="zr-all"> Tout</label>
+        <button class="zr-print-btn"></button>
+        <button class="zr-a4" title="Format A4 (4 par page)">A4</button>
+      </div>`;
+    box.querySelector('#zr-all').onchange = e => {
+      shownWithTrack.forEach(o => e.target.checked ? unchecked.delete(o.id) : unchecked.add(o.id));
+      document.querySelectorAll('.zr-check input').forEach(c => c.checked = e.target.checked);
+      updateBox();
+    };
+    box.querySelector('.zr-print-btn').onclick = e => printLabels('a6', e.target);
+    box.querySelector('.zr-a4').onclick = e => printLabels('a4', e.target);
+    updateBox();
   }
-  function chooseFormat(list){
-    confirmChoice(list).catch(()=>{});
+  async function printLabels(format, btn){
+    const list = selectedList().slice(0, 250);
+    if(!list.length) return;
+    const old = btn.textContent; btn.disabled = true; btn.textContent = '⏳ Préparation…';
+    const w = window.open('', '_blank');
+    try{
+      const j = await call('/labels', {ids: list.map(o => o.id), format});
+      if(!j.ok || !j.url) throw new Error(j.error || 'PDF indisponible');
+      if(w) w.location = j.url; else location.href = j.url;
+      toast('🖨️ ' + j.count + ' bordereau(x) ' + (format === 'a4' ? 'A4' : 'A6') + (j.failed && j.failed.length ? ' — ' + j.failed.length + ' en échec' : ''));
+    }catch(e){ if(w) w.close(); toast('ZR Express : ' + (e.message || e), true); }
+    btn.textContent = old; updateBox();
   }
-  async function confirmChoice(list){
-    let m = document.getElementById('zrPrintModal');
-    if(!m){
-      m = document.createElement('div'); m.id = 'zrPrintModal';
-      m.innerHTML = `<div class="zp-card"><h3>🖨️ Bordereaux ZR Express</h3><p class="zp-sub"></p>
-        <button class="zp-btn" data-f="a4">📄 A4 — 4 bordereaux par page</button>
-        <button class="zp-btn" data-f="a6">🏷️ A6 — 1 bordereau par page (imprimante étiquettes)</button>
-        <button class="zp-cancel" id="zp-cancel">Annuler</button></div>`;
-      document.body.appendChild(m);
-      m.addEventListener('click', e => { if(e.target === m) m.classList.remove('show'); });
-      m.querySelector('#zp-cancel').onclick = () => m.classList.remove('show');
-    }
-    m.querySelector('.zp-sub').textContent = list.length + ' bordereau' + (list.length > 1 ? 'x' : '') + ', dans l\'ordre de la liste.' + (list.length > 250 ? ' (250 maximum par impression)' : '');
-    m.querySelectorAll('.zp-btn').forEach(b => b.onclick = async () => {
-      const old = b.textContent; b.disabled = true; b.textContent = '⏳ Préparation du PDF…';
-      const w = window.open('', '_blank');
-      try{
-        const j = await call('/labels', {ids: list.slice(0, 250).map(o => o.id), format: b.dataset.f});
-        if(!j.ok || !j.url) throw new Error(j.error || 'PDF indisponible');
-        if(w) w.location = j.url; else location.href = j.url;
-        m.classList.remove('show');
-        toast('🖨️ ' + j.count + ' bordereau(x) prêts' + (j.failed && j.failed.length ? ' — ' + j.failed.length + ' en échec' : ''));
-      }catch(e){ if(w) w.close(); toast('ZR Express : ' + (e.message || e), true); }
-      b.disabled = false; b.textContent = old;
-    });
-    m.classList.add('show');
-  }
+  window.zrSelectBox = selectBox;
   const cssP = document.createElement('style');
   cssP.textContent = `
-    .zr-print-btn{width:100%;margin:10px 0 4px;border:none;border-radius:14px;padding:14px;font:inherit;font-size:15px;font-weight:800;background:#1a1a1a;color:#ffd200;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.18);}
+    .zr-print-bar{display:flex;align-items:center;gap:8px;margin:10px 0 4px;}
+    .zr-print-bar .zr-all{display:flex;align-items:center;gap:6px;font-weight:800;font-size:14px;padding:0 4px;white-space:nowrap;}
+    .zr-print-bar input,.zr-check input{width:20px;height:20px;accent-color:#1a1a1a;}
+    .zr-print-btn{flex:1;border:none;border-radius:14px;padding:14px 10px;font:inherit;font-size:15px;font-weight:800;background:#1a1a1a;color:#ffd200;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.18);}
+    .zr-print-btn:disabled,.zr-a4:disabled{opacity:.45;}
+    .zr-a4{border:1.5px solid #1a1a1a;background:transparent;color:inherit;border-radius:12px;padding:12px 10px;font:inherit;font-weight:800;cursor:pointer;}
+    .zr-check{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;margin:0 8px 6px 0;padding:4px 10px 4px 6px;border-radius:999px;background:#fff7d1;color:#1a1a1a;vertical-align:middle;}
     #zrPrintModal{position:fixed;inset:0;z-index:10040;background:rgba(0,0,0,.45);display:none;align-items:flex-end;justify-content:center;}
     #zrPrintModal.show{display:flex;}
     #zrPrintModal .zp-card{background:var(--card,#fff);color:var(--plum,#222);width:100%;max-width:520px;border-radius:20px 20px 0 0;padding:20px 16px 24px;box-sizing:border-box;}

@@ -886,6 +886,7 @@
         <div class="stats-presets" style="margin-bottom:12px;">
           <button type="button" class="chip active" id="of-filter-all">Toutes</button>
           <button type="button" class="chip" id="of-filter-deferred">🕓 Reportées</button>
+          <button type="button" class="chip" id="of-filter-today">📅 Aujourd'hui</button>
         </div>
         <div class="field">
           <label>Filtrer par employé</label>
@@ -4244,6 +4245,10 @@ function isOrderInBadgeWindow(o){
   const late = daysLate(o.deferredDate);
   return late >= 0 && late <= 2;
 }
+function localDay(iso){
+  const d = new Date(iso); if(isNaN(d)) return String(iso||'').slice(0,10);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
 function getFilteredOrders(){
   const employee = document.getElementById('of-employee').value;
   const dateFrom = document.getElementById('of-date-from').value;
@@ -4251,7 +4256,7 @@ function getFilteredOrders(){
   return orders.filter(o=>{
     if(ordersFilterDeferredOnly && !o.deferred) return false;
     if(employee && o.createdBy !== employee) return false;
-    const orderDate = o.createdAt.slice(0,10);
+    const orderDate = localDay(o.createdAt);
     if(dateFrom && orderDate < dateFrom) return false;
     if(dateTo && orderDate > dateTo) return false;
     return true;
@@ -4275,6 +4280,13 @@ document.getElementById('of-filter-all').addEventListener('click', ()=>{
   document.getElementById('of-filter-deferred').classList.remove('active');
   renderOrdersHistory();
 });
+document.getElementById('of-filter-today').addEventListener('click', ()=>{
+  const t = localDay(new Date().toISOString());
+  const f = document.getElementById('of-date-from'), to = document.getElementById('of-date-to');
+  const on = f.value === t && to.value === t;
+  f.value = on ? '' : t; to.value = on ? '' : t;
+  renderOrdersHistory();
+});
 document.getElementById('of-filter-deferred').addEventListener('click', ()=>{
   ordersFilterDeferredOnly = true;
   document.getElementById('of-filter-deferred').classList.add('active');
@@ -4288,6 +4300,9 @@ function renderOrdersHistory(){
   const wrap = document.getElementById('ordersHistory');
   const summaryEl = document.getElementById('ordersSummary');
   const filtered = getFilteredOrders();
+  { const t = localDay(new Date().toISOString());
+    document.getElementById('of-filter-today').classList.toggle('active',
+      document.getElementById('of-date-from').value === t && document.getElementById('of-date-to').value === t); }
   if(orders.length === 0){
     wrap.innerHTML = '<div class="empty"><h3>Aucune commande</h3><p>Les commandes enregistrées apparaîtront ici.</p></div>';
     summaryEl.innerHTML = '';
@@ -4322,6 +4337,7 @@ function renderOrdersHistory(){
     })() : '';
     return `<div class="order-card ${o.deferred ? 'deferred' : ''}" onclick="showOrderDetail('${o.id}')">
       ${deferredBadge}
+      ${window.zrSelectBox ? window.zrSelectBox(o) : ''}
       ${window.zrBadge ? window.zrBadge(o) : ''}
       <div class="oc-top">
         <div class="oc-name">${escapeHtml(o.customer.name || 'Client')}</div>
