@@ -664,6 +664,7 @@
   </button>
   <button class="sound-toggle" id="btn-sound-toggle" aria-label="Son">
     <svg id="sound-icon-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M17 8.5a5 5 0 0 1 0 7"/><path d="M19.5 6a8.5 8.5 0 0 1 0 12"/></svg>
+    <svg id="sound-icon-vib" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><rect x="8" y="3" width="8" height="18" rx="2"/><path d="M11 17.5h2"/><path d="M4.5 8v8M2 10v4M19.5 8v8M22 10v4"/></svg>
     <svg id="sound-icon-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><path d="M4 9v6h4l5 4V5L8 9H4z"/><line x1="16.5" y1="9" x2="21.5" y2="15"/><line x1="21.5" y1="9" x2="16.5" y2="15"/></svg>
   </button>
   <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
@@ -2011,15 +2012,29 @@ function playNotifTone(){
 }
 
 /* ---------- Son de clic (avec bouton muet) ---------- */
-let soundMuted = false;
-try{ soundMuted = localStorage.getItem('clickSoundMuted') === 'on'; }catch(e){}
+// 3 modes : 'sound' (son) → 'vibrate' (vibreur) → 'mute' (silencieux)
+let soundMode = 'sound';
+try{
+  soundMode = localStorage.getItem('soundMode') || (localStorage.getItem('clickSoundMuted') === 'on' ? 'mute' : 'sound');
+}catch(e){}
+let soundMuted = soundMode !== 'sound';
+function haptic(pattern){
+  if(soundMode !== 'vibrate') return;
+  try{ if(navigator.vibrate) navigator.vibrate(pattern); }catch(e){}
+}
+// alerte (nouvelle commande, rappel…) : son, vibration ou rien selon le mode
+function alertNotif(){
+  if(soundMode === 'sound') playNotifTone();
+  else haptic([200,100,200]);
+}
 function updateSoundIcon(){
-  const onIcon = document.getElementById('sound-icon-on');
-  const offIcon = document.getElementById('sound-icon-off');
-  if(onIcon) onIcon.style.display = soundMuted ? 'none' : 'block';
-  if(offIcon) offIcon.style.display = soundMuted ? 'block' : 'none';
+  const ids = {sound:'sound-icon-on', vibrate:'sound-icon-vib', mute:'sound-icon-off'};
+  Object.entries(ids).forEach(([m,id])=>{ const el = document.getElementById(id); if(el) el.style.display = soundMode === m ? 'block' : 'none'; });
+  const b = document.getElementById('btn-sound-toggle');
+  if(b) b.setAttribute('aria-label', soundMode === 'sound' ? 'Son' : soundMode === 'vibrate' ? 'Vibreur' : 'Silencieux');
 }
 function playClickTick(){
+  if(soundMode === 'vibrate'){ haptic(12); return; }
   if(soundMuted) return;
   const ctx = getAudioCtx();
   if(!ctx) return;
@@ -2068,9 +2083,13 @@ document.addEventListener('touchstart', (e)=> startPressFx(e.target), {capture:t
 document.addEventListener('mousedown', (e)=> startPressFx(e.target), true);
 document.addEventListener('mouseup', releasePressFx, true);
 document.getElementById('btn-sound-toggle').addEventListener('click', ()=>{
-  soundMuted = !soundMuted;
-  try{ localStorage.setItem('clickSoundMuted', soundMuted ? 'on' : 'off'); }catch(e){}
+  soundMode = soundMode === 'sound' ? 'vibrate' : soundMode === 'vibrate' ? 'mute' : 'sound';
+  soundMuted = soundMode !== 'sound';
+  try{ localStorage.setItem('soundMode', soundMode); localStorage.setItem('clickSoundMuted', soundMuted ? 'on' : 'off'); }catch(e){}
   updateSoundIcon();
+  if(soundMode === 'sound'){ playClickTick(); toast('🔊 Son activé'); }
+  else if(soundMode === 'vibrate'){ try{ navigator.vibrate && navigator.vibrate(150); }catch(e){} toast('📳 Mode vibreur'); }
+  else toast('🔇 Mode silencieux');
 });
 updateSoundIcon();
 function playRuptureTone(){
@@ -2110,8 +2129,8 @@ async function notifyRupture(names){
   const shown = names.slice(0,3).join(' • ') + (names.length>3 ? ' +' + (names.length-3) + ' autres' : '');
   const title = names.length > 1 ? '⚠️ ' + names.length + ' ruptures de stock' : '⚠️ Rupture de stock';
   showRuptureBanner(shown);
-  if(!soundMuted) playRuptureTone();
-  try{ if(navigator.vibrate) navigator.vibrate([300,150,300,150,500]); }catch(e){}
+  if(soundMode === 'sound') playRuptureTone();
+  if(soundMode !== 'mute'){ try{ if(navigator.vibrate) navigator.vibrate([300,150,300,150,500]); }catch(e){} }
   if(!notifPrefEnabled()) return;
   const body = shown + (names.length>1 ? ' — plus de stock' : ' — plus de stock disponible');
   try{
@@ -2129,7 +2148,7 @@ async function notifyRupture(names){
 }
 async function notifyNewOrder(o){
   if(!notifPrefEnabled()) return;
-  if(!soundMuted) playNotifTone();
+  alertNotif();
   const title = '🛍️ Nouvelle commande';
   const who = o.createdBy || 'Un membre de l\'équipe';
   const body = who + ' a ajouté une commande — ' + (o.customer && o.customer.name ? o.customer.name + ' — ' : '') + Number(o.total||0).toFixed(0) + ' DA';
@@ -2154,7 +2173,7 @@ notifToggle.addEventListener('change', async ()=>{
     try{ localStorage.setItem('notifPref','on'); }catch(e){}
     let perm = ('Notification' in window) ? Notification.permission : 'unsupported';
     if(perm === 'default'){ try{ perm = await Notification.requestPermission(); }catch(e){} }
-    if(!soundMuted) playNotifTone();
+    alertNotif();
     if(perm === 'granted') toast('Notifications activées');
     else toast("Son activé — pour voir aussi les notifications, autorisez-les pour l'app dans les réglages du téléphone");
   } else {
@@ -2221,7 +2240,7 @@ async function checkDeferredNotification(){
   try{ lastNotified = localStorage.getItem('lastDeferredNotifyDate') || ''; }catch(e){}
   if(lastNotified === today) return;
   try{ localStorage.setItem('lastDeferredNotifyDate', today); }catch(e){}
-  if(!soundMuted) playNotifTone();
+  alertNotif();
   const title = '📦 Commandes à envoyer';
   const names = due.slice(0,3).map(o=> (o.customer && o.customer.name) ? o.customer.name : 'Client').join(', ');
   const body = due.length + ' commande' + (due.length>1?'s':'') + ' reportée' + (due.length>1?'s':'') + ' arrive' + (due.length>1?'nt':'') + ' à échéance : ' + names + (due.length>3 ? '…' : '');
