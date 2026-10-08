@@ -259,6 +259,8 @@
     color:var(--mauve-dark);border:none;border-radius:20px;font-size:10px;font-weight:800;
     padding:4px 8px;cursor:pointer;}
   .order-pick.out-pick{opacity:0.5;pointer-events:none;}
+  @keyframes eoFlash{0%{background:#e3f4ea;border-color:#1f8a4c;}100%{}}
+  #eo-total.eo-flash{animation:eoFlash 1.2s ease;}
   .order-pick.vitrine-out img{opacity:0.45;filter:grayscale(60%);}   /* couleur de la vitrine épuisée, d'autres couleurs en stock */
 
   .cart-box{margin-top:18px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;}
@@ -4646,10 +4648,24 @@ function openEditOrderModal(id){
   document.getElementById('eo-wilaya').value = o.customer.wilaya || '';
   refreshEoCommuneOptions();
   if(o.customer.commune) document.getElementById('eo-commune').value = o.customer.commune;
+  eoItemsSum = eoSum();
   renderEoItems();
   document.getElementById('editOrderModal').classList.add('show');
 }
+// Total recalculé tout seul : on ajoute / retire seulement la différence des articles,
+// donc la livraison ou une remise saisie à la main restent comprises dans le total.
+let eoItemsSum = 0;
+function eoSum(){ return editingOrderItems.reduce((t,it)=> t + (Number(it.price)||0) * (Number(it.qty)||0), 0); }
+function syncEoTotal(){
+  const now = eoSum(), diff = now - eoItemsSum;
+  eoItemsSum = now;
+  if(!diff) return;
+  const inp = document.getElementById('eo-total');
+  inp.value = Math.max(0, (parseFloat(inp.value) || 0) + diff).toFixed(2);
+  inp.classList.remove('eo-flash'); void inp.offsetWidth; inp.classList.add('eo-flash');
+}
 function renderEoItems(){
+  syncEoTotal();
   const wrap = document.getElementById('eo-items');
   if(editingOrderItems.length === 0){
     wrap.innerHTML = '<div class="cart-empty">Aucun article dans cette commande.</div>';
