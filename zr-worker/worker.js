@@ -393,7 +393,7 @@ export default {
         try{ const x = await territories(env, 'alger'); return json({ok: true, test: 'connexion ZR OK', territoires: x.length, auth: authMode}); }
         catch(e){ return json({ok: false, test: 'échec', error: e.message, auth: authMode}); }
       }
-      return json({ok: true, service: 'atelier-zr', version: 8, configured: !!env.ZR_API_KEY, tenant: t ? 'ok' : 'manquant',
+      return json({ok: true, service: 'atelier-zr', version: 9, configured: !!env.ZR_API_KEY, tenant: t ? 'ok' : 'manquant',
         boutique: tenantName || undefined, info: t ? undefined : (tenantDiag || undefined)});
     }
     // GET /pdf?u=… : renvoie le PDF de ZR avec CORS → l'app peut l'afficher et l'imprimer elle-même
@@ -427,6 +427,20 @@ export default {
         }
         const trackings = list.map(o => o && o.zr && o.zr.tracking).filter(Boolean);   // même ordre que l'app
         if(!trackings.length) return json({ok: false, error: 'Aucune de ces commandes n\'a encore de numéro ZR'}, 400);
+        // A6 : une étiquette par colis, remises dans NOTRE ordre (ZR peut réordonner le PDF groupé)
+        if(format === 'a6'){
+          try{
+            const bi = await zr(env, '/parcels/labels/individual/pdf', {method: 'POST', body: JSON.stringify({trackingNumbers: trackings, format: 'a6'})});
+            const files = (bi && bi.parcelLabelFiles) || [];
+            const tnOf = f => String(f.trackingNumber || f.tracking || f.parcelTrackingNumber || (f.parcel && f.parcel.trackingNumber) || '');
+            let urls;
+            if(files.length && files.every(f => tnOf(f))){
+              const by = {}; files.forEach(f => { by[tnOf(f)] = f.fileUrl; });
+              urls = trackings.map(t => by[t]).filter(Boolean);
+            }else urls = files.map(f => f.fileUrl).filter(Boolean);   // même ordre que la demande
+            if(urls.length) return json({ok: true, urls, url: urls[0], count: urls.length, failed: (bi && bi.failedTrackingNumbers) || []});
+          }catch(e){ /* repli : PDF groupé */ }
+        }
         const b = await zr(env, '/parcels/labels/multiple/pdf', {method: 'POST', body: JSON.stringify({trackingNumbers: trackings, format})});
         if(!b || !b.fileUrl) return json({ok: false, error: 'ZR n\'a pas généré le PDF'}, 502);
         return json({ok: true, url: b.fileUrl, count: trackings.length, failed: b.failedTrackingNumbers || []});

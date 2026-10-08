@@ -410,16 +410,17 @@
   }
 
   async function printLabels(format, btn, list){
-    list = list.slice(0, 250);
+    // dans l'ordre où les commandes ont été saisies (la plus ancienne d'abord)
+    list = list.slice().sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || ''))).slice(0, 250);
     if(!list.length) return;
     const old = btn.innerHTML; btn.disabled = true; btn.textContent = '⏳ Préparation du PDF…';
     try{
       const j = await call('/labels', {ids: list.map(o => o.id), format});
       if(!j.ok || !j.url) throw new Error(j.error || 'PDF indisponible');
       document.getElementById('ocActionsModal').classList.remove('show');
-      await printPdf(j.url, format);
+      await printPdf(j.urls && j.urls.length ? j.urls : j.url, format);
       toast('🖨️ ' + j.count + ' bordereau(x) ' + (format === 'a4' ? 'A4' : 'A6') + (j.failed && j.failed.length ? ' — ' + j.failed.length + ' en échec' : ''));
-    }catch(e){ if(w) w.close(); toast('ZR Express : ' + (e.message || e), true); }
+    }catch(e){ toast('ZR Express : ' + (e.message || e), true); }
     btn.innerHTML = old; btn.disabled = false;
   }
 
@@ -477,13 +478,18 @@
     m.dataset.url = url;
     m.classList.add('show');
     try{
-      const [lib, buf] = await Promise.all([
-        pdfjs(),
-        fetch(relay + '/pdf?u=' + encodeURIComponent(url)).then(async r => {
-          if(!r.ok){ let j = {}; try{ j = await r.json(); }catch(e){} throw new Error(j.error || ('Erreur ' + r.status)); }
-          return r.arrayBuffer();
-        })
-      ]);
+      const urls = Array.isArray(url) ? url : [url];
+      const getPdf = u => fetch(relay + '/pdf?u=' + encodeURIComponent(u)).then(async r => {
+        if(!r.ok){ let j = {}; try{ j = await r.json(); }catch(e){} throw new Error(j.error || ('Erreur ' + r.status)); }
+        return r.arrayBuffer();
+      });
+      const bufs = new Array(urls.length);
+      for(let k = 0; k < urls.length; k += 6){   // 6 à la fois, l'ordre est gardé
+        await Promise.all(urls.slice(k, k + 6).map((u, j) => getPdf(u).then(b => { bufs[k + j] = b; })));
+        if(urls.length > 1) pages.innerHTML = `<div class="lp-wait">⏳ Bordereaux ${Math.min(urls.length, k + 6)} / ${urls.length}…</div>`;
+      }
+      const lib = await pdfjs();
+      const buf = bufs.length === 1 ? bufs[0] : await mergePdfs(bufs);
       const stamp = new Date().toISOString().slice(0, 16).replace(/[-T:]/g, '');
       m._pdf = new File([buf.slice(0)], 'bordereaux-' + (format === 'a4' ? 'A4' : 'A6') + '-' + stamp + '.pdf', {type: 'application/pdf'});
       m.querySelector('#lp-share').disabled = false;
@@ -514,6 +520,30 @@
     }
   }
   window.zrPrintPdf = printPdf;
+
+  // plusieurs PDF d'étiquettes → un seul, dans l'ordre
+  let pdfLibP = null;
+  function pdfLib(){
+    if(window.PDFLib) return Promise.resolve(window.PDFLib);
+    if(!pdfLibP) pdfLibP = new Promise((res, rej) => {
+      const sc = document.createElement('script');
+      sc.src = 'https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js';
+      sc.onload = () => res(window.PDFLib);
+      sc.onerror = () => { pdfLibP = null; rej(new Error('Outil PDF non chargé (connexion ?)')); };
+      document.head.appendChild(sc);
+    });
+    return pdfLibP;
+  }
+  async function mergePdfs(bufs){
+    const {PDFDocument} = await pdfLib();
+    const out = await PDFDocument.create();
+    for(const b of bufs){
+      const src = await PDFDocument.load(b);
+      const pgs = await out.copyPages(src, src.getPageIndices());
+      pgs.forEach(p => out.addPage(p));
+    }
+    return (await out.save()).buffer;
+  }
 
   async function bulkDelete(list, m){
     const atZr = list.filter(o => o.zr && o.zr.parcelId && o.zr.stage !== 'delivered' && o.zr.stage !== 'returned').length;
