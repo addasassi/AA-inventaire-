@@ -321,10 +321,9 @@
     if(!cuts.length || !shown.length){ if(el) el.remove(); return; }
     const last = cuts[0].at;
     const fresh = shown.filter(o => (o.createdAt || '') > last);
-    const tot = fresh.reduce((t, o) => t + (Number(o.total) || 0), 0);
     if(!el){ el = document.createElement('div'); el.className = 'os-new'; sum.appendChild(el); }
     el.innerHTML = fresh.length
-      ? `🆕 <b>${fresh.length}</b> nouvelle${fresh.length > 1 ? 's' : ''} depuis la ligne ✂️ · ${tot.toLocaleString('fr-FR').replace(/[\u202f\u00a0]/g, ' ')} DA`
+      ? `🆕 <b>${fresh.length}</b> nouvelle${fresh.length > 1 ? 's' : ''} depuis la ligne ✂️`
       : '✂️ Aucune nouvelle commande depuis la ligne';
     el.classList.toggle('zero', !fresh.length);
   }
