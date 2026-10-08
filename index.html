@@ -3018,7 +3018,7 @@ function renderColorsGrid(){
     const pillText = isOut ? 'Rupture' : (qty + ' en stock');
     const inCart = cart[makeCartKey(p.id, i)] || 0;
     html += `<div class="product ${isOut?'out':''}">
-      <div class="img-wrap" onclick="openColorFullscreen(${i})">
+      <div class="img-wrap" onclick="${isOrderContext ? (isOut ? `toast('Rupture de stock', true)` : `addColorToCart('${p.id}',${i})`) : `openColorFullscreen(${i})`}">
         <img src="${c.img}">
         ${c.img ? `<button class="img-dl-btn" onclick="event.stopPropagation(); downloadColorImage(${i})" title="Télécharger la photo">${dlIconSvg()}</button>` : ''}
         <span class="qty-badge ${pillClass}">${pillText}</span>
