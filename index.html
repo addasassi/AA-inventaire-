@@ -4588,8 +4588,61 @@ document.getElementById('btn-cancel-order').addEventListener('click', ()=>{
     document.getElementById('editOrderModal').classList.add('show');
     return;
   }
+  // Commande en cours (articles choisis ou client déjà saisi) : on demande confirmation avant de tout perdre
+  const nItems = Object.values(cart || {}).reduce((t, q)=> t + (Number(q)||0), 0);
+  const typed = ['o-name','o-phone','o-address','text-import'].some(id=>{ const el = document.getElementById(id); return el && el.value.trim(); });
+  if(nItems > 0 || typed){
+    confirmDialog({
+      title: 'Annuler cette commande ?',
+      text: (nItems > 0 ? nItems + ' article' + (nItems>1?'s':'') + ' déjà choisi' + (nItems>1?'s':'') : 'Les informations du client')
+            + ' seront perdu' + (nItems>1?'s':'') + '. Cette action est définitive.',
+      ok: 'Oui, annuler la commande',
+      cancel: 'Non, continuer la commande'
+    }).then(yes=>{
+      if(!yes) return;
+      cart = {};
+      ['o-name','o-phone','o-address','text-import'].forEach(id=>{ const el = document.getElementById(id); if(el) el.value = ''; });
+      if(typeof renderCart === 'function') renderCart();
+      showOrdersHome();
+      toast('Commande annulée');
+    });
+    return;
+  }
   showOrdersHome();
 });
+
+/* Fenêtre de confirmation (à la place du confirm() du navigateur) */
+function confirmDialog({title, text, ok = 'Confirmer', cancel = 'Annuler'}){
+  return new Promise(resolve=>{
+    let m = document.getElementById('confirmDialogModal');
+    if(!m){
+      const st = document.createElement('style');
+      st.textContent = `#confirmDialogModal{position:fixed;inset:0;z-index:10060;background:rgba(20,10,15,.55);display:none;align-items:center;justify-content:center;padding:22px;}
+        #confirmDialogModal.show{display:flex;}
+        #confirmDialogModal .cd-card{background:var(--card,#fff);color:var(--plum,#222);border-radius:20px;padding:22px 18px 16px;width:100%;max-width:380px;box-shadow:0 20px 50px rgba(0,0,0,.3);text-align:center;}
+        #confirmDialogModal .cd-ic{width:54px;height:54px;border-radius:50%;background:#fde8e6;color:#c0392b;display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto 12px;}
+        #confirmDialogModal h3{margin:0 0 8px;font-size:19px;}
+        #confirmDialogModal p{margin:0 0 18px;font-size:14.5px;line-height:1.5;opacity:.8;}
+        #confirmDialogModal button{width:100%;border:none;border-radius:14px;padding:14px;font:inherit;font-size:15px;font-weight:800;cursor:pointer;margin-top:8px;}
+        #confirmDialogModal #cd-ok{background:#c0392b;color:#fff;}
+        #confirmDialogModal #cd-cancel{background:#1f9d55;color:#fff;}`;
+      document.head.appendChild(st);
+      m = document.createElement('div');
+      m.id = 'confirmDialogModal';
+      m.innerHTML = '<div class="cd-card"><div class="cd-ic">⚠️</div><h3></h3><p></p><button id="cd-cancel"></button><button id="cd-ok"></button></div>';
+      document.body.appendChild(m);
+    }
+    m.querySelector('h3').textContent = title || '';
+    m.querySelector('p').textContent = text || '';
+    const bOk = m.querySelector('#cd-ok'), bNo = m.querySelector('#cd-cancel');
+    bOk.textContent = ok; bNo.textContent = cancel;
+    const done = v=>{ m.classList.remove('show'); bOk.onclick = bNo.onclick = m.onclick = null; resolve(v); };
+    bOk.onclick = ()=> done(true);
+    bNo.onclick = ()=> done(false);
+    m.onclick = e=>{ if(e.target === m) done(false); };
+    m.classList.add('show');
+  });
+}
 document.getElementById('btn-back-order-cats').addEventListener('click', ()=>{
   document.getElementById('orderCatFolders').style.display = 'block';
   document.getElementById('orderCatProducts').style.display = 'none';
