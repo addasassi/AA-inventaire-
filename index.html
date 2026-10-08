@@ -4910,10 +4910,14 @@ function renderOrderProducts(cat){
     const inCart = cart[p.id] || 0;
     const isOut = p.qty <= 0;
     const isLow = !isOut && p.qty <= 2;
-    const pillClass = isOut ? 'zero' : (isLow ? 'low' : 'ok');
-    const pillText = isOut ? 'Rupture de stock' : (p.qty + ' en stock');
+    // la photo de vitrine peut être épuisée alors que d'autres couleurs restent en stock
+    const colorsStock = (p.colors || []).reduce((t,c)=> t + Math.max(0, Number(c && c.qty) || 0), 0);
+    const onlyColors = isOut && colorsStock > 0;
+    const pillClass = onlyColors ? 'low' : (isOut ? 'zero' : (isLow ? 'low' : 'ok'));
+    const pillText = onlyColors ? ('🎨 ' + colorsStock + ' en stock (couleurs)') : (isOut ? 'Rupture de stock' : (p.qty + ' en stock'));
     const colorCount = (p.colors || []).length;
-    return `<div class="order-pick ${isOut?'out-pick':''}" onclick="addToCart('${p.id}')">
+    const click = onlyColors ? `openColorsModal('${p.id}','order')` : `addToCart('${p.id}')`;
+    return `<div class="order-pick ${isOut && !onlyColors?'out-pick':''}" onclick="${click}">
       <img src="${p.img || placeholderImg()}">
       ${inCart>0 ? `<div class="op-badge">${inCart}</div>` : ''}
       <div class="op-info">
