@@ -3735,24 +3735,29 @@ document.getElementById('pm-bundle-btn').addEventListener('click', async ()=>{
   if(!ok){ p.bundle = prev; refreshCurrentInventoryView(); openProductModal(id); toast('Échec — offre NON enregistrée, réessayez', true); return; }
   toast(off ? 'Offre retirée' : '🎁 Offre : ' + n + ' pièces pour ' + price + ' DA');
 });
-/* ---------- Offre lot (ex : 4 pièces du même modèle, couleurs au choix, pour 1000 DA) ----------
-   lines : [{productId, price, qty}] → remise totale + détail par modèle */
+/* ---------- Offre lot (ex : 4 pièces pour 1000 DA, couleurs ET modèles au choix) ----------
+   Tous les modèles qui ont la même offre (même nombre, même prix) se mélangent :
+   2 pièces du modèle 25 + 1 du 26 + 1 du 27 = un lot.
+   lines : [{productId, price, qty}] → remise totale + détail par offre */
 function bundleDiscount(lines){
   const by = {};
-  (lines || []).forEach(l=>{ if(!l || !l.productId) return; (by[l.productId] = by[l.productId] || []).push(l); });
-  let total = 0; const details = [];
-  Object.keys(by).forEach(pid=>{
-    const p = products.find(x=>x.id===pid);
-    const b = p && p.bundle;
+  (lines || []).forEach(l=>{
+    if(!l || !l.productId) return;
+    const p = products.find(x=>x.id===l.productId), b = p && p.bundle;
     if(!b || !(b.n >= 2) || !(b.price > 0)) return;
+    const k = b.n + '|' + b.price;
+    (by[k] = by[k] || {b, lines:[]}).lines.push(l);
+  });
+  let total = 0; const details = [];
+  Object.values(by).forEach(({b, lines: ls})=>{
     const units = [];
-    by[pid].forEach(l=>{ for(let i=0;i<(Number(l.qty)||0);i++) units.push(Number(l.price)||0); });
+    ls.forEach(l=>{ for(let i=0;i<(Number(l.qty)||0);i++) units.push(Number(l.price)||0); });
     const groups = Math.floor(units.length / b.n);
     if(!groups) return;
     units.sort((a,c)=> c-a);                       // les pièces les plus chères vont dans le lot
     const normal = units.slice(0, groups * b.n).reduce((t,v)=> t+v, 0);
     const disc = Math.max(0, normal - groups * b.price);
-    if(disc > 0){ total += disc; details.push({name: p.name, n: b.n, price: b.price, groups, disc}); }
+    if(disc > 0){ total += disc; details.push({n: b.n, price: b.price, groups, disc}); }
   });
   return {total, details};
 }
@@ -5158,7 +5163,7 @@ function renderCart(){
   const bd = bundleDiscount(keys.map(k=>{ const {productId} = parseCartKey(k); const i = cartLineInfo(k); return i ? {productId, price:i.price, qty:cart[k]} : null; }));
   if(bd.total > 0){
     total -= bd.total;
-    wrap.innerHTML += bd.details.map(d=> `<div class="bundle-line">🎁 Offre ${escapeHtml(d.name)} : ${d.n} pour ${d.price} DA ×${d.groups} <b>−${d.disc.toFixed(0)} DA</b></div>`).join('');
+    wrap.innerHTML += bd.details.map(d=> `<div class="bundle-line">🎁 Offre ${d.n} pour ${d.price} DA ×${d.groups} <b>−${d.disc.toFixed(0)} DA</b></div>`).join('');
   }
   if(!totalManuallyEdited) document.getElementById('o-total').value = total.toFixed(2);
 }
