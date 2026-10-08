@@ -172,6 +172,9 @@
   .oc-th{position:relative;width:54px;height:54px;flex-shrink:0;}
   .oc-th img{width:54px;height:54px;border-radius:50%;object-fit:cover;border:2px solid var(--card,#fff);box-shadow:0 0 0 1.5px var(--line),0 2px 6px rgba(0,0,0,.12);display:block;}
   .oc-th span{position:absolute;top:-4px;right:-4px;background:var(--plum);color:#fff;font-size:11px;font-weight:800;min-width:20px;height:20px;border-radius:10px;display:flex;align-items:center;justify-content:center;padding:0 5px;border:2px solid var(--card,#fff);}
+  .oc-head{display:flex;align-items:flex-start;gap:10px;}
+  .oc-head:empty{display:none;}
+  .oc-head .zr-badges,.oc-head .zr-badge{margin-top:2px;}
   section.view{display:none;padding:14px;padding-top:62px;}
   section.view.active{display:block;}
 
@@ -4337,8 +4340,7 @@ function renderOrdersHistory(){
     })() : '';
     return `<div class="order-card ${o.deferred ? 'deferred' : ''}" onclick="showOrderDetail('${o.id}')">
       ${deferredBadge}
-      ${window.zrSelectBox ? window.zrSelectBox(o) : ''}
-      ${window.zrBadge ? window.zrBadge(o) : ''}
+      <div class="oc-head">${window.zrSelectBox ? window.zrSelectBox(o) : ''}${window.zrBadge ? window.zrBadge(o) : ''}</div>
       <div class="oc-top">
         <div class="oc-name">${escapeHtml(o.customer.name || 'Client')}</div>
         <div class="oc-total">${Number(o.total).toFixed(2)} DA</div>
