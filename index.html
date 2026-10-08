@@ -4481,10 +4481,8 @@ function renderOrdersHistory(){
   const filterActive = ordersFilterDeferredOnly || document.getElementById('of-employee').value || document.getElementById('of-date-from').value || document.getElementById('of-date-to').value;
   const filteredTotal = filtered.reduce((sum,o)=> sum + Number(o.total || 0), 0);
   summaryEl.innerHTML = filterActive
-    ? `${filtered.length} commande${filtered.length>1?'s':''} correspondante${filtered.length>1?'s':''}
-       <div class="os-total">Total : ${filteredTotal.toFixed(2)} DA</div>`
-    : `${orders.length} commande${orders.length>1?'s':''} au total
-       <div class="os-total">Total : ${filteredTotal.toFixed(2)} DA</div>`;
+    ? `${filtered.length} commande${filtered.length>1?'s':''} correspondante${filtered.length>1?'s':''}`
+    : `${orders.length} commande${orders.length>1?'s':''} au total`;
   if(filtered.length === 0){
     wrap.innerHTML = '<div class="empty"><h3>Aucun résultat</h3><p>Aucune commande ne correspond à ces filtres.</p></div>';
     return;
