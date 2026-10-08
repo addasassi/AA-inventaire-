@@ -42,7 +42,7 @@
     if(!z && Date.now() - Date.parse(o.createdAt || 0) > 10*60*1000) return;
     const w = (typeof wilayasList !== 'undefined' ? wilayasList : []).find(x => norm(x.name) === norm(o.customer.wilaya));
     if(w) o.customer.wilayaCode = w.code;
-    o.zrDesc = (o.items || []).map(it => (it.qty || 1) + 'x ' + it.name).join(', ').slice(0, 250);
+    o.zrDesc = 'ملابس نسائية';   // texte affiché sur le bordereau (pas le détail des articles)
     o.zr = Object.assign({}, z || {}, {
       status: 'queued', active: true, error: '',
       sendAfter: o.deferred && o.deferredDate ? o.deferredDate : '',

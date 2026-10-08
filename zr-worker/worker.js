@@ -280,7 +280,7 @@ async function createParcel(env, o){
   const cust = await zr(env, '/customers/individual', {method: 'POST', body: JSON.stringify({name: c.name, phone: {number1: phone}})});
   if(!cust || !cust.id) throw new ZrError('Création du client ZR impossible', false);
   const amount = Math.round(Number(o.total) || 0);
-  const desc = (o.zrDesc || 'Commande').slice(0, 250);
+  const desc = 'ملابس نسائية';   // toujours ce texte sur le bordereau
   const created = await zr(env, '/parcels', {method: 'POST', body: JSON.stringify({
     customer: {customerId: cust.id, name: c.name, phone: {number1: phone}},
     deliveryAddress: {cityTerritoryId: cityId, districtTerritoryId: districtId, street: pickup ? null : (c.address || null)},
