@@ -221,10 +221,12 @@
   .cat-folder .overlay .ccount{color:#f0ddd8;font-size:12px;font-weight:600;margin-top:2px;}
   .cat-folder.empty-cat .overlay{background:rgba(58,38,50,0.45);}
   .cat-folder-actions{position:absolute;top:8px;right:8px;display:flex;gap:6px;z-index:2;}
-  .cat-folder-actions button{width:28px;height:28px;border-radius:50%;border:none;
-    background:rgba(255,255,255,0.9);color:var(--plum);font-size:14px;font-weight:800;
-    cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(0,0,0,0.25);}
-  .cat-folder-actions button:last-child{color:var(--danger);}
+  .cat-folder-actions button{width:32px;height:32px;border-radius:10px;border:none;padding:0;
+    background:rgba(255,255,255,0.92);color:var(--plum);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+    cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.18);}
+  .cat-folder-actions button svg{width:16px;height:16px;}
+  .cat-folder-actions button:last-child{color:#c0392b;}
+  .cat-folder-actions button:active{transform:scale(.92);}
   .cat-folder.add-folder,.product.add-product{background:var(--card);border:2px dashed var(--mauve);
     display:flex;align-items:center;justify-content:center;cursor:pointer;}
   .add-folder-inner{text-align:center;}
@@ -2597,8 +2599,8 @@ function renderCatFolders(){
     return `<div class="cat-folder ${items.length===0?'empty-cat':''}" onclick="openCategory('${cat}')">
       <img src="${thumb}">
       ${isAdmin ? `<div class="cat-folder-actions">
-        <button onclick="event.stopPropagation(); openRenameCategoryModal('${cat}')" title="Renommer">✎</button>
-        <button onclick="event.stopPropagation(); deleteCategory('${cat}')" title="Supprimer">×</button>
+        <button onclick="event.stopPropagation(); openRenameCategoryModal('${cat}')" title="Renommer" aria-label="Renommer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>
+        <button onclick="event.stopPropagation(); deleteCategory('${cat}')" title="Supprimer" aria-label="Supprimer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg></button>
       </div>` : ''}
       <div class="overlay">
         <div class="cname">${cat}</div>
