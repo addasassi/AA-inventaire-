@@ -1348,6 +1348,9 @@ let FIREBASE_OK = false;
 try{
   firebase.initializeApp(firebaseConfig);
   db = firebase.firestore();
+  // copie locale des données (téléphone) : l'app s'affiche tout de suite, puis
+  // Firebase ne télécharge que ce qui a changé depuis la dernière ouverture
+  try{ db.enablePersistence({synchronizeTabs: true}).catch(()=>{}); }catch(e){}
   FIREBASE_OK = true;
 }catch(e){ FIREBASE_OK = false; }
 
@@ -1479,14 +1482,22 @@ async function saveUsers(){
 let productsUnsub = null;
 function startProductsListener(){
   if(!FIREBASE_OK || productsUnsub) return;
-  productsUnsub = db.collection('products').onSnapshot(snap=>{
+  productsUnsub = db.collection('products').onSnapshot({includeMetadataChanges: true}, snap=>{
     products = snap.docs.map(d=>d.data()).sort((a,b)=>(a.order||0)-(b.order||0));
-    scheduleStockLight();
-    if(window.shopifyAutoSync) window.shopifyAutoSync();
-    detectNewRuptures();
+    if(!snap.metadata.fromCache){
+      // données confirmées par le serveur : seulement là on publie / synchronise / alerte
+      productsSynced = true; productsSyncWaiters.splice(0).forEach(f=>f());
+      scheduleStockLight();
+      if(window.shopifyAutoSync) window.shopifyAutoSync();
+      detectNewRuptures();
+    }
     refreshCurrentInventoryView();
   }, ()=> warnStorage());
 }
+let productsSynced = false;
+const productsSyncWaiters = [];
+const waitSync = (isOk, waiters, ms)=> isOk() ? Promise.resolve() :
+  new Promise(res=>{ waiters.push(res); setTimeout(res, ms); });
 /* ---------- Stock léger pour le catalogue client (aa-vetements.github.io) ----------
    Petit document sans photos (quantités, prix, noms) que le catalogue lit en direct :
    une pièce vendue ou un prix changé apparaît tout de suite chez les clientes. */
@@ -1547,6 +1558,13 @@ function detectNewRuptures(){
 }
 async function loadProducts(){
   if(!FIREBASE_OK){ warnStorage(); refreshCurrentInventoryView(); return; }
+  // L'écoute en direct garde déjà « products » à jour : pas besoin de tout retélécharger
+  // (photos comprises) à chaque écran. On attend seulement la 1re synchro avec le serveur.
+  if(productsUnsub){
+    await waitSync(()=>productsSynced, productsSyncWaiters, 8000);
+    refreshCurrentInventoryView();
+    return;
+  }
   try{
     const snap = await withTimeout(db.collection('products').get(), 8000);
     products = snap.docs.map(d=>d.data()).sort((a,b)=>(a.order||0)-(b.order||0));
@@ -4086,9 +4104,13 @@ let ordersListenerInitialized = false;
 function startOrdersListener(){
   if(!FIREBASE_OK || ordersUnsub) return;
   ordersListenerInitialized = false;
-  ordersUnsub = db.collection('orders').onSnapshot(snap=>{
+  ordersUnsub = db.collection('orders').onSnapshot({includeMetadataChanges: true}, snap=>{
     orders = snap.docs.map(d=>d.data());
-    if(ordersListenerInitialized){
+    const fromCache = snap.metadata.fromCache;
+    if(!fromCache){ ordersSynced = true; ordersSyncWaiters.splice(0).forEach(f=>f()); }
+    if(fromCache){
+      // affichage immédiat depuis la copie du téléphone (pas d'alerte ni d'envoi ZR)
+    } else if(ordersListenerInitialized){
       snap.docChanges().forEach(change=>{
         if(change.type === 'added'){
           const o = change.doc.data();
@@ -4105,11 +4127,14 @@ function startOrdersListener(){
       renderOrdersHistory();
     }
     if(typeof renderDashboard === 'function') renderDashboard();
-    if(window.zrOnOrders) window.zrOnOrders();
+    if(window.zrOnOrders && !fromCache) window.zrOnOrders();
   }, ()=> warnStorage());
 }
+let ordersSynced = false;
+const ordersSyncWaiters = [];
 async function loadOrders(){
   if(!FIREBASE_OK){ warnStorage(); return; }
+  if(ordersUnsub){ await waitSync(()=>ordersSynced, ordersSyncWaiters, 8000); return; }
   try{
     const snap = await withTimeout(db.collection('orders').get(), 8000);
     orders = snap.docs.map(d=>d.data());
@@ -5634,11 +5659,11 @@ document.getElementById('text-import-btn').addEventListener('click', ()=>{
 
 boot();
 </script>
-<script>document.write('<script src="shopify-sync.js?t='+Date.now()+'"><\/script>');</script>
-<script>document.write('<script src="zr-bureaux.js?t='+Date.now()+'"><\/script>');</script>
-<script>document.write('<script src="zr-sync.js?t='+Date.now()+'"><\/script>');</script>
-<script>document.write('<script src="app-update.js?t='+Date.now()+'"><\/script>');</script>
-<script>document.write('<script src="app-back.js?t='+Date.now()+'"><\/script>');</script>
-<script>document.write('<script src="select-search.js?t='+Date.now()+'"><\/script>');</script>
+<script src="shopify-sync.js"></script>
+<script src="zr-bureaux.js"></script>
+<script src="zr-sync.js"></script>
+<script src="app-update.js"></script>
+<script src="app-back.js"></script>
+<script src="select-search.js"></script>
 </body>
 </html>

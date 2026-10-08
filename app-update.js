@@ -5,7 +5,7 @@
    l'app se recharge avec la nouvelle version.
    ===================================================================== */
 (function(){
-  const FILES = [location.pathname, 'shopify-sync.js', 'zr-bureaux.js', 'zr-sync.js', 'app-back.js', 'select-search.js'];
+  const FILES = [location.pathname, 'shopify-sync.js', 'zr-bureaux.js', 'zr-sync.js', 'app-update.js', 'app-back.js', 'select-search.js'];
   const base = {};
   let shown = false;
 
@@ -19,7 +19,8 @@
   // Version de départ : la page (copie déjà en cache = celle affichée) + les scripts (chargés frais au démarrage)
   async function init(){
     for(const f of FILES){
-      try{ base[f] = await get(f, f === FILES[0] ? 'default' : 'no-store'); }catch(e){}
+      // 'default' passe par la copie locale (service worker) = la version qui tourne en ce moment
+      try{ base[f] = await get(f, 'default'); }catch(e){}
     }
   }
 
@@ -61,7 +62,14 @@
   async function update(){
     const b = document.querySelector('#app-update .au-go');
     if(b){ b.disabled = true; b.textContent = '⏳'; }
-    // remplace la copie en cache par la nouvelle avant de recharger
+    // remplace la copie gardée sur le téléphone par la nouvelle version, puis recharge
+    try{
+      const c = 'caches' in window ? await caches.open('atelier-app-v1') : null;
+      await Promise.all(FILES.map(async f=>{
+        const r = await fetch(f + (f.includes('?') ? '&' : '?') + '_v=' + Date.now(), {cache:'no-store'});
+        if(r.ok && c){ const u = new URL(f, location.href); u.search = ''; await c.put(u.href, r); }
+      }));
+    }catch(e){}
     try{ await fetch(FILES[0], {cache:'reload'}); }catch(e){}
     location.reload();
   }
