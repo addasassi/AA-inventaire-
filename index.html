@@ -4698,10 +4698,17 @@ function adjustEoItemQty(index, delta){
   if(it.qty === 0) editingOrderItems.splice(index, 1);
   renderEoItems();
 }
+// après « + Ajouter un article », la liste des commandes était restée cachée → page vide
+function eoBackToOrders(){
+  pickerMode = 'newOrder';
+  const b = document.getElementById('btn-cancel-order'); if(b) b.textContent = '← Annuler la commande';
+  showOrdersHome();
+}
 document.getElementById('eo-cancel').addEventListener('click', ()=>{
   document.getElementById('editOrderModal').classList.remove('show');
   editingOrderId = null;
   editingOrderItems = [];
+  eoBackToOrders();
 });
 document.getElementById('eo-save').addEventListener('click', async ()=>{
   const o = orders.find(x=>x.id===editingOrderId);
@@ -4767,6 +4774,7 @@ document.getElementById('eo-save').addEventListener('click', async ()=>{
   document.getElementById('editOrderModal').classList.remove('show');
   editingOrderId = null;
   editingOrderItems = [];
+  eoBackToOrders();
   toast('Commande modifiée — stock mis à jour');
   renderOrdersHistory();
 });
