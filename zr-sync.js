@@ -151,10 +151,9 @@
       }else if(kind === 'track'){
         await call('/track', {id: o.id}); toast('État mis à jour');
       }else if(kind === 'label'){
-        const w = window.open('', '_blank');
         const j = await call('/label', {id: o.id});
-        if(j.url){ if(w) w.location = j.url; else location.href = j.url; }
-        else { if(w) w.close(); toast(j.error || 'Étiquette indisponible', true); }
+        if(j.url) await printPdf(j.url, 'a6');
+        else toast(j.error || 'Étiquette indisponible', true);
       }
     }catch(e){ toast('ZR Express : ' + (e.message || e), true); }
     btn.disabled = false; btn.textContent = old;
@@ -342,16 +341,90 @@
     list = list.slice(0, 250);
     if(!list.length) return;
     const old = btn.innerHTML; btn.disabled = true; btn.textContent = '⏳ Préparation du PDF…';
-    const w = window.open('', '_blank');
     try{
       const j = await call('/labels', {ids: list.map(o => o.id), format});
       if(!j.ok || !j.url) throw new Error(j.error || 'PDF indisponible');
-      if(w) w.location = j.url; else location.href = j.url;
       document.getElementById('ocActionsModal').classList.remove('show');
+      await printPdf(j.url, format);
       toast('🖨️ ' + j.count + ' bordereau(x) ' + (format === 'a4' ? 'A4' : 'A6') + (j.failed && j.failed.length ? ' — ' + j.failed.length + ' en échec' : ''));
     }catch(e){ if(w) w.close(); toast('ZR Express : ' + (e.message || e), true); }
     btn.innerHTML = old; btn.disabled = false;
   }
+
+  /* ---------- Impression directe : le PDF de ZR est dessiné dans l'app, puis
+     la fenêtre d'impression du téléphone s'ouvre (choix de la machine). ---------- */
+  let pdfjsP = null;
+  function pdfjs(){
+    const B = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/';
+    if(!pdfjsP) pdfjsP = import(B + 'pdf.min.mjs').then(lib => {
+      lib.GlobalWorkerOptions.workerSrc = B + 'pdf.worker.min.mjs';
+      return lib;
+    }).catch(e => { pdfjsP = null; throw new Error('Lecteur PDF non chargé (connexion ?)'); });
+    return pdfjsP;
+  }
+
+  function printModal(){
+    let m = document.getElementById('labelPrintModal');
+    if(m) return m;
+    m = document.createElement('div');
+    m.id = 'labelPrintModal';
+    m.innerHTML = `<div class="lp-bar">
+        <button id="lp-close" type="button">← Retour</button>
+        <span class="lp-info"></span>
+        <button id="lp-print" type="button">🖨️ Imprimer</button>
+      </div>
+      <div class="lp-pages"></div>
+      <style id="lp-page-style"></style>`;
+    document.body.appendChild(m);
+    m.querySelector('#lp-close').onclick = () => m.classList.remove('show');
+    m.querySelector('#lp-print').onclick = () => window.print();
+    return m;
+  }
+
+  async function printPdf(url, format){
+    if(!relay) await loadCfg();
+    const m = printModal();
+    const pages = m.querySelector('.lp-pages'), info = m.querySelector('.lp-info');
+    pages.innerHTML = '<div class="lp-wait">⏳ Préparation des bordereaux…</div>';
+    info.textContent = '';
+    m.querySelector('#lp-print').disabled = true;
+    m.dataset.url = url;
+    m.classList.add('show');
+    try{
+      const [lib, buf] = await Promise.all([
+        pdfjs(),
+        fetch(relay + '/pdf?u=' + encodeURIComponent(url)).then(async r => {
+          if(!r.ok){ let j = {}; try{ j = await r.json(); }catch(e){} throw new Error(j.error || ('Erreur ' + r.status)); }
+          return r.arrayBuffer();
+        })
+      ]);
+      const doc = await lib.getDocument({data: buf}).promise;
+      pages.innerHTML = '';
+      let wmm = 0, hmm = 0;
+      for(let i = 1; i <= doc.numPages; i++){
+        const pg = await doc.getPage(i);
+        const v1 = pg.getViewport({scale: 1});
+        if(i === 1){ wmm = v1.width * 25.4 / 72; hmm = v1.height * 25.4 / 72; }
+        const scale = (format === 'a4' ? 2.2 : 3.2);            // ~200–230 dpi : net sur thermique
+        const vp = pg.getViewport({scale});
+        const c = document.createElement('canvas');
+        c.width = Math.ceil(vp.width); c.height = Math.ceil(vp.height);
+        const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+        await pg.render({canvasContext: ctx, canvas: c, viewport: vp}).promise;
+        const img = new Image(); img.src = c.toDataURL('image/png'); img.className = 'lp-page';
+        pages.appendChild(img);
+      }
+      m.querySelector('#lp-page-style').textContent =
+        `@page{size:${wmm.toFixed(1)}mm ${hmm.toFixed(1)}mm;margin:0;}
+         @media print{#labelPrintModal .lp-page{width:${wmm.toFixed(1)}mm;height:${hmm.toFixed(1)}mm;}}`;
+      info.textContent = doc.numPages + ' page' + (doc.numPages > 1 ? 's' : '') + ' · ' + (format === 'a4' ? 'A4' : 'A6');
+      m.querySelector('#lp-print').disabled = false;
+      setTimeout(() => window.print(), 300);
+    }catch(e){
+      pages.innerHTML = `<div class="lp-wait">⚠️ ${e.message || e}<br><br><a href="${url}" target="_blank" rel="noopener">Ouvrir le PDF</a></div>`;
+    }
+  }
+  window.zrPrintPdf = printPdf;
 
   async function bulkDelete(list, m){
     const atZr = list.filter(o => o.zr && o.zr.parcelId && o.zr.stage !== 'delivered' && o.zr.stage !== 'returned').length;
@@ -379,6 +452,26 @@
     .oc-all{display:flex;align-items:center;gap:8px;font-weight:700;font-size:14px;}
     .oc-all input,.oc-check input{width:22px;height:22px;accent-color:var(--plum,#3a2632);margin:0;}
     .oc-check{display:flex;align-items:center;padding:2px;flex-shrink:0;}
+    #labelPrintModal{position:fixed;inset:0;z-index:10060;background:#e9e4e1;display:none;flex-direction:column;}
+    #labelPrintModal.show{display:flex;}
+    #labelPrintModal .lp-bar{display:flex;align-items:center;gap:10px;padding:12px;background:var(--plum,#3a2632);color:#fff;}
+    #labelPrintModal .lp-bar button{border:none;border-radius:12px;padding:12px 16px;font:inherit;font-size:15px;font-weight:800;cursor:pointer;}
+    #lp-close{background:rgba(255,255,255,.15);color:#fff;}
+    #lp-print{background:#2e9e5b;color:#fff;margin-inline-start:auto;font-size:16px !important;}
+    #lp-print:disabled{opacity:.5;}
+    #labelPrintModal .lp-info{font-size:13px;opacity:.85;}
+    #labelPrintModal .lp-pages{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;align-items:center;gap:14px;}
+    #labelPrintModal .lp-page{width:100%;max-width:480px;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.15);}
+    #labelPrintModal .lp-wait{padding:40px 20px;text-align:center;font-size:16px;}
+    @media print{
+      body > *:not(#labelPrintModal){display:none !important;}
+      html,body{background:#fff !important;margin:0 !important;padding:0 !important;}
+      #labelPrintModal{position:static !important;display:block !important;background:#fff !important;}
+      #labelPrintModal .lp-bar{display:none !important;}
+      #labelPrintModal .lp-pages{display:block !important;padding:0 !important;overflow:visible !important;}
+      #labelPrintModal .lp-page{display:block;max-width:none;box-shadow:none;margin:0;page-break-after:always;break-after:page;}
+      #labelPrintModal .lp-page:last-child{page-break-after:auto;break-after:auto;}
+    }
     .oc-actions-btn{border:none;border-radius:12px;padding:11px 18px;font:inherit;font-size:15px;font-weight:800;background:var(--plum,#3a2632);color:#fff;cursor:pointer;}
     .oc-actions-btn:disabled{opacity:.4;}
     .oc-actions-btn span{background:#fff;color:var(--plum,#3a2632);border-radius:999px;padding:1px 8px;margin-left:4px;font-size:13px;}

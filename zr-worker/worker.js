@@ -382,8 +382,18 @@ export default {
         try{ const x = await territories(env, 'alger'); return json({ok: true, test: 'connexion ZR OK', territoires: x.length, auth: authMode}); }
         catch(e){ return json({ok: false, test: 'échec', error: e.message, auth: authMode}); }
       }
-      return json({ok: true, service: 'atelier-zr', version: 6, configured: !!env.ZR_API_KEY, tenant: t ? 'ok' : 'manquant',
+      return json({ok: true, service: 'atelier-zr', version: 7, configured: !!env.ZR_API_KEY, tenant: t ? 'ok' : 'manquant',
         boutique: tenantName || undefined, info: t ? undefined : (tenantDiag || undefined)});
+    }
+    // GET /pdf?u=… : renvoie le PDF de ZR avec CORS → l'app peut l'afficher et l'imprimer elle-même
+    if(path === '/pdf'){
+      let u; try{ u = new URL(new URL(req.url).searchParams.get('u') || ''); }catch(e){}
+      if(!u || u.protocol !== 'https:') return json({ok: false, error: 'lien invalide'}, 400);
+      const r = await fetch(u.toString());
+      const buf = await r.arrayBuffer();
+      const head = new TextDecoder().decode(new Uint8Array(buf.slice(0, 5)));
+      if(!r.ok || head !== '%PDF-') return json({ok: false, error: 'PDF introuvable (' + r.status + ')'}, 502);
+      return new Response(buf, {headers: {...CORS, 'Content-Type': 'application/pdf', 'Cache-Control': 'no-store'}});
     }
     if(req.method !== 'POST') return json({error: 'POST attendu'}, 405);
     if(!env.ZR_API_KEY) return json({ok: false, error: 'Secret ZR_API_KEY manquant dans Cloudflare'}, 500);
