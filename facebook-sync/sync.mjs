@@ -60,6 +60,17 @@ async function readProducts() {
     (j.documents || []).forEach(d => out.push(fsFields(d.fields || {})));
     pageToken = j.nextPageToken || '';
   } while (pageToken);
+  // le produit ne garde qu'une miniature : on remet la photo complète (photos/{imgId})
+  const fnv = s => { s = String(s || ''); let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36) + s.length.toString(36); };
+  for (const p of out) {
+    for (const o of [p, ...(p.colors || []).filter(Boolean)]) {
+      if (!(o.imgId && o.img && o.imgTh && fnv(o.img) === o.imgTh)) continue;
+      try {
+        const r = await fetch(`https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT}/databases/(default)/documents/photos/${o.imgId}?key=${FIREBASE_KEY}`);
+        if (r.ok) { const d = fsFields((await r.json()).fields || {}); if (d.d) o.img = d.d; }
+      } catch (e) {}
+    }
+  }
   return out;
 }
 

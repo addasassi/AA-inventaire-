@@ -67,6 +67,11 @@
     for(let i=0;i<s.length;i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
     return (h>>>0).toString(36) + s.length.toString(36);
   }
+  // empreinte de la PHOTO COMPLÈTE (le produit ne garde qu'une miniature, voir index.html)
+  function imgH(o){
+    if(!o || !o.img) return hashStr('');
+    return (window.hasPhotoRef && window.hasPhotoRef(o) && o.imgH) ? o.imgH : hashStr(o.img);
+  }
   function uuid(){
     try{ if(crypto.randomUUID) return crypto.randomUUID(); }catch(e){}
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c=>{ const r=Math.random()*16|0; return (c==='x'?r:(r&3|8)).toString(16); });
@@ -130,6 +135,8 @@
 
   /* ---------- Envoi d'une image (base64) vers Shopify ---------- */
   async function uploadImage(dataUrl, name){
+    // on reçoit le produit / la couleur : on va chercher la photo complète
+    if(dataUrl && typeof dataUrl === 'object') dataUrl = window.fullImg ? await window.fullImg(dataUrl) : dataUrl.img;
     const mime = mimeOf(dataUrl);
     if(!mime) return null;
     const ext = mime.split('/')[1] === 'png' ? 'png' : 'jpg';
@@ -310,7 +317,7 @@
       const oldCoverId = sp.coverMedia && sp.coverMedia.value;
       let coverId = oldCoverId, coverChanged = false;
       if(cols.length && !isDefault && p.img){
-        const want = hashStr(p.img);
+        const want = imgH(p);
         const have = sp.cover && sp.cover.value;
         if(want !== have){
           log('🖼️ Photo de vitrine : ' + p.name);
@@ -330,11 +337,11 @@
       let mainFirstName = null;
       if(mainHit && mainHit.product.id === sp.id) mainFirstName = colorOf(mainHit.variants[0]);
       const existingNames = new Set(spVariants.map(colorOf));
-      const units = cols.length ? cols.map((c,i)=>({code:String(c.code), qty:int(c.qty), price:money(colorPrice(p,c)), img:c.img, idx:i}))
-                                : [{code:String(p.code), qty:int(p.qty), price:money(p.price), img:p.img, idx:-1}];
+      const units = cols.length ? cols.map((c,i)=>({code:String(c.code), qty:int(c.qty), price:money(colorPrice(p,c)), img:c.img, obj:c, idx:i}))
+                                : [{code:String(p.code), qty:int(p.qty), price:money(p.price), img:p.img, obj:p, idx:-1}];
       // la pièce de la photo de vitrine devient une couleur (son stock = quantité du produit)
       if(cols.length && !isDefault && p.code && !cols.some(c=> String(c.code) === String(p.code))){
-        units.unshift({code:String(p.code), qty:int(p.qty), price:money(p.price), img:p.img, idx:-2, main:true});
+        units.unshift({code:String(p.code), qty:int(p.qty), price:money(p.price), img:p.img, obj:p, idx:-2, main:true});
       }
       // ---- Noms des couleurs (Atelier ⇄ Shopify, IA pour les couleurs sans nom) ----
       let pChanged = false;
@@ -399,7 +406,7 @@
             if(withMedia) vs.forEach(x=>{ if(!x.media.nodes.length) mediaFill.push({variantId:x.id, mediaIds:[withMedia.media.nodes[0].id]}); });
           }
           // Photo modifiée ?
-          const h = hashStr(u.img);
+          const h = imgH(u.obj);
           if(firstRun || !imgHash[u.code]){ imgHash[u.code] = h; }
           else if(u.img && imgHash[u.code] !== h){
             log('📷 Photo : ' + p.name + (u.idx>=0 ? ' #'+(u.idx+1) : ''));
@@ -433,7 +440,7 @@
           let src = null, mediaId = null;
           if(nv.u.main){ mediaId = coverId || null; mainFirstName = nv.name; }
           else{
-            src = nv.u.img ? await uploadImage(nv.u.img, 'c'+nv.u.code) : null;
+            src = nv.u.img ? await uploadImage(nv.u.obj, 'c'+nv.u.code) : null;
             if(src) media.push({originalSource:src, mediaContentType:'IMAGE', alt: p.name + ' - ' + nv.name});
           }
           (hasSizes ? SIZES : [null]).forEach(sz=>{
@@ -448,7 +455,7 @@
             if(mediaId) item.mediaId = mediaId;
             variants.push(item);
           });
-          imgHash[nv.u.code] = hashStr(nv.u.img);
+          imgHash[nv.u.code] = imgH(nv.u.obj);
         }
         userErr(await gql(`mutation C($productId:ID!,$variants:[ProductVariantsBulkInput!]!,$media:[CreateMediaInput!]){ productVariantsBulkCreate(productId:$productId, variants:$variants, media:$media){ productVariants{ id } userErrors{ field message } } }`,
           {productId: sp.id, variants, media: media.length ? media : null}));
@@ -503,7 +510,7 @@
     userErr(await gql(`mutation PU($product:ProductUpdateInput!){ productUpdate(product:$product){ userErrors{ field message } } }`, {product:{id:productId, metafields}}));
   }
   async function setCover(productId, p, hash, oldMediaId){
-    const src = await uploadImage(p.img, 'cover'+p.code);
+    const src = await uploadImage(p, 'cover'+p.code);
     if(!src) return;
     const res = userErr(await gql(`mutation PM($productId:ID!,$media:[CreateMediaInput!]!){ productCreateMedia(productId:$productId, media:$media){ media{ id } mediaUserErrors{ field message } } }`,
       {productId, media:[{originalSource:src, mediaContentType:'IMAGE', alt:p.name}]}));
@@ -530,8 +537,8 @@
     const files = []; const variants = [];
     let coverHash = null, coverFile = null;
     if(cols.length && p.img){
-      const csrc = await uploadImage(p.img, 'cover'+p.code);
-      if(csrc){ coverFile = {originalSource:csrc, contentType:'IMAGE', alt:p.name}; files.push(coverFile); coverHash = hashStr(p.img); }
+      const csrc = await uploadImage(p, 'cover'+p.code);
+      if(csrc){ coverFile = {originalSource:csrc, contentType:'IMAGE', alt:p.name}; files.push(coverFile); coverHash = imgH(p); }
     }
     const withMain = cols.length && p.code && !cols.some(c=> String(c.code) === String(p.code));
     // noms : ceux d'Atelier, sinon IA, sinon « لون N »
@@ -565,7 +572,7 @@
     if(cols.length){
       for(let i=0;i<cols.length;i++){
         const c = cols[i];
-        const src = c.img ? await uploadImage(c.img, 'c'+c.code) : null;
+        const src = c.img ? await uploadImage(c, 'c'+c.code) : null;
         const f = src ? {originalSource:src, contentType:'IMAGE', alt: p.name + ' - ' + names[i]} : null;
         if(f) files.push(f);
         SIZES.forEach((sz, j)=>{
@@ -577,17 +584,17 @@
           if(f && j === 0) v.file = f;
           variants.push(v);
         });
-        imgHash[String(c.code)] = hashStr(c.img);
+        imgHash[String(c.code)] = imgH(c);
       }
     } else {
-      const src = p.img ? await uploadImage(p.img, 'p'+p.code) : null;
+      const src = p.img ? await uploadImage(p, 'p'+p.code) : null;
       if(src) files.push({originalSource:src, contentType:'IMAGE', alt:p.name});
       SIZES.forEach(sz=> variants.push({
         optionValues:[{optionName:SIZE_OPT, name:sz}], price: money(p.price), sku: String(p.code),
         inventoryItem:{tracked:true},
         inventoryQuantities:[{locationId: shop.locationId, name:'available', quantity:int(p.qty)}]
       }));
-      imgHash[String(p.code)] = hashStr(p.img);
+      imgHash[String(p.code)] = imgH(p);
     }
     const input = {
       title: p.name, vendor: VENDOR, productType: p.cat || '', tags: p.cat ? [p.cat] : [], status:'ACTIVE',
@@ -628,7 +635,7 @@
 
   async function replacePhoto(sp, vs, u, isDefault){
     const v = vs[0];
-    const src = await uploadImage(u.img, (isDefault?'p':'c') + u.code);
+    const src = await uploadImage(u.obj || u.img, (isDefault?'p':'c') + u.code);
     if(!src) return;
     const old = isDefault ? sp.media.nodes.map(m=>m.id) : v.media.nodes.map(m=>m.id);
     const res = userErr(await gql(`mutation PM($productId:ID!,$media:[CreateMediaInput!]!){ productCreateMedia(productId:$productId, media:$media){ media{ id status } mediaUserErrors{ field message } } }`,

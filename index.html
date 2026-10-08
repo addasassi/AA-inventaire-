@@ -1419,10 +1419,10 @@ function downloadDataUrl(dataUrl, filename){
     document.body.removeChild(a);
   }catch(e){}
 }
-function downloadProductImage(id){
+async function downloadProductImage(id){
   const p = products.find(x=>x.id===id);
   if(!p || !p.img) return;
-  downloadDataUrl(p.img, 'produit-'+slugForFilename(p.code || p.name)+'.jpg');
+  downloadDataUrl(await fullImg(p), 'produit-'+slugForFilename(p.code || p.name)+'.jpg');
 }
 function downloadCurrentProductImage(){
   if(currentProductModalId) downloadProductImage(currentProductModalId);
@@ -1431,11 +1431,12 @@ function downloadColorImage(index){
   const p = products.find(x=>x.id===currentColorsProductId);
   if(!p || !p.colors || !p.colors[index] || !p.colors[index].img) return;
   const c = p.colors[index];
-  downloadDataUrl(c.img, 'couleur-'+slugForFilename(p.name)+'-'+(c.code || (index+1))+'.jpg');
+  fullImg(c).then(src=> downloadDataUrl(src, 'couleur-'+slugForFilename(p.name)+'-'+(c.code || (index+1))+'.jpg'));
 }
 async function downloadImagesAsZip(images){
   // Téléchargement groupé: chaque photo est enregistrée séparément (pas de zip)
   if(!images || images.length === 0){ alert('Aucune photo à télécharger.'); return; }
+  for(const im of images){ if(im.obj) im.dataUrl = await fullImg(im.obj); }
   images.forEach((im, idx)=> setTimeout(()=> downloadDataUrl(im.dataUrl, im.name), idx*400));
 }
 function obf(s){ return btoa(unescape(encodeURIComponent(s))); }
@@ -1591,9 +1592,73 @@ function stampOutAt(p){
   mark(p, p.id);
   (p.colors||[]).forEach((c,i)=>{ if(c) mark(c, p.id+'#'+i); });
 }
+/* ---------- Photos : miniature dans le produit, photo complète à part ----------
+   Le produit ne garde qu'une petite miniature (img, ~20 Ko) : la liste se charge vite
+   et un produit ne dépasse plus la limite de 1 Mo de Firebase. La photo complète est
+   dans photos/{imgId} et n'est téléchargée que quand on en a besoin (zoom, envoi,
+   téléchargement, Shopify, catalogue).
+   imgTh = empreinte de la miniature : si une ancienne version de l'app remet une
+   grande photo dans img, l'empreinte ne correspond plus → img est alors la photo complète. */
+function imgFnv(s){
+  s = String(s || ''); let h = 2166136261;
+  for(let i=0;i<s.length;i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return (h>>>0).toString(36) + s.length.toString(36);
+}
+function hasPhotoRef(o){ return !!(o && o.imgId && o.img && o.imgTh && imgFnv(o.img) === o.imgTh); }
+const photoCache = new Map();
+async function fullImg(o){
+  if(!o || !o.img) return '';
+  if(!hasPhotoRef(o)) return o.img;
+  if(photoCache.has(o.imgId)) return photoCache.get(o.imgId);
+  try{
+    const d = await withTimeout(db.collection('photos').doc(o.imgId).get(), 25000);
+    const v = d.exists && d.data().d;
+    if(v){ photoCache.set(o.imgId, v); return v; }
+  }catch(e){}
+  return o.img;   // repli : la miniature
+}
+window.fullImg = fullImg;
+window.imgFnv = imgFnv;
+window.hasPhotoRef = hasPhotoRef;
+function makeThumb(dataUrl, maxDim, quality){
+  maxDim = maxDim || 360; quality = quality || 0.72;
+  return new Promise((resolve, reject)=>{
+    const img = new Image();
+    img.onload = ()=>{
+      let w = img.width, h = img.height;
+      const k = Math.min(1, maxDim / Math.max(w, h));
+      w = Math.round(w * k); h = Math.round(h * k);
+      const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+      const g = cv.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.drawImage(img, 0, 0, w, h);
+      let out = cv.toDataURL('image/webp', quality);
+      if(!out.startsWith('data:image/webp')) out = cv.toDataURL('image/jpeg', quality);
+      resolve(out);
+    };
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
+}
+// Avant d'enregistrer un produit : chaque grande photo part dans photos/ et le produit garde la miniature.
+async function externalizeImages(p){
+  if(!p || !FIREBASE_OK) return;
+  const slots = [p].concat((p.colors || []).filter(Boolean));
+  for(const o of slots){
+    const big = o.img && String(o.img).startsWith('data:image') && o.img.length > 45000 && !hasPhotoRef(o);
+    if(!big) continue;
+    try{
+      const full = o.img;
+      const id = 'ph' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+      await withTimeout(db.collection('photos').doc(id).set({d: full, at: Date.now()}), 30000);
+      const th = await makeThumb(full);
+      photoCache.set(id, full);
+      o.img = th; o.imgId = id; o.imgTh = imgFnv(th); o.imgH = imgFnv(full);
+    }catch(e){ /* pas grave : la grande photo reste dans le produit */ }
+  }
+}
 async function saveProducts(){
   if(!FIREBASE_OK){ warnStorage(); return false; }
   products.forEach(stampOutAt);
+  for(const p of products) await externalizeImages(p);
   for(let attempt=0; attempt<2; attempt++){
     try{
       const batch = db.batch();
@@ -1613,6 +1678,7 @@ async function saveProducts(){
 async function saveProductDoc(p){
   if(!FIREBASE_OK || !p){ warnStorage(); return false; }
   stampOutAt(p);
+  await externalizeImages(p);
   for(let attempt=0; attempt<2; attempt++){
     try{
       await withTimeout(db.collection('products').doc(p.id).set(p), 20000);
@@ -3041,6 +3107,7 @@ function openProductModal(id){
   const badgeText = isOut ? 'Rupture de stock' : (p.qty + ' en stock');
 
   document.getElementById('pm-img').src = p.img || placeholderImg();
+  if(hasPhotoRef(p)) fullImg(p).then(src=>{ if(currentProductModalId === id && src) document.getElementById('pm-img').src = src; });
   const pmDlBtn = document.getElementById('pm-dl-btn');
   if(pmDlBtn) pmDlBtn.style.display = p.img ? 'flex' : 'none';
   document.getElementById('pm-name').textContent = p.name;
@@ -3317,13 +3384,16 @@ async function setVitrineColor(index){
   const before = JSON.parse(JSON.stringify(p));
   const c = p.colors[index];
   const main = {img:p.img||'', qty:Number(p.qty)||0, price:p.price, cost:(p.cost!=null?p.cost:null), code:p.code, name:p.colorName||''};
+  const refOf = o=> ({imgId:o.imgId||null, imgTh:o.imgTh||null, imgH:o.imgH||null});
+  const mainRef = refOf(p), colRef = refOf(c);
+  Object.assign(p, colRef);
   p.img = c.img || '';
   p.qty = Number(c.qty)||0;
   p.price = (c.price!=null && c.price!=='') ? c.price : p.price;
   p.cost = (c.cost!=null && c.cost!=='') ? c.cost : p.cost;
   p.code = c.code;
   p.colorName = c.name || '';
-  p.colors[index] = {img:main.img, qty:main.qty, price:main.price, cost:main.cost, code:main.code, name:main.name};
+  p.colors[index] = Object.assign({img:main.img, qty:main.qty, price:main.price, cost:main.cost, code:main.code, name:main.name}, mainRef);
   refreshCurrentInventoryView();
   renderColorsGrid();
   const ok = await saveProductDoc(p);
@@ -3429,6 +3499,7 @@ function openColorFullscreen(index){
   if(!p || !p.colors || !p.colors[index]) return;
   colorFullscreenIndex = index;
   document.getElementById('cv-img').src = p.colors[index].img;
+  if(hasPhotoRef(p.colors[index])) fullImg(p.colors[index]).then(src=>{ if(colorFullscreenIndex === index && src) document.getElementById('cv-img').src = src; });
   document.getElementById('colorViewModal').classList.add('show');
 }
 function downloadCurrentColorFullscreen(){
@@ -3769,9 +3840,9 @@ async function priceImageFile(src, price, name){
 function availablePhotos(cat){
   const out = [], seen = new Set();
   products.filter(p=>p.cat===cat).forEach(p=>{
-    const add = (img, price)=>{ if(img && !seen.has(img)){ seen.add(img); out.push({img, price, name:p.name}); } };
-    if(p.img && (Number(p.qty)||0) > 0) add(p.img, p.price);
-    (p.colors||[]).forEach(c=>{ if((Number(c.qty)||0) > 0) add(c.img, (c.price!=null && c.price!=='') ? c.price : p.price); });
+    const add = (o, price)=>{ const img = o.img; if(img && !seen.has(img)){ seen.add(img); out.push({img, obj:o, price, name:p.name}); } };
+    if(p.img && (Number(p.qty)||0) > 0) add(p, p.price);
+    (p.colors||[]).forEach(c=>{ if((Number(c.qty)||0) > 0) add(c, (c.price!=null && c.price!=='') ? c.price : p.price); });
   });
   return out;
 }
@@ -3858,7 +3929,7 @@ async function prepareAvailablePhotos(cat, btn){
     const count = {};
     for(const x of list){
       count[x.cat] = (count[x.cat]||0) + 1;
-      try{ const f = await priceImageFile(x.img, x.price, x.cat + '-' + stamp + '-' + String(count[x.cat]).padStart(2,'0')); f.catName = x.cat; files.push(f); }catch(e){}
+      try{ const f = await priceImageFile(await fullImg(x.obj), x.price, x.cat + '-' + stamp + '-' + String(count[x.cat]).padStart(2,'0')); f.catName = x.cat; files.push(f); }catch(e){}
     }
     if(!files.length){ toast('Erreur de préparation des photos', true); return; }
     // photos prêtes : un bouton apparaît en bas (le téléchargement doit partir d'un toucher)
@@ -3878,7 +3949,7 @@ document.getElementById('btn-download-cat-photos').addEventListener('click', asy
     : products.filter(p=>p.cat===cat);
   const images = items.filter(p=>p.img).map(p=> ({
     name: 'produit-'+slugForFilename(p.code || p.name)+'.jpg',
-    dataUrl: p.img
+    dataUrl: p.img, obj: p
   }));
   await downloadImagesAsZip(images);
 });
@@ -3887,9 +3958,9 @@ document.getElementById('btn-download-color-photos').addEventListener('click', a
   if(!p) return;
   // seulement les photos en stock (> 0), y compris la photo du produit (vitrine)
   const images = [], seen = new Set();
-  if(p.img && (Number(p.qty)||0) > 0){ seen.add(p.img); images.push({name: 'produit-'+slugForFilename(p.name)+'-'+(p.code||'0')+'.jpg', dataUrl: p.img}); }
+  if(p.img && (Number(p.qty)||0) > 0){ seen.add(p.img); images.push({name: 'produit-'+slugForFilename(p.name)+'-'+(p.code||'0')+'.jpg', dataUrl: p.img, obj: p}); }
   (p.colors||[]).forEach((c, i)=>{
-    if(c.img && (Number(c.qty)||0) > 0 && !seen.has(c.img)){ seen.add(c.img); images.push({name: 'couleur-'+slugForFilename(p.name)+'-'+(c.code || (i+1))+'.jpg', dataUrl: c.img}); }
+    if(c.img && (Number(c.qty)||0) > 0 && !seen.has(c.img)){ seen.add(c.img); images.push({name: 'couleur-'+slugForFilename(p.name)+'-'+(c.code || (i+1))+'.jpg', dataUrl: c.img, obj: c}); }
   });
   if(!images.length){ toast('Aucune photo en stock pour ce produit', true); return; }
   await downloadImagesAsZip(images);
