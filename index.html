@@ -163,6 +163,11 @@
   #btn-new-order, #dash-btn-order{background:#1f9d55 !important;border-color:#1f9d55 !important;color:#fff !important;
     box-shadow:0 6px 16px rgba(31,157,85,.35);}
   #btn-new-order:active, #dash-btn-order:active{background:#178a49 !important;}
+  .rupt-filter{display:flex;gap:8px;margin:0 2px 12px;}
+  .rupt-filter .chip{border:1px solid var(--line);background:var(--card);color:var(--plum);border-radius:999px;padding:9px 16px;font:inherit;font-weight:700;font-size:14px;cursor:pointer;}
+  .rupt-filter .chip.active{background:var(--plum);color:#fff;border-color:var(--plum);}
+  .rupt-when{font-size:12px;font-weight:700;color:var(--mauve-dark);margin:4px 0 2px;}
+  .rupt-when.today{color:#c0392b;}
   section.view{display:none;padding:14px;padding-top:62px;}
   section.view.active{display:block;}
 
@@ -1530,8 +1535,24 @@ async function loadProducts(){
 // qui touchent plusieurs produits à la fois (réorganisation, suppression de catégorie, import...).
 // Renvoie true/false : le code appelant doit vérifier le résultat avant d'annoncer un succès,
 // sinon une commande/quantité peut sembler "enregistrée" alors qu'elle ne l'était pas.
+/* Date (et auteur) du passage en rupture, pour afficher les ruptures les plus récentes en premier */
+function stampOutAt(p){
+  if(!p || !p.id) return;
+  const prev = (typeof stockPrevMap === 'object' && stockPrevMap) || {};
+  const who = (currentUser && currentUser.name) || '';
+  const mark = (obj, key)=>{
+    const q = Number(obj.qty)||0;
+    if(q <= 0){
+      const before = prev[key];
+      if(before && before.qty > 0){ obj.outAt = Date.now(); obj.outBy = who; }   // vrai passage à 0
+    } else if(obj.outAt){ delete obj.outAt; delete obj.outBy; }
+  };
+  mark(p, p.id);
+  (p.colors||[]).forEach((c,i)=>{ if(c) mark(c, p.id+'#'+i); });
+}
 async function saveProducts(){
   if(!FIREBASE_OK){ warnStorage(); return false; }
+  products.forEach(stampOutAt);
   for(let attempt=0; attempt<2; attempt++){
     try{
       const batch = db.batch();
@@ -1550,6 +1571,7 @@ async function saveProducts(){
 // (quantité, prix, coût, photo d'une couleur...).
 async function saveProductDoc(p){
   if(!FIREBASE_OK || !p){ warnStorage(); return false; }
+  stampOutAt(p);
   for(let attempt=0; attempt<2; attempt++){
     try{
       await withTimeout(db.collection('products').doc(p.id).set(p), 20000);
@@ -2588,22 +2610,60 @@ function openStockFilter(type){
   document.getElementById('view-liste').classList.add('active');
   renderFilteredStockList(type);
 }
+let ruptureTodayOnly = false;
+function outWhen(t){
+  if(!t) return '';
+  const d = new Date(t), now = new Date();
+  const hm = d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+  if(d.toDateString() === now.toDateString()) return "Aujourd'hui " + hm;
+  const y = new Date(now); y.setDate(now.getDate()-1);
+  if(d.toDateString() === y.toDateString()) return 'Hier ' + hm;
+  return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'}) + ' ' + hm;
+}
 function renderFilteredStockList(type){
   const wrap = document.getElementById('listWrap');
-  const items = products.filter(p=> type === 'out' ? p.qty <= 0 : (p.qty > 0 && p.qty <= 2));
-  const outColors = type === 'out' ? getOutColors() : [];
-  if(items.length === 0 && outColors.length === 0){
-    wrap.innerHTML = `<div class="empty"><h3>Aucun résultat</h3><p>${type==='out' ? 'Aucun produit en rupture de stock.' : 'Aucun produit en stock faible.'}</p></div>`;
+  if(type !== 'out'){
+    const items = products.filter(p=> p.qty > 0 && p.qty <= 2);
+    if(!items.length){ wrap.innerHTML = '<div class="empty"><h3>Aucun résultat</h3><p>Aucun produit en stock faible.</p></div>'; return; }
+    wrap.innerHTML = '<div class="grid-wrap">' + items.map(p=> stockCardHtml(p, null, null, false)).join('') + '</div>';
     return;
   }
-  let html = '<div class="grid-wrap">';
-  items.forEach((p)=>{
-    const isOut = p.qty <= 0;
-    const isLow = !isOut && p.qty <= 2;
-    const pillClass = isOut ? 'zero' : (isLow ? 'low' : 'ok');
-    const pillText = isOut ? 'Rupture' : (p.qty + ' en stock');
-    const colorCount = (p.colors || []).length;
-    html += `<div class="product ${isOut?'out':''}" onclick="openProductModal('${p.id}')">
+  // produits ET couleurs en rupture, les plus récentes d'abord
+  const today = new Date().toDateString();
+  let entries = [];
+  products.forEach(p=>{ if((Number(p.qty)||0) <= 0) entries.push({p, c:null, i:null, t:p.outAt||0, by:p.outBy||''}); });
+  getOutColors().forEach(({p,c,i})=> entries.push({p, c, i, t:c.outAt||0, by:c.outBy||''}));
+  entries.sort((x,y)=> y.t - x.t);
+  const nToday = entries.filter(e=> e.t && new Date(e.t).toDateString() === today).length;
+  if(ruptureTodayOnly) entries = entries.filter(e=> e.t && new Date(e.t).toDateString() === today);
+  let html = `<div class="rupt-filter">
+      <button class="chip ${ruptureTodayOnly?'':'active'}" onclick="ruptureTodayOnly=false;renderFilteredStockList('out')">Toutes</button>
+      <button class="chip ${ruptureTodayOnly?'active':''}" onclick="ruptureTodayOnly=true;renderFilteredStockList('out')">🔥 Aujourd'hui (${nToday})</button>
+    </div>`;
+  if(!entries.length){
+    wrap.innerHTML = html + `<div class="empty"><h3>Aucun résultat</h3><p>${ruptureTodayOnly ? "Aucune rupture aujourd'hui." : 'Aucun produit en rupture de stock.'}</p></div>`;
+    return;
+  }
+  html += '<div class="grid-wrap">' + entries.map(e=> stockCardHtml(e.p, e.c, e.i, true, e.t, e.by)).join('') + '</div>';
+  wrap.innerHTML = html;
+}
+function stockCardHtml(p, c, i, isOut, t, by){
+  const when = t ? `<div class="rupt-when ${new Date(t).toDateString()===new Date().toDateString()?'today':''}">🕒 ${outWhen(t)}${by?' · '+escapeHtml(by):''}</div>` : '';
+  if(c){
+    return `<div class="product out" onclick="openColorsModal('${p.id}')">
+      <div class="img-wrap"><img src="${c.img || placeholderImg()}"><span class="qty-badge zero">Rupture</span></div>
+      <div class="info">
+        <div class="name">${escapeHtml(c.name ? p.name + ' — ' + c.name : colorLabel(p.name, i))}</div>
+        <div class="meta">${Number(c.price != null ? c.price : p.price).toFixed(2)} DA</div>
+        <div class="code" style="color:var(--mauve-dark);">🎨 Couleur · ${escapeHtml(p.cat)}</div>
+        ${when}
+      </div>
+    </div>`;
+  }
+  const pillClass = isOut ? 'zero' : 'low';
+  const pillText = isOut ? 'Rupture' : (p.qty + ' en stock');
+  const colorCount = (p.colors || []).length;
+  return `<div class="product ${isOut?'out':''}" onclick="openProductModal('${p.id}')">
       <div class="img-wrap">
         <img src="${p.img || placeholderImg()}">
         ${p.img ? `<button class="img-dl-btn" onclick="event.stopPropagation(); downloadProductImage('${p.id}')" title="Télécharger la photo">${dlIconSvg()}</button>` : ''}
@@ -2614,29 +2674,10 @@ function renderFilteredStockList(type){
         <div class="meta">${Number(p.price).toFixed(2)} DA</div>
         <div class="code">#${p.code}</div>
         <div class="code" style="color:var(--mauve-dark);">${escapeHtml(p.cat)}</div>
+        ${when}
         <button class="colors-link" onclick="event.stopPropagation(); openColorsModal('${p.id}')">🎨 ${colorCount>0 ? colorCount+' couleur'+(colorCount>1?'s':'') : 'Voir les couleurs'}</button>
       </div>
     </div>`;
-  });
-  html += '</div>';
-  if(outColors.length){
-    html += `<div class="dash-section-title" style="margin:18px 4px 8px;">🎨 Couleurs en rupture (${outColors.length})</div><div class="grid-wrap">`;
-    outColors.forEach(({p,c,i})=>{
-      html += `<div class="product out" onclick="openColorsModal('${p.id}')">
-        <div class="img-wrap">
-          <img src="${c.img || placeholderImg()}">
-          <span class="qty-badge zero">Rupture</span>
-        </div>
-        <div class="info">
-          <div class="name">${escapeHtml(colorLabel(p.name, i))}</div>
-          <div class="meta">${Number(c.price != null ? c.price : p.price).toFixed(2)} DA</div>
-          <div class="code" style="color:var(--mauve-dark);">${escapeHtml(p.cat)}</div>
-        </div>
-      </div>`;
-    });
-    html += '</div>';
-  }
-  wrap.innerHTML = html;
 }
 document.getElementById('btn-back-cats').addEventListener('click', showCatFolders);
 
