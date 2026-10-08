@@ -587,6 +587,7 @@
   transform:translateY(-140%);transition:transform .35s cubic-bezier(.2,.9,.3,1.2);cursor:pointer;max-width:560px;margin:0 auto;}
 #ruptureBanner.show{transform:translateY(0);}
 #ruptureBanner .rb-ico{font-size:28px;line-height:1;}
+#ruptureBanner .rb-img{width:52px;height:52px;border-radius:12px;object-fit:cover;flex-shrink:0;filter:grayscale(40%);border:2px solid rgba(255,255,255,.6);}
 #ruptureBanner .rb-txt{display:flex;flex-direction:column;gap:2px;font-size:14px;}
 #ruptureBanner .rb-txt b{font-size:15px;}
 
@@ -1538,8 +1539,8 @@ let ruptureTimer = null;
 function buildStockMap(list){
   const m = {};
   list.forEach(p=>{
-    m[p.id] = {qty:p.qty||0, label:p.name};
-    (p.colors||[]).forEach((c,i)=>{ m[p.id+'#'+i] = {qty:c.qty||0, label:colorLabel(p.name, i)}; });
+    m[p.id] = {qty:p.qty||0, label:p.name, img:p.img||''};
+    (p.colors||[]).forEach((c,i)=>{ m[p.id+'#'+i] = {qty:c.qty||0, label:colorLabel(p.name, i), img:(c&&c.img)||''}; });
   });
   return m;
 }
@@ -1548,14 +1549,14 @@ function detectNewRuptures(){
   if(stockPrevMap){
     Object.keys(cur).forEach(k=>{
       const prev = stockPrevMap[k];
-      if(prev && prev.qty > 0 && cur[k].qty <= 0) pendingRuptures.push(cur[k].label);
+      if(prev && prev.qty > 0 && cur[k].qty <= 0) pendingRuptures.push({label:cur[k].label, img:cur[k].img});
     });
     if(pendingRuptures.length && !ruptureTimer){
       // regroupe les ruptures survenues ensemble (une même commande peut en provoquer plusieurs)
       ruptureTimer = setTimeout(()=>{
-        const names = Array.from(new Set(pendingRuptures));
+        const seen = new Set(), list = pendingRuptures.filter(x=> !seen.has(x.label) && seen.add(x.label));
         pendingRuptures = []; ruptureTimer = null;
-        notifyRupture(names);
+        notifyRupture(list.map(x=>x.label), list.map(x=>x.img));
       }, 700);
     }
   }
@@ -2199,7 +2200,7 @@ function playRuptureTone(){
     });
   }catch(e){}
 }
-function showRuptureBanner(text){
+function showRuptureBanner(text, pic){
   let b = document.getElementById('ruptureBanner');
   if(!b){
     b = document.createElement('div');
@@ -2207,17 +2208,19 @@ function showRuptureBanner(text){
     b.addEventListener('click', ()=>{ b.classList.remove('show'); openStockFilter('out'); });
     document.body.appendChild(b);
   }
-  b.innerHTML = '<div class="rb-ico">⚠️</div><div class="rb-txt"><b>Rupture de stock</b><span></span></div>';
+  b.innerHTML = (pic ? '<img class="rb-img" alt="">' : '<div class="rb-ico">⚠️</div>') + '<div class="rb-txt"><b>⚠️ Rupture de stock</b><span></span></div>';
+  if(pic) b.querySelector('.rb-img').src = pic;
   b.querySelector('span').textContent = text;
   b.classList.add('show');
   clearTimeout(showRuptureBanner.t);
   showRuptureBanner.t = setTimeout(()=> b.classList.remove('show'), 9000);
 }
-async function notifyRupture(names){
+async function notifyRupture(names, imgs){
   if(!currentUser || !names.length) return;
   const shown = names.slice(0,3).join(' • ') + (names.length>3 ? ' +' + (names.length-3) + ' autres' : '');
   const title = names.length > 1 ? '⚠️ ' + names.length + ' ruptures de stock' : '⚠️ Rupture de stock';
-  showRuptureBanner(shown);
+  const pic = (imgs || []).find(Boolean) || '';   // photo du modèle / de la couleur épuisée
+  showRuptureBanner(shown, pic);
   if(soundMode === 'sound') playRuptureTone();
   if(soundMode !== 'mute'){ try{ if(navigator.vibrate) navigator.vibrate([300,150,300,150,500]); }catch(e){} }
   if(!notifPrefEnabled()) return;
@@ -2225,13 +2228,16 @@ async function notifyRupture(names){
   try{
     if('serviceWorker' in navigator && navigator.serviceWorker.ready){
       const reg = await navigator.serviceWorker.ready;
-      reg.showNotification(title, {
-        body, icon:'icon-192.png', badge:'icon-192.png',
+      const opts = {
+        body, icon: pic || 'icon-192.png', badge:'icon-192.png',
         vibrate:[300,150,300,150,500], tag:'rupture-'+Date.now(), renotify:true,
         requireInteraction:true
-      });
+      };
+      if(pic) opts.image = pic;                        // grande photo quand on déplie la notification
+      try{ await reg.showNotification(title, opts); }
+      catch(e){ delete opts.image; opts.icon = 'icon-192.png'; await reg.showNotification(title, opts); }
     } else if('Notification' in window){
-      new Notification(title, {body, icon:'icon-192.png'});
+      new Notification(title, {body, icon: pic || 'icon-192.png'});
     }
   }catch(e){}
 }
