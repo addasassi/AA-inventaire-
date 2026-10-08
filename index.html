@@ -2552,10 +2552,19 @@ async function deleteCategory(cat){
   await loadProducts();
   const count = products.filter(p=>p.cat===cat).length;
   if(count > 0){
-    toast('Videz d\'abord cette catégorie (' + count + ' produit' + (count>1?'s':'') + ')', true);
+    await confirmDialog({
+      title: 'Impossible de supprimer « ' + cat + ' »',
+      text: 'Cette catégorie contient ' + count + ' produit' + (count>1?'s':'') + '. Déplacez-les ou supprimez-les d\'abord.',
+      ok: 'Compris', cancel: null
+    });
     return;
   }
-  if(!confirm('Supprimer la catégorie « ' + cat + ' » ?')) return;
+  const ok = await confirmDialog({
+    title: 'Supprimer la catégorie « ' + cat + ' » ?',
+    text: 'Cette action est définitive.',
+    ok: 'Oui, supprimer', cancel: 'Non, garder'
+  });
+  if(!ok) return;
   CATS = CATS.filter(c=> c!==cat);
   await saveCategories();
   populateCatSelect();
@@ -4720,7 +4729,9 @@ function confirmDialog({title, text, ok = 'Confirmer', cancel = 'Annuler'}){
     m.querySelector('h3').textContent = title || '';
     m.querySelector('p').textContent = text || '';
     const bOk = m.querySelector('#cd-ok'), bNo = m.querySelector('#cd-cancel');
-    bOk.textContent = ok; bNo.textContent = cancel;
+    bOk.textContent = ok; bNo.textContent = cancel || '';
+    bNo.style.display = cancel === null ? 'none' : '';            // cancel:null → simple message, un seul bouton
+    bOk.style.background = cancel === null ? 'var(--plum,#3a2632)' : '';
     const done = v=>{ m.classList.remove('show'); bOk.onclick = bNo.onclick = m.onclick = null; resolve(v); };
     bOk.onclick = ()=> done(true);
     bNo.onclick = ()=> done(false);
