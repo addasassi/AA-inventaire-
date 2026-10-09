@@ -559,7 +559,12 @@ export default {
         const pid = o && o.zr && o.zr.parcelId;
         if(!pid) return json({ok: false, error: 'pas de colis'}, 400);
         const out = {parcel: await zr(env, '/parcels/' + pid)};
-        for(const sub of ['/history', '/situations', '/events', '/timeline']){ try{ out[sub] = await zr(env, '/parcels/' + pid + sub); }catch(e){ out[sub] = String(e && e.message || e).slice(0, 120); } }
+        const probes = Array.isArray(body.probe) ? body.probe.slice(0, 40) : [];
+        for(const pr of probes){
+          const u = String(pr).replace(/^POST /, '').replace('{id}', pid).replace('{tn}', encodeURIComponent((o.zr && o.zr.tracking) || ''));
+          try{ const r = await zr(env, u, pr.startsWith('POST ') ? {method: 'POST', body: JSON.stringify({parcelId: pid, pageNumber: 1, pageSize: 50})} : {}); out[pr] = JSON.stringify(r).slice(0, 3000); }
+          catch(e){ out[pr] = 'ERR ' + String(e && e.message || e).slice(0, 100); }
+        }
         return json(out);
       }
       if(path === '/label'){
