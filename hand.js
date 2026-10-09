@@ -47,7 +47,7 @@
     if(!isHand(o)) return '';
     if(!isPlanned(o)){
       const when = o.handDone ? new Date(o.handDone).toLocaleString('fr-FR', {dateStyle: 'short', timeStyle: 'short'}) : new Date(o.createdAt).toLocaleString('fr-FR', {dateStyle: 'short', timeStyle: 'short'});
-      return `<div class="hd-box ok">🤝 <b>Remise en main propre faite</b><br><span>${when}${o.customer.address ? ' · ' + esc(o.customer.address) : ''}</span></div>`;
+      return `<div class="hd-box ok"><b style="font-size:16px">✅ Livrée</b> — 🤝 remise en main propre<br><span>${when}${o.customer.address ? ' · ' + esc(o.customer.address) : ''}</span></div>`;
     }
     const late = o.deferredDate < todayIso(), today = o.deferredDate === todayIso();
     return `<div class="hd-box ${late ? 'late' : (today ? 'today' : '')}">🤝 <b>Remise prévue ${today ? "aujourd'hui" : 'le ' + fmtD(o.deferredDate)}</b>${late ? ' — <b>date dépassée</b>' : ''}

@@ -4611,7 +4611,7 @@ function renderOrdersHistory(){
     const itemsTxt = o.items.map(it=> it.qty+'x '+escapeHtml(it.name)).join(', ');
     const d = new Date(o.createdAt);
     const dateTxt = d.toLocaleDateString('fr-FR') + ' ' + d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
-    const dtLabel = o.customer.deliveryType === 'stopdesk' ? 'Stop Desk' : (o.customer.deliveryType === 'main' ? ((o.deferred && o.deferredDate && !o.handDone) ? '🤝 Remise en main propre (prévue)' : '🤝 Remise en main propre ✅') : 'Livraison à domicile');
+    const dtLabel = o.customer.deliveryType === 'stopdesk' ? 'Stop Desk' : (o.customer.deliveryType === 'main' ? ((o.deferred && o.deferredDate && !o.handDone) ? '🤝 Remise en main propre (prévue)' : '🤝 En main propre · ✅ Livrée') : 'Livraison à domicile');
     const deferredBadge = o.deferred && o.deferredDate ? (()=>{
       const late = daysLate(o.deferredDate);
       const dLabel = new Date(o.deferredDate+'T00:00:00').toLocaleDateString('fr-FR');
@@ -4651,7 +4651,7 @@ function showOrderDetail(id){
   const o = orders.find(x=>x.id===id);
   if(!o) return;
   currentDetailOrderId = id;
-  const dtLabel = o.customer.deliveryType === 'stopdesk' ? 'Stop Desk' : (o.customer.deliveryType === 'main' ? ((o.deferred && o.deferredDate && !o.handDone) ? '🤝 Remise en main propre (prévue)' : '🤝 Remise en main propre ✅') : 'Livraison à domicile');
+  const dtLabel = o.customer.deliveryType === 'stopdesk' ? 'Stop Desk' : (o.customer.deliveryType === 'main' ? ((o.deferred && o.deferredDate && !o.handDone) ? '🤝 Remise en main propre (prévue)' : '🤝 En main propre · ✅ Livrée') : 'Livraison à domicile');
   const odBadgeEl = document.getElementById('od-deferred-badge');
   if(o.deferred && o.deferredDate){
     const late = daysLate(o.deferredDate);
@@ -5299,6 +5299,7 @@ document.getElementById('btn-save-order').addEventListener('click', async ()=>{
     deferred: isDeferred,
     deferredDate: isDeferred ? deferredDate : ''
   };
+  if(isHandOrder && !isDeferred) newOrder.handDone = newOrder.createdAt;   // remise immédiate → livrée
   if(window.zrPrepareOrder) window.zrPrepareOrder(newOrder);
   const orderSaved = await saveOrderDoc(newOrder);
   if(!orderSaved){

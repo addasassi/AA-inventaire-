@@ -106,6 +106,12 @@
     return [s[0], z.state || s[1], s[2], s[3]];
   }
   function badge(o){
+    if(o && o.customer && o.customer.deliveryType === 'main' && !(o.zr && o.zr.parcelId)){
+      const planned = o.deferred && o.deferredDate && !o.handDone;
+      return planned
+        ? '<div class="zr-badges"><div class="zr-badge" style="color:#1d4f86;background:#e3f0ff">🤝 Remise prévue</div></div>'
+        : '<div class="zr-badges"><div class="zr-badge" style="color:#1f7a4a;background:#dcf3e6">✅ Livrée · 🤝 En main propre</div></div>';
+    }
     const i = info(o);
     if(!i) return '';
     const t = o.zr.tracking ? ' · ' + esc(o.zr.tracking) : '';
