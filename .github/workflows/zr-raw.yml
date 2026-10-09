@@ -16,6 +16,6 @@ jobs:
         env: {TN: '${{ github.event.inputs.tn }}'}
       - run: |
           git config user.name "atelier-stock-bot"; git config user.email "atelier-stock-bot@users.noreply.github.com"
-          git add tools/debug/zr-raw.txt
+          git add tools/debug
           git commit -m "Diagnostic ZR" || exit 0
           for i in 1 2 3; do git pull --rebase -q && git push -q && exit 0; sleep 5; done
