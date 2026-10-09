@@ -30,13 +30,13 @@
      Bénéfice = ventes livrées − coût d'achat − livraison ZR − retours ZR − sponsor
      Sponsor saisi en € par jour → $ (taux du jour) → DA (prix USDT réglable). */
   const TARIF = {1:[1400,980],2:[750,530],3:[950,680],4:[800,530],5:[800,530],6:[800,530],7:[950,680],8:[1050,730],9:[750,530],10:[800,530],11:[1600,1130],12:[850,530],13:[700,530],14:[750,530],15:[800,530],16:[650,480],17:[950,680],18:[800,530],19:[800,530],20:[750,580],21:[800,530],22:[700,530],23:[850,530],24:[850,530],25:[800,530],26:[750,530],27:[700,530],28:[900,580],29:[700,530],30:[950,730],31:[500,380],32:[1000,680],34:[800,530],35:[800,530],36:[850,530],38:[750,530],39:[950,730],40:[800,530],41:[800,530],42:[800,530],43:[800,530],44:[750,530],45:[1000,680],46:[650,530],47:[950,680],48:[750,530],49:[1050,980],51:[950,680],52:[1600,980],53:[1600,1130],54:[1600,0],55:[950,730],57:[950,0],58:[950,730]};
-  let SP = {usdt: 254, retDefault: 250, days: {}}, spSub = null;
+  let SP = {usdt: 254, retDefault: 200, days: {}}, spSub = null;
   function subSponsor(){
     if(spSub || typeof db === 'undefined') return;
     try{
       spSub = db.collection('meta').doc('sponsor').onSnapshot(d => {
         const x = (d.exists && d.data()) || {};
-        SP = {usdt: Number(x.usdt) || 254, retDefault: x.retDefault != null && x.retDefault !== '' ? Number(x.retDefault) : 250, days: x.days || {}, lastRate: Number(x.lastRate) || 0};
+        SP = {usdt: Number(x.usdt) || 254, retDefault: x.retDefault != null && x.retDefault !== '' ? Number(x.retDefault) : 200, days: x.days || {}, lastRate: Number(x.lastRate) || 0};
         maybeRender();
       }, () => { spSub = null; });
     }catch(e){ spSub = null; }
@@ -82,7 +82,7 @@
     const u = Number(String(document.getElementById('pf-usdt').value).replace(',', '.'));
     const r = Number(String(document.getElementById('pf-ret').value).replace(',', '.'));
     if(!(u > 0)){ toast('Prix USDT invalide', true); return; }
-    try{ await db.collection('meta').doc('sponsor').set({usdt: u, retDefault: r >= 0 ? r : 250}, {merge: true}); ['pf-usdt', 'pf-ret'].forEach(id => { const el = document.getElementById(id); if(el) delete el.dataset.touched; }); toast('✅ Réglages enregistrés'); }
+    try{ await db.collection('meta').doc('sponsor').set({usdt: u, retDefault: r >= 0 ? r : 200}, {merge: true}); ['pf-usdt', 'pf-ret'].forEach(id => { const el = document.getElementById(id); if(el) delete el.dataset.touched; }); toast('✅ Réglages enregistrés'); }
     catch(err){ toast('Échec : ' + (err && err.message || err), true); }
   };
 

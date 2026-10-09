@@ -95,7 +95,7 @@ function reportDateOf(p, depth){
   }
   for(const k of Object.keys(p)){
     const v = p[k];
-    if(/situation|comment|note|remark|attempt/i.test(k) || (depth > 0 && /name|description|label|title/i.test(k))){
+    if(/situation|comment|note|remark|attempt|metadata|meta$/i.test(k) || (depth > 0 && /name|description|label|title/i.test(k))){
       if(typeof v === 'string' && /report/i.test(v)){ const d = toIsoDay(v.replace(/^[^]*?report\w*/i, '')); if(d) return d; }
       if(v && typeof v === 'object'){ const d = reportDateOf(v, depth + 1); if(d) return d; }
     }
@@ -431,7 +431,7 @@ async function trackOrder(env, o){
     situationNote: noteOf(p) || '',
     // depuis quand l'état / la situation n'ont pas changé (pour repérer les colis bloqués)
     stateAt: ((p.state && (p.state.description || p.state.name)) || z.state) !== z.state ? nowIso : (z.stateAt || z.sentAt || nowIso),
-    situationAt: (isNoSituation(sit) ? '' : sit) !== (z.situation || '') ? nowIso : (z.situationAt || nowIso),
+    situationAt: (p.lastSituationUpdateAt ? new Date(String(p.lastSituationUpdateAt).replace(/(\.\d{3})\d+/, '$1') + (/Z|[+-]\d\d:?\d\d$/.test(p.lastSituationUpdateAt) ? '' : 'Z')).toISOString() : '') || ((isNoSituation(sit) ? '' : sit) !== (z.situation || '') ? nowIso : (z.situationAt || nowIso)),
     status: final ? stage : 'sent', active: !final || keep, lastCheck: Date.now(), updatedAt: nowIso};
   await saveZr(o.id, nz);
   return nz;
