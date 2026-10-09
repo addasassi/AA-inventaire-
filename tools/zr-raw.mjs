@@ -14,3 +14,6 @@ const relay = meta.fields.url.stringValue.replace(/\/+$/, '');
 const r = await fetch(relay + '/raw', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id})});
 console.log(r.status);
 console.log(JSON.stringify(await r.json(), null, 1));
+const t = await fetch(relay + '/track', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id})});
+const tj = await t.json();
+console.log('TRACK', JSON.stringify({situation: tj.zr && tj.zr.situation, reportDate: tj.zr && tj.zr.reportDate, situationAt: tj.zr && tj.zr.situationAt, returnPrice: tj.zr && tj.zr.returnPrice}));
