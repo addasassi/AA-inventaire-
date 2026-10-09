@@ -4569,7 +4569,19 @@ function renderOrdersHistory(){
     return;
   }
   const isAdmin = currentUser && currentUser.role === 'admin';
-  const sorted = filtered.slice().sort((a,b)=> b.createdAt.localeCompare(a.createdAt));
+  let sorted = filtered.slice().sort((a,b)=> b.createdAt.localeCompare(a.createdAt));
+  // filtre « seulement après la dernière ligne ✂️ » (toucher le compteur dans le résumé)
+  const lastCutAt = window.ocLastCutAt ? window.ocLastCutAt() : '';
+  if(window.ocNewOnly && lastCutAt){
+    sorted = sorted.filter(o=> (o.createdAt || '') > lastCutAt);
+    if(!sorted.length){
+      window.ordersShown = [];
+      if(window.zrLabelsButton) window.zrLabelsButton([]);
+      if(window.ocNewCount) window.ocNewCount();
+      wrap.innerHTML = '<div class="empty"><h3>Aucune nouvelle commande</h3><p>Rien depuis la dernière ligne ✂️ — touchez le compteur en haut pour tout afficher.</p></div>';
+      return;
+    }
+  } else if(!lastCutAt) window.ocNewOnly = false;
   window.ordersShown = sorted;   // ordre affiché (utilisé pour imprimer les bordereaux ZR)
   if(window.zrLabelsButton) window.zrLabelsButton(sorted);
   wrap.innerHTML = sorted.map(o=>{

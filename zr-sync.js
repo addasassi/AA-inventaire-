@@ -320,15 +320,29 @@
   function newCountInSummary(){
     const sum = document.getElementById('ordersSummary'); if(!sum) return;
     let el = sum.querySelector('.os-new');
-    if(!cuts.length || !shown.length){ if(el) el.remove(); return; }
+    if(!cuts.length || (!shown.length && !window.ocNewOnly)){ if(el) el.remove(); return; }
     const last = cuts[0].at;
     const fresh = shown.filter(o => (o.createdAt || '') > last);
     if(!el){ el = document.createElement('div'); el.className = 'os-new'; sum.appendChild(el); }
-    el.innerHTML = fresh.length
-      ? `🆕 <b>${fresh.length}</b> nouvelle${fresh.length > 1 ? 's' : ''} depuis la ligne ✂️`
-      : '✂️ Aucune nouvelle commande depuis la ligne';
-    el.classList.toggle('zero', !fresh.length);
+    el.style.cursor = 'pointer';
+    el.onclick = () => {
+      window.ocNewOnly = !window.ocNewOnly;
+      selected.clear();
+      if(typeof renderOrdersHistory === 'function') renderOrdersHistory();
+    };
+    if(window.ocNewOnly){
+      el.innerHTML = `✅ Seulement les <b>${fresh.length}</b> nouvelle${fresh.length > 1 ? 's' : ''} après la ligne ✂️ <u>Tout afficher</u>`;
+      el.style.outline = '2px solid #1e7b45'; el.style.background = '#dcf3e6'; el.style.color = '#16502f';
+    } else {
+      el.innerHTML = fresh.length
+        ? `🆕 <b>${fresh.length}</b> nouvelle${fresh.length > 1 ? 's' : ''} depuis la ligne ✂️ <u>Afficher seulement</u>`
+        : '✂️ Aucune nouvelle commande depuis la ligne';
+      el.style.outline = ''; el.style.background = ''; el.style.color = '';
+    }
+    el.classList.toggle('zero', !fresh.length && !window.ocNewOnly);
   }
+  window.ocNewCount = newCountInSummary;
+  window.ocLastCutAt = () => cuts[0] ? cuts[0].at : '';
 
   /* ---------- Ligne de séparation (lots) ----------
      « ✂️ Ligne » trace un trait : tout ce qui est déjà enregistré passe sous la ligne
@@ -359,6 +373,7 @@
     const me = (typeof currentUser !== 'undefined' && currentUser) ? currentUser.name : '';
     try{
       await saveCuts([{at: new Date().toISOString(), by: me, n}].concat(cuts));
+      window.ocNewOnly = false;
       toast('✂️ Ligne tracée — les nouvelles commandes seront au-dessus');
     }catch(e){ toast('Échec — ligne non enregistrée', true); }
   }
