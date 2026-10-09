@@ -2790,7 +2790,7 @@ function renderCatFolders(){
       <span class="os-txt">Rupture de stock</span>
       <span class="os-count">${outTotal}</span>
     </div>`;
-  const dlAll = `<button class="btn-primary" style="width:100%;margin:0 0 8px;" onclick="prepareAvailablePhotos(null, this)">⬇️ Toutes les photos disponibles avec prix</button><button class="btn-secondary" style="width:100%;margin:0 0 12px;" onclick="prepareAvailablePhotos(null, this, true)">🖼️ Toutes les photos (même en rupture) — logo + prix</button>`;
+  const dlAll = `<button class="btn-primary" style="width:100%;margin:0 0 12px;" onclick="prepareAvailablePhotos(null, this)">⬇️ Toutes les photos disponibles avec prix</button>`;
   wrap.innerHTML = outBar + dlAll + '<div class="folder-grid">' + CATS.map(cat=>{
     const items = products.filter(p=>p.cat===cat);
     const thumb = catThumb(cat) || catEmojiBg();
