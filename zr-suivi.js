@@ -62,9 +62,50 @@
       }).join('')}</div>`;
   }
 
+  /* ---------- Recherche d'un colis (téléphone, nom, n° de suivi) ---------- */
+  let query = '';
+  const digits = t => String(t || '').replace(/\D/g, '').replace(/^213/, '0');
+  function colorOf(o){
+    const z = o.zr || {};
+    if(z.stage === 'delivered') return '#22c55e';
+    if(z.stage === 'returned') return '#dc2626';
+    const sk = norm(sitOf(o));
+    if(/annul|refus/.test(sk)) return '#ef4444';
+    if(nrpN(o)) return '#f59e0b';
+    if(/report/.test(sk)) return '#8b5cf6';
+    if(z.stage === 'out_for_delivery') return '#14b8a6';
+    if(z.stage === 'at_hub') return '#0ea5e9';
+    if(z.stage === 'in_transit') return '#60a5fa';
+    return '#94a3b8';
+  }
+  function results(){
+    const box = document.getElementById('zs-results');
+    if(!box) return;
+    const q = query.trim(), qd = digits(q), qn = norm(q);
+    if(q.length < 2){ box.innerHTML = ''; return; }
+    const hits = all().filter(o => {
+      if(!o.zr && !(o.customer && o.customer.deliveryType !== 'main')) return false;
+      const c = o.customer || {}, z = o.zr || {};
+      if(qd.length >= 3 && digits(c.phone).includes(qd)) return true;
+      if(z.tracking && norm(z.tracking).replace(/[^a-z0-9]/g, '').includes(qn.replace(/[^a-z0-9]/g, '')) && qn.replace(/[^a-z0-9]/g, '').length >= 3) return true;
+      return qn.length >= 2 && !/^\d+$/.test(q) && norm(c.name).includes(qn);
+    }).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).slice(0, 30);
+    box.innerHTML = hits.length
+      ? `<div class="zs-rcount">${hits.length} colis trouvé${hits.length > 1 ? 's' : ''}</div><div class="zs-list">` + hits.map(o => o.zr && o.zr.parcelId ? card(o, colorOf(o))
+          : `<div class="zs-o" style="--c:#94a3b8" onclick="zsOpen('${esc(o.id)}')"><div class="zs-o-m"><div class="zs-o-n">${esc((o.customer || {}).name || 'Cliente')}</div><div class="zs-o-w">📍 ${esc((o.customer || {}).wilaya || '')}</div><div class="zs-o-s"><span class="zs-pill">${o.zr && o.zr.status === 'error' ? '❌ Erreur ZR' : (o.deferred ? '🕓 Reportée — pas encore envoyée' : '📦 Pas encore envoyée à ZR')}</span><span class="zs-when">${new Date(o.createdAt).toLocaleDateString('fr-FR')}</span></div></div><div class="zs-o-r"><div class="zs-o-p">${money(o.total)}</div></div></div>`).join('') + '</div>'
+      : '<div class="zs-empty">Aucun colis trouvé pour « ' + esc(q) + ' »</div>';
+  }
+  window.zsSearch = v => { query = v; results(); const x = document.getElementById('zs-x'); if(x) x.style.display = v ? '' : 'none'; };
+
   function render(){
-    const root = document.getElementById('zsPage');
-    if(!root) return;
+    const page = document.getElementById('zsPage');
+    if(!page) return;
+    if(!document.getElementById('zs-body')){
+      page.innerHTML = `<div class="zs-search"><span>🔍</span><input id="zs-q" type="text" enterkeyhint="search" autocomplete="off" placeholder="N° de téléphone, nom ou n° de suivi" oninput="zsSearch(this.value)"><button id="zs-x" style="display:none" onclick="var i=document.getElementById('zs-q');i.value='';zsSearch('');i.focus()">✕</button></div>
+        <div id="zs-results"></div><div id="zs-body"></div>`;
+    }
+    results();
+    const root = document.getElementById('zs-body');
     const P = parcels();
     const dom = P.filter(o => (o.customer || {}).deliveryType !== 'stopdesk'), sd = P.filter(o => (o.customer || {}).deliveryType === 'stopdesk');
     const last = P.reduce((m, o) => Math.max(m, Date.parse(o.zr.updatedAt || 0) || 0), 0);
@@ -130,6 +171,11 @@
     }, 3000);
     const st = document.createElement('style');
     st.textContent = `
+      .zs-search{display:flex;align-items:center;gap:8px;background:var(--card);border:2px solid #FFCC00;border-radius:14px;padding:4px 6px 4px 12px;margin:2px 0 10px;}
+      .zs-search input{flex:1;min-width:0;border:none;background:transparent;color:inherit;font:inherit;font-size:16px;padding:10px 0;outline:none;}
+      .zs-search button{border:none;background:transparent;color:inherit;font-size:18px;padding:6px 10px;cursor:pointer;}
+      #zs-results{margin-bottom:6px;} #zs-results:empty{display:none;}
+      .zs-rcount{font-size:12.5px;font-weight:700;color:var(--mauve-dark);margin:0 2px 6px;}
       .zs-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:2px 0 12px;}
       .zs-sub{font-size:12.5px;color:var(--mauve-dark);}
       .zs-refresh{border:none;border-radius:12px;padding:9px 14px;background:#FFCC00;color:#111;font:inherit;font-weight:800;font-size:13px;cursor:pointer;white-space:nowrap;}
