@@ -114,8 +114,8 @@
     }
     const i = info(o);
     if(!i) return '';
-    const t = o.zr.tracking ? ' · ' + esc(o.zr.tracking) : '';
-    return `<div class="zr-badges"><div class="zr-badge" style="color:${i[2]};background:${i[3]}">${i[0]} ${esc(i[1])}${t}</div>${sitBadge(o)}</div>`;
+    const t = o.zr.tracking ? `<div class="zr-badge" style="color:#111;background:#FFCC00;font-family:monospace;font-weight:800">${esc(o.zr.tracking)}</div>` : '';
+    return `<div class="zr-badges"><div class="zr-badge" style="color:${i[2]};background:${i[3]}">${i[0]} ${esc(i[1])}</div>${t}${sitBadge(o)}</div>`;
   }
 
   let detailId = null;
@@ -213,7 +213,7 @@
       .zr-err{font-size:12.5px;margin-top:8px;color:#a4483f;font-weight:700;}
       .zr-track{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;}
       .zr-track span{opacity:.7;}
-      .zr-track b{direction:ltr;letter-spacing:.3px;}
+      .zr-track b{direction:ltr;letter-spacing:.3px;background:#FFCC00;color:#111;font-family:monospace;font-weight:800;padding:3px 9px;border-radius:7px;}
       .zr-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
       .zr-btn{flex:1;min-width:120px;border:none;border-radius:10px;padding:10px;font-weight:800;font-size:13px;background:#1a1a1a;color:#ffd200;cursor:pointer;}
       .zr-btn.ghost{background:var(--card,#fff);color:inherit;border:1px solid var(--line,#ddd);}

@@ -48,7 +48,7 @@
       <div class="zs-o-m"><div class="zs-o-n">${esc(c.name || 'Cliente')}</div>
         <div class="zs-o-w">📍 ${esc(c.wilaya || '')}${c.commune ? ' — ' + esc(c.commune) : ''}</div>
         <div class="zs-o-s"><span class="zs-pill">${esc(sit || z.state || '—')}</span><span class="zs-when">${when}</span></div>
-        <div class="zs-o-t">${esc(z.tracking || '')}</div></div>
+        ${z.tracking ? `<div class="zs-o-t">${esc(z.tracking)}</div>` : ''}</div>
       <div class="zs-o-r"><div class="zs-o-p">${money(o.total)}</div>${c.phone ? `<a href="tel:${esc(c.phone)}" onclick="event.stopPropagation()" aria-label="Appeler">📞</a>` : ''}</div></div>`;
   }
   function block(type, title, icon, list, rows){
@@ -151,7 +151,7 @@
       .zs-o-s{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px;}
       .zs-pill{background:color-mix(in srgb,var(--c) 28%,#fff);border:1.5px solid var(--c);color:#111;font-weight:800;font-size:12.5px;padding:3px 9px;border-radius:999px;}
       .zs-when{font-size:12.5px;font-weight:700;}
-      .zs-o-t{font-family:monospace;font-size:12.5px;font-weight:700;margin-top:6px;letter-spacing:.02em;}
+      .zs-o-t{display:inline-block;background:#FFCC00;color:#111;font-family:monospace;font-size:13px;font-weight:800;margin-top:7px;padding:3px 9px;border-radius:7px;letter-spacing:.02em;}
       .zs-o-r{text-align:right;white-space:nowrap;display:flex;flex-direction:column;align-items:flex-end;justify-content:space-between;gap:8px;}
       .zs-o-p{font-weight:900;font-size:15px;}
       .zs-o-r a{text-decoration:none;font-size:20px;background:#dcf3e6;border-radius:12px;padding:6px 9px;}
