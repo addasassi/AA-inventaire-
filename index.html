@@ -2416,6 +2416,29 @@ document.addEventListener('pointerdown', e=>{
   if(el.inputMode !== 'text'){ el.inputMode = 'text'; if(document.activeElement === el){ el.blur(); setTimeout(()=> el.focus(), 0); } }
 }, true);
 document.addEventListener('focusout', e=>{ if(e.target && e.target.matches && e.target.matches(SCAN_INPUTS)) e.target.inputMode = 'none'; }, true);
+/* page ouverte gardée en mémoire : après un rechargement (glisser vers le bas), on revient sur la même page */
+(function(){
+  const KEY = 'atelier-last-tab';
+  document.addEventListener('click', e=>{
+    const b = e.target.closest && e.target.closest('.tab-btn');
+    if(b && b.dataset.tab){ try{ sessionStorage.setItem(KEY, b.dataset.tab); sessionStorage.removeItem(KEY + '-y'); }catch(_){} }
+  }, true);
+  window.addEventListener('pagehide', ()=>{ try{ sessionStorage.setItem(KEY + '-y', String(window.scrollY || 0)); }catch(_){} });
+  let tries = 0;
+  const restore = setInterval(()=>{
+    if(++tries > 60){ clearInterval(restore); return; }
+    if(typeof currentUser === 'undefined' || !currentUser) return;
+    let tab = null, y = 0;
+    try{ tab = sessionStorage.getItem(KEY); y = Number(sessionStorage.getItem(KEY + '-y')) || 0; }catch(_){}
+    if(!tab || tab === 'accueil'){ clearInterval(restore); return; }
+    const b = document.querySelector('.tab-btn[data-tab="' + tab + '"]');
+    if(!b) return;                                   // page ajoutée par un module pas encore chargé
+    clearInterval(restore);
+    if(getComputedStyle(b).display === 'none') return; // page réservée à l'admin
+    b.click();
+    if(y) setTimeout(()=> window.scrollTo(0, y), 700);
+  }, 250);
+})();
 document.querySelectorAll('.tab-btn').forEach(btn=>{
   btn.addEventListener('click', ()=>{
     // en changeant de page : fermer le clavier
