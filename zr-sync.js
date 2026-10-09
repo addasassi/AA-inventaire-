@@ -118,6 +118,11 @@
     const el = document.getElementById('od-zr');
     if(!el) return;
     const z = o.zr;
+    if(o.customer && o.customer.deliveryType === 'main' && !(z && z.parcelId)){   // 🤝 en main propre : pas de ZR
+      el.innerHTML = window.handBox ? window.handBox(o) : '';
+      if(window.handBind) window.handBind(el, o);
+      return;
+    }
     if(!relay){ el.innerHTML = ''; return; }
     if(!z){
       el.innerHTML = `<div class="zr-box"><div class="zr-h">🚚 ZR Express</div><div class="zr-sub">Commande pas envoyée à ZR.</div>

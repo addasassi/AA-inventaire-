@@ -4598,12 +4598,15 @@ function renderOrdersHistory(){
     const itemsTxt = o.items.map(it=> it.qty+'x '+escapeHtml(it.name)).join(', ');
     const d = new Date(o.createdAt);
     const dateTxt = d.toLocaleDateString('fr-FR') + ' ' + d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
-    const dtLabel = o.customer.deliveryType === 'stopdesk' ? 'Stop Desk' : (o.customer.deliveryType === 'main' ? '🤝 Remise en main propre ✅' : 'Livraison à domicile');
+    const dtLabel = o.customer.deliveryType === 'stopdesk' ? 'Stop Desk' : (o.customer.deliveryType === 'main' ? ((o.deferred && o.deferredDate && !o.handDone) ? '🤝 Remise en main propre (prévue)' : '🤝 Remise en main propre ✅') : 'Livraison à domicile');
     const deferredBadge = o.deferred && o.deferredDate ? (()=>{
       const late = daysLate(o.deferredDate);
       const dLabel = new Date(o.deferredDate+'T00:00:00').toLocaleDateString('fr-FR');
       const cls = late > 0 ? 'late' : (late === 0 ? 'today' : 'future');
-      const txt = late > 0 ? `En retard · envoi prévu le ${dLabel}` : `🕓 Reportée · envoi le ${dLabel}`;
+      const isHandO = o.customer && o.customer.deliveryType === 'main';
+      const txt = isHandO
+        ? (late > 0 ? `🤝 RDV dépassé (${dLabel}) — à confirmer` : (late === 0 ? `🤝 Remise aujourd'hui` : `🤝 Remise prévue le ${dLabel}`))
+        : (late > 0 ? `En retard · envoi prévu le ${dLabel}` : `🕓 Reportée · envoi le ${dLabel}`);
       return `<div class="deferred-badge ${cls}">${escapeHtml(txt)}</div>`;
     })() : '';
     return `<div class="order-card ${o.deferred ? 'deferred' : ''}" onclick="showOrderDetail('${o.id}')">
@@ -4635,7 +4638,7 @@ function showOrderDetail(id){
   const o = orders.find(x=>x.id===id);
   if(!o) return;
   currentDetailOrderId = id;
-  const dtLabel = o.customer.deliveryType === 'stopdesk' ? 'Stop Desk' : (o.customer.deliveryType === 'main' ? '🤝 Remise en main propre ✅' : 'Livraison à domicile');
+  const dtLabel = o.customer.deliveryType === 'stopdesk' ? 'Stop Desk' : (o.customer.deliveryType === 'main' ? ((o.deferred && o.deferredDate && !o.handDone) ? '🤝 Remise en main propre (prévue)' : '🤝 Remise en main propre ✅') : 'Livraison à domicile');
   const odBadgeEl = document.getElementById('od-deferred-badge');
   if(o.deferred && o.deferredDate){
     const late = daysLate(o.deferredDate);
@@ -4757,6 +4760,7 @@ function openEditOrderModal(id){
   document.getElementById('eo-dt-stopdesk').classList.toggle('active', eoDeliveryType==='stopdesk');
   document.getElementById('eo-dt-main').classList.toggle('active', eoDeliveryType==='main');
   handFields('eo', eoDeliveryType==='main');
+  if(window.handRelabel) window.handRelabel('eo', eoDeliveryType==='main');
   document.getElementById('eo-wilaya').value = o.customer.wilaya || '';
   refreshEoCommuneOptions();
   if(o.customer.commune) document.getElementById('eo-commune').value = o.customer.commune;
@@ -5962,5 +5966,6 @@ boot();
 <script src="select-search.js"></script>
 <script src="stats.js"></script>
 <script src="returns.js"></script>
+<script src="hand.js"></script>
 </body>
 </html>

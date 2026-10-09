@@ -20,8 +20,8 @@
   const allOrders = () => (typeof orders !== 'undefined' && Array.isArray(orders)) ? orders : [];
   const allProducts = () => (typeof products !== 'undefined' && Array.isArray(products)) ? products : [];
   const isHand = o => !!(o && o.customer && o.customer.deliveryType === 'main');   // 🤝 remise en main propre = livrée tout de suite
-  const stageOf = o => isHand(o) ? 'delivered' : ((o.zr && o.zr.stage) || '');
-  const Z = o => isHand(o) ? {stage: 'delivered', finalAt: o.createdAt, sentAt: o.createdAt, paid: true, deliveryPrice: 0, returnPrice: 0} : (o.zr || {});
+  const stageOf = o => isHand(o) ? ((o.deferred && o.deferredDate && !o.handDone) ? 'planned' : 'delivered') : ((o.zr && o.zr.stage) || '');
+  const Z = o => isHand(o) ? {stage: stageOf(o), finalAt: o.handDone || o.createdAt, sentAt: o.createdAt, paid: true, deliveryPrice: 0, returnPrice: 0} : (o.zr || {});
   const isDelivered = o => stageOf(o) === 'delivered';
   const isReturned = o => stageOf(o) === 'returned';
   const wilayaOf = o => (o.customer && o.customer.wilaya) || '—';
