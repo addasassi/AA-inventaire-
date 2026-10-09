@@ -156,7 +156,6 @@
     const lines = ['📍 Bureau ZR Express — ' + b.name + ' (' + String(b.n).padStart(2,'0') + ' ' + b.w + ')'];
     if(b.addr) lines.push(b.addr);
     if(b.addrAr) lines.push(b.addrAr);
-    if(b.desk) lines.push('📞 Stop desk : ' + phones(b.desk).join(' / '));
     return lines.join('\n');
   }
   async function doCopy(txt, btn){
