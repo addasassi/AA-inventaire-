@@ -37,7 +37,9 @@
   function prepare(o){
     if(!relay || !o || !o.customer) return;
     const z = o.zr || null;
-    if(z && z.parcelId) return;                                // déjà chez ZR : on ne touche plus
+    const w0 = (typeof wilayasList !== 'undefined' ? wilayasList : []).find(x => norm(x.name) === norm(o.customer.wilaya));
+    if(w0) o.customer.wilayaCode = w0.code;
+    if(z && z.parcelId) return;                                // déjà chez ZR : remplacé via zrUpdateParcel après l'enregistrement
     // anciennes commandes (avant le branchement ZR) : jamais envoyées automatiquement
     if(!z && Date.now() - Date.parse(o.createdAt || 0) > 10*60*1000) return;
     const w = (typeof wilayasList !== 'undefined' ? wilayasList : []).find(x => norm(x.name) === norm(o.customer.wilaya));
@@ -648,6 +650,22 @@
     #zrPrintModal .zp-cancel{border:1px solid var(--line,#ddd);background:var(--card,#fff);color:inherit;}`;
   document.head.appendChild(cssP);
   window.zrLabelsButton = labelsButton;
+
+  /* ---------- Commande modifiée alors que le colis est déjà chez ZR ---------- */
+  async function updateParcel(o){
+    if(!relay || !o || !o.zr || !o.zr.parcelId) return;
+    if(o.zr.stage && o.zr.stage !== 'created'){ toast('⚠️ Colis déjà en route chez ZR : modification NON envoyée à ZR (contactez ZR)', true); return; }
+    toast('🔄 Mise à jour du colis chez ZR Express…');
+    try{
+      const j = await call('/update', {id: o.id});
+      if(j.ok && j.zr){
+        o.zr = j.zr;
+        toast('✅ Colis ZR mis à jour' + (j.zr.tracking ? ' — nouveau n° ' + j.zr.tracking + ' : réimprimez l\'étiquette' : ''));
+      } else toast('ZR Express : ' + (j.error || 'modification impossible'), true);
+    }catch(e){ toast('ZR Express : ' + (e.message || e), true); }
+    try{ if(typeof renderOrdersHistory === 'function') renderOrdersHistory(); }catch(e){}
+  }
+  window.zrUpdateParcel = updateParcel;
 
   window.zrPrepareOrder = prepare;
   window.zrAfterSave = afterSave;

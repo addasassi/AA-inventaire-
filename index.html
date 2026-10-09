@@ -4843,6 +4843,8 @@ document.getElementById('eo-save').addEventListener('click', async ()=>{
     return;
   }
 
+  const zrKey = x => JSON.stringify([x.customer && x.customer.name, x.customer && x.customer.phone, x.customer && x.customer.wilaya, x.customer && x.customer.commune, x.customer && x.customer.address, x.customer && x.customer.deliveryType, Math.round(Number(x.total)||0)]);
+  const zrBefore = zrKey(o);
   o.customer = Object.assign({}, o.customer, {name, phone, wilaya, commune, address, deliveryType: eoDeliveryType});
   o.items = editingOrderItems;
   o.total = total;
@@ -4857,6 +4859,8 @@ document.getElementById('eo-save').addEventListener('click', async ()=>{
     return;
   }
   if(window.zrAfterSave) window.zrAfterSave(o);
+  // colis déjà chez ZR et infos changées → mise à jour chez ZR
+  if(o.zr && o.zr.parcelId && zrKey(o) !== zrBefore && window.zrUpdateParcel) window.zrUpdateParcel(o);
   await upsertCustomer(o);
   updateDeferredBadge();
   document.getElementById('editOrderModal').classList.remove('show');

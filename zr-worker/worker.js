@@ -524,6 +524,38 @@ export default {
         const url = b && b.parcelLabelFiles && b.parcelLabelFiles[0] && b.parcelLabelFiles[0].fileUrl;
         return url ? json({ok: true, url}) : json({ok: false, error: 'Étiquette indisponible'}, 502);
       }
+      if(path === '/update'){
+        // commande modifiée dans l'app → le colis ZR est remplacé (tant que ZR ne l'a pas encore pris en charge)
+        const o = await getOrder(id);
+        if(!o) return json({ok: false, error: 'Commande introuvable'}, 404);
+        const z = o.zr || {};
+        if(!z.parcelId) return json(await sendOrder(env, id, true));
+        const live = await zr(env, '/parcels/' + z.parcelId).catch(() => null);
+        const st = (live && stageOf(live.state)) || z.stage || 'created';
+        if(st !== 'created'){
+          const lbl = (live && live.state && (live.state.description || live.state.name)) || st;
+          return json({ok: false, locked: true, error: `Colis déjà pris en charge par ZR (${lbl}) : modification impossible depuis l'app, contactez ZR.`});
+        }
+        const delOld = async () => { try{ if(z.tracking) await zr(env, '/parcels/bulk/by-tracking-number', {method: 'DELETE', body: JSON.stringify({trackingNumbers: [z.tracking]})}); }catch(e){ if(!/not found/i.test(e.message)) throw e; } };
+        let np = null;
+        try{ np = await createParcel(env, o); await delOld(); }
+        catch(e){
+          if(e.permanent && !/exist|duplic|externalid|already/i.test(e.message || '')) return json({ok: false, error: e.message || String(e)});
+          await delOld();
+          try{ np = await createParcel(env, o); }
+          catch(e2){
+            const nz = {...z, parcelId: '', tracking: '', status: 'queued', active: true, stage: '', error: e2.message || String(e2), previousTracking: z.tracking || '', updatedAt: new Date().toISOString()};
+            await saveZr(id, nz);
+            return json({ok: false, zr: nz, error: 'Ancien colis annulé, nouveau colis pas encore créé (nouvel essai automatique) : ' + (e2.message || e2)});
+          }
+        }
+        const now = new Date().toISOString();
+        const nz = {...z, status: 'sent', active: true, parcelId: np.parcelId, tracking: np.tracking,
+          state: (np.state && (np.state.description || np.state.name)) || 'Commande reçue', stage: stageOf(np.state) || 'created', situation: '',
+          error: '', previousTracking: z.tracking || '', updatedAt: now, lastCheck: Date.now(), editedAt: now};
+        await saveZr(id, nz);
+        return json({ok: true, replaced: true, zr: nz});
+      }
       if(path === '/cancel'){
         const o = await getOrder(id);
         const t = o && o.zr && o.zr.tracking;
