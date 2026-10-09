@@ -3,6 +3,8 @@ on:
   workflow_dispatch:
     inputs:
       tn: {description: 'N° de suivi', required: true}
+permissions:
+  contents: write
 jobs:
   run:
     runs-on: ubuntu-latest
@@ -10,5 +12,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: {node-version: '20'}
-      - run: node tools/zr-raw.mjs
+      - run: mkdir -p tools/debug && node tools/zr-raw.mjs > tools/debug/zr-raw.txt 2>&1 || true
         env: {TN: '${{ github.event.inputs.tn }}'}
+      - run: |
+          git config user.name "atelier-stock-bot"; git config user.email "atelier-stock-bot@users.noreply.github.com"
+          git add tools/debug/zr-raw.txt
+          git commit -m "Diagnostic ZR" || exit 0
+          for i in 1 2 3; do git pull --rebase -q && git push -q && exit 0; sleep 5; done
