@@ -16,6 +16,7 @@
   const final = o => { const st = o.zr && o.zr.stage; return st === 'delivered' || st === 'returned'; };
   const nrpN = o => { const m = norm(sitOf(o)).match(/r[e]?pond\w*\s+pas\D*(\d)/); return m ? Number(m[1]) : (/repond pas|sans reponse|injoignable/.test(norm(sitOf(o))) ? 1 : 0); };
   const today = () => dayKey(Date.now());
+  const fmtDay = k => { try{ return new Date(k + 'T00:00:00').toLocaleDateString('fr-FR', {weekday: 'long', day: 'numeric', month: 'long'}); }catch(e){ return k; } };
 
   // lignes du tableau : [clé, couleur, libellé, test]
   const ROWS = [
@@ -24,7 +25,7 @@
     ['nrp2', '#fbbf24', 'Ne répond pas 2', o => !final(o) && nrpN(o) === 2],
     ['nrp3', '#f59e0b', 'Ne répond pas 3', o => !final(o) && nrpN(o) >= 3],
     ['ann',  '#ef4444', 'Commande annulée', o => !final(o) && /annul|refus/.test(norm(sitOf(o)))],
-    ['rep',  '#8b5cf6', 'Commande reportée', o => !final(o) && /report/.test(norm(sitOf(o)))],
+    ['rep',  '#10b981', 'Commande reportée', o => !final(o) && /report/.test(norm(sitOf(o)))],
   ];
   const FLOW = [
     ['new',  '#94a3b8', 'Créées — pas encore récupérées', o => !final(o) && (o.zr.stage || 'created') === 'created'],
@@ -48,6 +49,8 @@
       <div class="zs-o-m"><div class="zs-o-n">${esc(c.name || 'Cliente')}</div>
         <div class="zs-o-w">📍 ${esc(c.wilaya || '')}${c.commune ? ' — ' + esc(c.commune) : ''}</div>
         <div class="zs-o-s"><span class="zs-pill">${esc(sit || z.state || '—')}</span><span class="zs-when">${when}</span></div>
+        ${/report/.test(norm(sit)) ? `<div class="zs-rep">📅 ${z.reportDate ? 'Reportée au <b>' + fmtDay(z.reportDate) + '</b>' : 'Date du report pas indiquée par ZR'}${z.situationAt ? ' · reportée le ' + fmtDay(dayKey(z.situationAt)) : ''}</div>` : ''}
+        ${z.situationNote ? `<div class="zs-note">💬 ${esc(z.situationNote)}</div>` : ''}
         ${z.tracking ? `<div class="zs-o-t">${esc(z.tracking)}</div>` : ''}</div>
       <div class="zs-o-r"><div class="zs-o-p">${money(o.total)}</div>${c.phone ? `<a href="tel:${esc(c.phone)}" onclick="event.stopPropagation()" aria-label="Appeler">📞</a>` : ''}</div></div>`;
   }
@@ -72,7 +75,7 @@
     const sk = norm(sitOf(o));
     if(/annul|refus/.test(sk)) return '#ef4444';
     if(nrpN(o)) return '#f59e0b';
-    if(/report/.test(sk)) return '#8b5cf6';
+    if(/report/.test(sk)) return '#10b981';
     if(z.stage === 'out_for_delivery') return '#14b8a6';
     if(z.stage === 'at_hub') return '#0ea5e9';
     if(z.stage === 'in_transit') return '#60a5fa';
@@ -194,6 +197,8 @@
       .zs-o-m{min-width:0;}
       .zs-o-n{font-weight:800;font-size:15.5px;}
       .zs-o-w{font-size:13.5px;font-weight:600;margin-top:3px;overflow-wrap:anywhere;}
+      .zs-rep{margin-top:7px;font-size:13.5px;font-weight:600;background:#d1fae5;color:#065f46;border-radius:9px;padding:6px 9px;}
+      .zs-note{margin-top:6px;font-size:13px;font-style:italic;}
       .zs-o-s{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px;}
       .zs-pill{background:color-mix(in srgb,var(--c) 28%,#fff);border:1.5px solid var(--c);color:#111;font-weight:800;font-size:12.5px;padding:3px 9px;border-radius:999px;}
       .zs-when{font-size:12.5px;font-weight:700;}

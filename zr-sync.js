@@ -80,7 +80,7 @@
     if(/ne repond pas 3|annule/.test(k)) return ['📵', '#fff', '#c0392b'];
     if(/ne repond pas/.test(k)) return ['📵', '#7a4b00', '#ffe7a8'];
     if(/commune erronee/.test(k)) return ['📍', '#7a4b00', '#ffe7a8'];
-    if(/reportee|rendez vous/.test(k)) return ['📅', '#1f6b3a', '#dcf3e6'];
+    if(/report|rendez vous/.test(k)) return ['📅', '#065f46', '#d1fae5'];
     if(/changement stop ?desk/.test(k)) return ['🏢', '#1f6b3a', '#dcf3e6'];
     if(/sms/.test(k)) return ['✉️', '#1a5fa0', '#dcebfa'];
     if(/appel/.test(k)) return ['📞', '#1a5fa0', '#dcebfa'];
@@ -90,7 +90,8 @@
     const t = o && o.zr && o.zr.situation;
     if(!t || /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(t) || o.zr.stage === 'delivered' || o.zr.stage === 'returned') return '';
     const s = sitStyle(t);
-    return `<div class="zr-badge" style="color:${s[1]};background:${s[2]}">${s[0]} ${esc(t)}</div>`;
+    const rd = o.zr.reportDate && /report/i.test(t) ? ' → ' + new Date(o.zr.reportDate + 'T00:00:00').toLocaleDateString('fr-FR', {day: 'numeric', month: 'short'}) : '';
+    return `<div class="zr-badge" style="color:${s[1]};background:${s[2]}">${s[0]} ${esc(t)}${rd}</div>`;
   }
 
   function info(o){

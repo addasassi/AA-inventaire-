@@ -75,6 +75,38 @@ function situationOf(p){
   }
   return '';
 }
+// date à laquelle le colis est reporté (champ du colis ou date écrite dans la situation / le commentaire)
+function toIsoDay(v){
+  if(!v || typeof v !== 'string') return '';
+  let m = v.match(/(\d{4})-(\d{2})-(\d{2})/); if(m) return m[1] + '-' + m[2] + '-' + m[3];
+  m = v.match(/\b(\d{1,2})[\/.-](\d{1,2})(?:[\/.-](\d{2,4}))?\b/);
+  if(m){ const y = m[3] ? (m[3].length === 2 ? '20' + m[3] : m[3]) : String(new Date().getFullYear()); const d = Number(m[1]), mo = Number(m[2]); if(d >= 1 && d <= 31 && mo >= 1 && mo <= 12) return y + '-' + String(mo).padStart(2, '0') + '-' + String(d).padStart(2, '0'); }
+  return '';
+}
+function reportDateOf(p, depth){
+  depth = depth || 0;
+  if(!p || typeof p !== 'object' || depth > 3) return '';
+  for(const k of Object.keys(p)){
+    if(/report|postpon|resched|deferr|schedul|planned|nextattempt|nextdelivery|newdate/i.test(k)){
+      const v = p[k];
+      const d = typeof v === 'string' ? toIsoDay(v) : (v && typeof v === 'object' ? reportDateOf(v, depth + 1) : '');
+      if(d) return d;
+    }
+  }
+  for(const k of Object.keys(p)){
+    const v = p[k];
+    if(/situation|comment|note|remark|attempt/i.test(k) || (depth > 0 && /name|description|label|title/i.test(k))){
+      if(typeof v === 'string' && /report/i.test(v)){ const d = toIsoDay(v.replace(/^[^]*?report\w*/i, '')); if(d) return d; }
+      if(v && typeof v === 'object'){ const d = reportDateOf(v, depth + 1); if(d) return d; }
+    }
+  }
+  return '';
+}
+function noteOf(p){
+  const s = p && (p.situation || p.lastSituation);
+  const c = s && typeof s === 'object' ? (s.comment || s.note || s.remark || s.observation) : '';
+  return typeof c === 'string' ? c.slice(0, 200) : '';
+}
 const isNoSituation = t => !t || /pas de situation/i.test(strip(t));
 
 /* ---------- Firestore (REST) ---------- */
@@ -395,6 +427,8 @@ async function trackOrder(env, o){
     situation: isNoSituation(sit) ? '' : sit,
     deliveryPrice: Number(p.deliveryPrice) || z.deliveryPrice || 0, returnPrice: Number(p.returnPrice) || z.returnPrice || 0,
     finalAt, paid, nrp,
+    reportDate: /report/i.test(sit || '') ? (reportDateOf(p) || (/report/i.test(z.situation || '') ? z.reportDate || '' : '')) : '',
+    situationNote: noteOf(p) || '',
     // depuis quand l'état / la situation n'ont pas changé (pour repérer les colis bloqués)
     stateAt: ((p.state && (p.state.description || p.state.name)) || z.state) !== z.state ? nowIso : (z.stateAt || z.sentAt || nowIso),
     situationAt: (isNoSituation(sit) ? '' : sit) !== (z.situation || '') ? nowIso : (z.situationAt || nowIso),
