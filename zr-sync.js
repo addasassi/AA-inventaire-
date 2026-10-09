@@ -124,10 +124,13 @@
     }else{
       const i = info(o);
       const hist = '';
-      const err = z.status === 'error' ? `<div class="zr-err">${esc(z.error || 'Erreur')}</div>` : '';
+      const pending = !z.parcelId && z.status !== 'error' && !(z.sendAfter && z.sendAfter > today());
+      const err = z.status === 'error' ? `<div class="zr-err">${esc(z.error || 'Erreur')}</div>`
+        : (pending && z.error ? `<div class="zr-err" style="opacity:.9">Dernier essai : ${esc(z.error)}${z.attempts ? ' (' + z.attempts + ' essai' + (z.attempts > 1 ? 's' : '') + ')' : ''}</div>` : '');
       const tr = z.tracking ? `<div class="zr-track"><span>N° de suivi</span><b>${esc(z.tracking)}</b><button class="zr-mini" data-zr="copy">Copier</button></div>` : '';
       const btns = [];
       if(z.status === 'error') btns.push('<button class="zr-btn" data-zr="retry">🔁 Corriger puis réessayer</button>');
+      else if(pending) btns.push('<button class="zr-btn" data-zr="retry">🚚 Envoyer à ZR maintenant</button>');
       if(z.parcelId){
         btns.push('<button class="zr-btn ghost" data-zr="label">🏷️ Étiquette</button>');
         btns.push('<button class="zr-btn ghost" data-zr="track">🔄 Actualiser</button>');
