@@ -207,7 +207,7 @@
       const k = pieceKey(it); const t = top[k] || (top[k] = {label: it.name, v: 0, ca: 0, img: pieceImg(it)}); t.v += q; t.ca += v;
       const p = prodById[it.productId]; const mk = it.productId;
       const m = topModel[mk] || (topModel[mk] = {label: p ? p.name : it.name, v: 0, ca: 0, img: p ? p.img : it.img}); m.v += q; m.ca += v;
-      const c = (p && p.cat) || 'Autre'; cats[c] = (cats[c] || 0) + v;
+      const c = (p && p.cat) || 'Autre'; cats[c] = (cats[c] || 0) + q;
     }));
 
     // vitesse de vente (14 derniers jours) → stock dormant, à racheter
@@ -274,7 +274,7 @@
     const S = lastS = compute();
     const n = S.cur.length, nP = S.prev.length;
     const finished = S.delivered.length + S.returned.length;
-    const wilRows = Object.entries(S.wil).sort((a, b) => b[1].ca - a[1].ca);
+    const wilRows = Object.entries(S.wil).sort((a, b) => b[1].n - a[1].n || b[1].ca - a[1].ca);
     const tops = Object.values(S.top).sort((a, b) => b.v - a.v).slice(0, 10);
     const topModels = Object.values(S.topModel).sort((a, b) => b.v - a.v).slice(0, 10);
     // ↩️ retours : modèles les plus retournés (période) + retours à récupérer (toutes périodes)
@@ -337,10 +337,10 @@
 
       ${section('👗 Les plus vendus', `
         <div class="st-tabs"><button class="on" onclick="zrStatsTab(this,'st-top-c')">Par couleur</button><button onclick="zrStatsTab(this,'st-top-m')">Par modèle</button></div>
-        <div id="st-top-c">${hbars(tops.map(t => ({label: t.label, v: t.v, img: t.img, note: money(t.ca)})), v => v + ' pcs')}</div>
-        <div id="st-top-m" style="display:none">${hbars(topModels.map(t => ({label: t.label, v: t.v, img: t.img, note: money(t.ca)})), v => v + ' pcs')}</div>
+        <div id="st-top-c">${hbars(tops.map(t => ({label: t.label, v: t.v, img: t.img})), v => v + ' pcs')}</div>
+        <div id="st-top-m" style="display:none">${hbars(topModels.map(t => ({label: t.label, v: t.v, img: t.img})), v => v + ' pcs')}</div>
         <h4>Ventes par catégorie</h4>
-        ${hbars(Object.entries(S.cats).sort((a, b) => b[1] - a[1]).map(([c, v]) => ({label: c, v, note: pct(v, S.ca)})), money)}
+        ${(() => { const totP = Object.values(S.cats).reduce((a, b) => a + b, 0); return hbars(Object.entries(S.cats).sort((a, b) => b[1] - a[1]).map(([c, v]) => ({label: c, v, note: pct(v, totP)})), v => v + ' pcs'); })()}
       `)}
 
       ${section('🔁 À racheter bientôt', S.reorder.length ? hbars(S.reorder.map(x => ({label: x.name, v: x.s, img: x.img, note: x.qty <= 0 ? '— <b class="bad-t">rupture</b>' : `— reste ${x.qty}, ≈ ${Math.max(1, Math.round(x.left))} j`})), v => v + ' vendus/14 j', {cls: 'warn'}) : '<div class="st-empty ok">✅ Aucun article ne va manquer cette semaine</div>', 'Pièces vendues au moins 2 fois en 14 jours dont le stock tiendra moins d\'une semaine à ce rythme.')}
@@ -356,7 +356,7 @@
 
       ${section('😴 Modèles qui dorment', S.dormant.length ? hbars(S.dormant, v => v + ' en stock', {cls: 'muted'}) : '<div class="st-empty ok">✅ Tout se vend</div>', 'En stock mais aucune vente depuis 30 jours — pensez à une promo ou une nouvelle photo.' + (S.historyDays < 30 ? ' (Historique de commandes encore court : liste plus fiable dans quelques semaines.)' : ''))}
 
-      ${section('🗺️ Wilayas', hbars(wilRows.slice(0, 15).map(([w, x]) => ({label: w, v: x.ca, note: x.n + ' cmd'})), money))}
+      ${section('🗺️ Wilayas', hbars(wilRows.slice(0, 15).map(([w, x]) => ({label: w, v: x.n, note: x.d ? x.d + ' livrée' + (x.d > 1 ? 's' : '') : ''})), v => v + ' cmd'))}
 
       ${section('👥 Clientes', `<div class="st-grid">
           ${tile('Clientes', num(S.custN))}
@@ -369,7 +369,7 @@
         <div class="st-hint">Quand une de ces clientes recommande, un avertissement s'affiche dans le formulaire de commande.</div>
       `)}
 
-      ${section('👩‍💼 Équipe', table(['Employé', 'Cmd', 'CA', 'Livrées', 'Retours', 'Taux'], Object.entries(S.team).sort((a, b) => b[1].ca - a[1].ca).map(([k, t]) => ({cells: [esc(k), t.n, money(t.ca), t.d, t.r, t.d + t.r ? pct(t.d, t.d + t.r) : '—']}))), 'Un taux de livraison bas pour un employé = commandes mal confirmées avec la cliente.')}
+      ${section('👩‍💼 Équipe', table(['Employé', 'Cmd', 'Livrées', 'Retours', 'Taux'], Object.entries(S.team).sort((a, b) => b[1].n - a[1].n).map(([k, t]) => ({cells: [esc(k), t.n, t.d, t.r, t.d + t.r ? pct(t.d, t.d + t.r) : '—']}))), 'Un taux de livraison bas pour un employé = commandes mal confirmées avec la cliente.')}
 
       ${section('⏰ Quand vend-on le plus ?', `
         ${n ? `<div class="st-best">Meilleur moment : <b>${WD[bestD]}</b> vers <b>${bestH}h</b> — publiez sur Facebook un peu avant.</div>` : ''}
