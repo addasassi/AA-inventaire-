@@ -2790,7 +2790,7 @@ function renderCatFolders(){
       <span class="os-txt">Rupture de stock</span>
       <span class="os-count">${outTotal}</span>
     </div>`;
-  const dlAll = `<button class="btn-primary" style="width:100%;margin:0 0 12px;" onclick="prepareAvailablePhotos(null, this)">⬇️ Toutes les photos disponibles avec prix</button>`;
+  const dlAll = `<button class="btn-primary" style="width:100%;margin:0 0 8px;" onclick="prepareAvailablePhotos(null, this)">⬇️ Toutes les photos disponibles avec prix</button><button class="btn-secondary" style="width:100%;margin:0 0 12px;" onclick="prepareAvailablePhotos(null, this, true)">🖼️ Toutes les photos (même en rupture) — logo + prix</button>`;
   wrap.innerHTML = outBar + dlAll + '<div class="folder-grid">' + CATS.map(cat=>{
     const items = products.filter(p=>p.cat===cat);
     const thumb = catThumb(cat) || catEmojiBg();
@@ -3943,34 +3943,57 @@ let shareQueue = [];
 function loadImg(src){
   return new Promise((res, rej)=>{ const im = new Image(); im.onload = ()=>res(im); im.onerror = rej; im.src = src; });
 }
+let brandLogo = null;
+async function getBrandLogo(){
+  if(brandLogo) return brandLogo;
+  try{ brandLogo = await loadImg('kolech-logo.png'); }catch(e){ brandLogo = null; }
+  return brandLogo;
+}
 async function priceImageFile(src, price, name){
   const im = await loadImg(src);
-  const max = 1080, k = Math.min(1, max / Math.max(im.width, im.height));
+  // haute qualité : dimension native ×2 (max 1600 px), lissage maximal, JPEG 95 %
+  const max = 1600, k = Math.min(2, max / Math.max(im.width, im.height));
   const w = Math.round(im.width * k), h = Math.round(im.height * k);
   const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
   const g = cv.getContext('2d');
+  g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
   g.drawImage(im, 0, 0, w, h);
+  const base = Math.min(w, h), m = Math.round(base * 0.035);
+  // léger dégradé en bas pour que le logo et le prix ressortent
+  const grad = g.createLinearGradient(0, h - base * 0.32, 0, h);
+  grad.addColorStop(0, 'rgba(0,0,0,0)'); grad.addColorStop(1, 'rgba(0,0,0,0.28)');
+  g.fillStyle = grad; g.fillRect(0, h - base * 0.32, w, base * 0.32);
+  // logo كلش 100 ألف en bas à gauche
+  const logo = await getBrandLogo();
+  const ls = Math.round(base * 0.24);
+  if(logo){
+    g.save(); g.shadowColor = 'rgba(0,0,0,0.35)'; g.shadowBlur = ls * 0.12; g.shadowOffsetY = ls * 0.03;
+    g.beginPath(); g.arc(m + ls / 2, h - m - ls / 2, ls / 2, 0, Math.PI * 2); g.fillStyle = '#fff'; g.fill(); g.restore();
+    g.drawImage(logo, m, h - m - ls, ls, ls);
+  }
+  // prix en bas à droite
   const label = Math.round(Number(price)||0) + ' DA';
-  const fs = Math.max(22, Math.round(w * 0.075));
+  const fs = Math.max(26, Math.round(base * 0.085));
   g.font = '800 ' + fs + 'px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
   const tw = g.measureText(label).width, padX = fs * 0.6, padY = fs * 0.38;
-  const bw = tw + padX * 2, bh = fs + padY * 2, m = Math.round(w * 0.035);
-  const x = w - bw - m, y = h - bh - m, r = bh / 2;
-  g.fillStyle = 'rgba(58,38,50,0.88)';
+  const bw = tw + padX * 2, bh = fs + padY * 2;
+  const x = w - bw - m, y = h - m - (logo ? (ls + bh) / 2 : bh), r = bh / 2;
+  g.save(); g.shadowColor = 'rgba(0,0,0,0.3)'; g.shadowBlur = fs * 0.3; g.shadowOffsetY = fs * 0.06;
+  g.fillStyle = '#b8459f';
   g.beginPath();
   g.moveTo(x + r, y); g.lineTo(x + bw - r, y); g.arc(x + bw - r, y + r, r, -Math.PI/2, Math.PI/2);
-  g.lineTo(x + r, y + bh); g.arc(x + r, y + r, r, Math.PI/2, Math.PI*1.5); g.closePath(); g.fill();
+  g.lineTo(x + r, y + bh); g.arc(x + r, y + r, r, Math.PI/2, Math.PI*1.5); g.closePath(); g.fill(); g.restore();
   g.fillStyle = '#fff'; g.textBaseline = 'middle'; g.textAlign = 'center';
   g.fillText(label, x + bw / 2, y + bh / 2 + fs * 0.04);
-  const blob = await new Promise(res=> cv.toBlob(res, 'image/jpeg', 0.88));
+  const blob = await new Promise(res=> cv.toBlob(res, 'image/jpeg', 0.95));
   return new File([blob], name + '.jpg', {type:'image/jpeg'});
 }
-function availablePhotos(cat){
+function availablePhotos(cat, withOut){
   const out = [], seen = new Set();
   products.filter(p=>p.cat===cat).forEach(p=>{
     const add = (o, price)=>{ const img = o.img; if(img && !seen.has(img)){ seen.add(img); out.push({img, obj:o, price, name:p.name}); } };
-    if(p.img && (Number(p.qty)||0) > 0) add(p, p.price);
-    (p.colors||[]).forEach(c=>{ if((Number(c.qty)||0) > 0) add(c, (c.price!=null && c.price!=='') ? c.price : p.price); });
+    if(p.img && (withOut || (Number(p.qty)||0) > 0)) add(p, p.price);
+    (p.colors||[]).forEach(c=>{ if(withOut || (Number(c.qty)||0) > 0) add(c, (c.price!=null && c.price!=='') ? c.price : p.price); });
   });
   return out;
 }
@@ -4044,11 +4067,11 @@ async function downloadZip(){
     toast('✅ ZIP enregistré — ouvrez-le dans Mes fichiers puis « Extraire »', false);
   }catch(e){ toast('Erreur ZIP : ' + (e.message||e), true); }
 }
-async function prepareAvailablePhotos(cat, btn){
+async function prepareAvailablePhotos(cat, btn, withOut){
   // cat = null → toutes les catégories
   const cats = cat ? [cat] : CATS;
   const list = [];
-  cats.forEach(c=> availablePhotos(c).forEach(x=> list.push(Object.assign({cat:c}, x))));
+  cats.forEach(c=> availablePhotos(c, withOut).forEach(x=> list.push(Object.assign({cat:c}, x))));
   if(!list.length){ toast('Aucune photo disponible (stock à 0)', true); return; }
   const old = btn.textContent; btn.disabled = true; btn.textContent = '⏳ Préparation de ' + list.length + ' photos...';
   try{
