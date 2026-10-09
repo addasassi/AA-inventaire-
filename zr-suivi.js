@@ -38,15 +38,18 @@
   let open = '';   // ligne ouverte (type|clé)
   function parcels(){ return all().filter(o => o.zr && o.zr.parcelId); }
 
-  function card(o){
+  function card(o, col){
     const c = o.customer || {}, z = o.zr || {};
     const sit = sitOf(o);
     const since = Math.floor((Date.now() - Date.parse(z.situationAt || z.stateAt || z.sentAt || o.createdAt)) / DAY);
-    return `<div class="zs-o" onclick="zsOpen('${esc(o.id)}')">
-      <div class="zs-o-m"><b>${esc(c.name || 'Cliente')}</b>${c.wilaya ? ' · ' + esc(c.wilaya) : ''}${c.commune ? ' — ' + esc(c.commune) : ''}
-        <span>${esc(z.state || '')}${sit ? ' · ' + esc(sit) : ''}${since > 0 ? ' · depuis ' + since + ' j' : ''}</span>
-        <span class="zs-o-t">${esc(z.tracking || '')}</span></div>
-      <div class="zs-o-r">${money(o.total)}${c.phone ? `<a href="tel:${esc(c.phone)}" onclick="event.stopPropagation()">📞</a>` : ''}</div></div>`;
+    const when = final(o) && z.finalAt ? (dayKey(z.finalAt) === today() ? "aujourd'hui à " + new Date(z.finalAt).toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'}) : 'le ' + new Date(z.finalAt).toLocaleDateString('fr-FR'))
+      : (since > 0 ? 'depuis ' + since + ' j' : "aujourd'hui");
+    return `<div class="zs-o" style="--c:${col}" onclick="zsOpen('${esc(o.id)}')">
+      <div class="zs-o-m"><div class="zs-o-n">${esc(c.name || 'Cliente')}</div>
+        <div class="zs-o-w">📍 ${esc(c.wilaya || '')}${c.commune ? ' — ' + esc(c.commune) : ''}</div>
+        <div class="zs-o-s"><span class="zs-pill">${esc(sit || z.state || '—')}</span><span class="zs-when">${when}</span></div>
+        <div class="zs-o-t">${esc(z.tracking || '')}</div></div>
+      <div class="zs-o-r"><div class="zs-o-p">${money(o.total)}</div>${c.phone ? `<a href="tel:${esc(c.phone)}" onclick="event.stopPropagation()" aria-label="Appeler">📞</a>` : ''}</div></div>`;
   }
   function block(type, title, icon, list, rows){
     return `<div class="zs-box"><div class="zs-h"><span class="zs-ic">${icon}</span>${title}</div>
@@ -55,7 +58,7 @@
         const id = type + '|' + k, isOpen = open === id;
         return `<div class="zs-r${isOpen ? ' on' : ''}${items.length ? '' : ' zero'}" onclick="zsRow('${id}')">
             <i style="background:${col}"></i><span>${label}</span><b>${items.length}</b><em>${isOpen ? '▾' : '↗'}</em></div>
-          ${isOpen ? `<div class="zs-list">${items.length ? items.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).map(card).join('') : '<div class="zs-empty">Aucune commande</div>'}</div>` : ''}`;
+          ${isOpen ? `<div class="zs-list">${items.length ? items.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).map(o => card(o, col)).join('') : '<div class="zs-empty">Aucune commande</div>'}</div>` : ''}`;
       }).join('')}</div>`;
   }
 
@@ -140,11 +143,18 @@
       .zs-r em{font-style:normal;text-align:center;font-weight:900;border:1px solid var(--line);border-radius:9px;padding:5px 0;font-size:14px;}
       .zs-r.on em{background:var(--plum);color:#fff;border-color:var(--plum);}
       .zs-list{display:flex;flex-direction:column;gap:6px;padding:4px 0 10px;}
-      .zs-o{display:flex;justify-content:space-between;gap:10px;padding:10px;border-radius:12px;background:color-mix(in srgb,var(--line) 30%,transparent);font-size:13px;cursor:pointer;}
-      .zs-o-m{min-width:0;} .zs-o-m span{display:block;font-size:12px;color:var(--mauve-dark);margin-top:2px;overflow-wrap:anywhere;}
-      .zs-o-t{font-family:monospace;font-size:11px !important;}
-      .zs-o-r{text-align:right;font-weight:800;white-space:nowrap;display:flex;flex-direction:column;align-items:flex-end;gap:6px;}
-      .zs-o-r a{text-decoration:none;font-size:18px;}
+      .zs-o{display:flex;justify-content:space-between;gap:10px;padding:11px 12px;border-radius:12px;background:var(--card);border:1px solid var(--line);border-left:6px solid var(--c);color:var(--plum);cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.06);}
+      html[data-theme="dark"] .zs-o{color:#fff;}
+      .zs-o-m{min-width:0;}
+      .zs-o-n{font-weight:800;font-size:15.5px;}
+      .zs-o-w{font-size:13.5px;font-weight:600;margin-top:3px;overflow-wrap:anywhere;}
+      .zs-o-s{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px;}
+      .zs-pill{background:color-mix(in srgb,var(--c) 28%,#fff);border:1.5px solid var(--c);color:#111;font-weight:800;font-size:12.5px;padding:3px 9px;border-radius:999px;}
+      .zs-when{font-size:12.5px;font-weight:700;}
+      .zs-o-t{font-family:monospace;font-size:12.5px;font-weight:700;margin-top:6px;letter-spacing:.02em;}
+      .zs-o-r{text-align:right;white-space:nowrap;display:flex;flex-direction:column;align-items:flex-end;justify-content:space-between;gap:8px;}
+      .zs-o-p{font-weight:900;font-size:15px;}
+      .zs-o-r a{text-decoration:none;font-size:20px;background:#dcf3e6;border-radius:12px;padding:6px 9px;}
       .zs-empty{font-size:13px;color:var(--mauve-dark);padding:6px 4px;}
       .zs-cap{font-weight:800;font-size:13px;color:var(--mauve-dark);margin:18px 2px 8px;text-transform:uppercase;letter-spacing:.04em;}
       .zs-hint{font-size:12px;color:var(--mauve-dark);line-height:1.45;margin:4px 2px 30px;}`;
