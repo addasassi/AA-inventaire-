@@ -554,6 +554,26 @@ export default {
         if(!o) return json({ok: false, error: 'Commande introuvable'}, 404);
         return json({ok: true, zr: await trackOrder(env, o)});
       }
+      if(path === '/history'){   // historique du colis (états + situations), du plus récent au plus ancien
+        const o = await getOrder(id);
+        const pid = o && o.zr && o.zr.parcelId;
+        if(!pid) return json({ok: false, error: 'Pas encore de colis ZR'}, 400);
+        const h = await zr(env, '/parcels/' + pid + '/state-history');
+        const ev = [];
+        (Array.isArray(h) ? h : (h && (h.items || h.data)) || []).forEach(e => {
+          const st = e.newState || {};
+          const loc = e.location || {};
+          const note = typeof e.comment === 'string' && e.comment && !/^confirmed_in|^scann/i.test(e.comment) ? e.comment : '';
+          ev.push({at: e.createdAt, kind: 'state', label: st.description || st.name || '', color: st.color ? '#' + st.color : '', hub: loc.hubName || '', note});
+          (e.situations || []).forEach(x => {
+            const md = x.metadata || {};
+            ev.push({at: x.createdAt || e.createdAt, kind: 'sit', label: x.situationDescription || x.situationName || '', slug: x.situationSlug || '',
+              date: md.scheduledDate ? toIsoDay(String(md.scheduledDate)) : '', note: typeof x.comment === 'string' ? x.comment : ''});
+          });
+        });
+        ev.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+        return json({ok: true, events: ev});
+      }
       if(path === '/raw'){   // diagnostic : colis brut renvoyé par ZR
         const o = await getOrder(id);
         const pid = o && o.zr && o.zr.parcelId;

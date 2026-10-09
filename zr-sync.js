@@ -147,11 +147,32 @@
       if(z.parcelId){
         btns.push('<button class="zr-btn ghost" data-zr="label">🏷️ Étiquette</button>');
         btns.push('<button class="zr-btn ghost" data-zr="track">🔄 Actualiser</button>');
+        btns.push('<button class="zr-btn ghost" data-zr="history">📜 Historique</button>');
       }
       el.innerHTML = `<div class="zr-box"><div class="zr-h">🚚 ZR Express <span class="zr-badge" style="color:${i[2]};background:${i[3]}">${i[0]} ${esc(i[1])}</span></div>
-        ${sitBadge(o) ? '<div style="margin-top:8px">' + sitBadge(o) + '</div>' : ''}${tr}${hist}${err}<div class="zr-row">${btns.join('')}</div></div>`;
+        ${sitBadge(o) ? '<div style="margin-top:8px">' + sitBadge(o) + '</div>' : ''}${tr}${hist}${err}<div class="zr-row">${btns.join('')}</div><div class="zr-hist" id="zr-hist"></div></div>`;
     }
     el.querySelectorAll('[data-zr]').forEach(b => b.onclick = () => action(b.dataset.zr, o, b));
+  }
+  async function showHistory(o, btn){
+    const box = document.getElementById('zr-hist');
+    if(!box) return;
+    if(box.dataset.open === '1'){ box.dataset.open = ''; box.innerHTML = ''; btn.textContent = '📜 Historique'; return; }
+    btn.disabled = true; btn.textContent = '⏳';
+    try{
+      const j = await call('/history', {id: o.id});
+      const ev = j.events || [];
+      const fmt = iso => { const d = new Date(iso); return d.toLocaleDateString('fr-FR', {day: '2-digit', month: 'short'}) + ' · ' + d.toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'}); };
+      const sitCol = t => { const k = String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        return /livre/.test(k) ? '#16a34a' : /report/.test(k) ? '#10b981' : /annul|refus|retour/.test(k) ? '#dc2626' : /repond pas|injoignable/.test(k) ? '#f59e0b' : '#1e88e5'; };
+      box.innerHTML = ev.length ? '<div class="zr-tl">' + ev.map(e => `<div class="zr-ev ${e.kind}"><div class="zr-ev-d">${fmt(e.at)}</div>
+          <div class="zr-ev-b"><span class="zr-ev-l" style="--c:${e.kind === 'state' ? (e.color || '#555') : sitCol(e.label)}">${esc(e.label || '—')}</span>
+          ${e.date ? `<div class="zr-ev-n">📅 pour le <b>${new Date(e.date + 'T00:00:00').toLocaleDateString('fr-FR', {weekday: 'long', day: 'numeric', month: 'long'})}</b></div>` : ''}
+          ${e.hub ? `<div class="zr-ev-n">📍 ${esc(e.hub)}</div>` : ''}${e.note ? `<div class="zr-ev-n">💬 ${esc(e.note)}</div>` : ''}</div></div>`).join('') + '</div>'
+        : '<div class="zr-sub">Pas encore d\'historique.</div>';
+      box.dataset.open = '1'; btn.textContent = '📜 Masquer';
+    }catch(e){ toast('Historique : ' + (e.message || e), true); btn.textContent = '📜 Historique'; }
+    btn.disabled = false;
   }
   async function action(kind, o, btn){
     const z = o.zr || {};
@@ -159,6 +180,7 @@
       try{ await navigator.clipboard.writeText(z.tracking); toast('N° de suivi copié'); }catch(e){ prompt('N° de suivi', z.tracking); }
       return;
     }
+    if(kind === 'history') return showHistory(o, btn);
     const old = btn.textContent; btn.disabled = true; btn.textContent = '⏳';
     try{
       if(kind === 'send' || kind === 'retry'){
@@ -212,6 +234,14 @@
       .zr-h .zr-badge{margin:0;}
       .zr-sub{font-size:12.5px;margin-top:6px;opacity:.85;}
       .zr-err{font-size:12.5px;margin-top:8px;color:#a4483f;font-weight:700;}
+      .zr-hist:empty{display:none;} .zr-hist{margin-top:12px;}
+      .zr-tl{position:relative;padding-left:4px;}
+      .zr-ev{display:grid;grid-template-columns:92px 1fr;gap:10px;padding:9px 0;border-top:1px solid var(--line);}
+      .zr-ev-d{font-size:12px;font-weight:700;color:var(--mauve-dark);line-height:1.35;}
+      .zr-ev-l{display:inline-block;font-size:13px;font-weight:800;border-radius:999px;padding:3px 10px;}
+      .zr-ev.state .zr-ev-l{background:var(--c);color:#fff;}
+      .zr-ev.sit .zr-ev-l{background:color-mix(in srgb,var(--c) 18%,#fff);color:#111;border:1.5px solid var(--c);}
+      .zr-ev-n{font-size:12.5px;margin-top:4px;line-height:1.4;}
       .zr-track{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;}
       .zr-track span{opacity:.7;}
       .zr-track b{direction:ltr;letter-spacing:.3px;background:#FFCC00;color:#111;font-family:monospace;font-weight:800;padding:3px 9px;border-radius:7px;}
