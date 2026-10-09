@@ -2434,6 +2434,9 @@ window.addEventListener('click', (e)=>{
   if(document.getElementById('view-scan')?.classList.contains('active')){
     const addField = document.getElementById('scanAddField');
     if(addField && addField.contains(e.target)) return;
+    const rt = document.getElementById('rt-section');
+    if(rt && rt.contains(e.target)) return;
+    if(e.target && e.target.closest && e.target.closest('#rt-cam')) return;
     setTimeout(()=>document.getElementById('manualCode')?.focus(), 30);
   }
 });
@@ -5206,13 +5209,13 @@ document.getElementById('btn-save-order').addEventListener('click', async ()=>{
       const c = p.colors[colorIndex];
       const price = c.price != null ? c.price : p.price;
       const cost = c.cost != null ? c.cost : (p.cost || 0);
-      items.push({productId, colorIndex, name: colorLabel(p.name, colorIndex), price, cost, qty, img: c.img||''});
+      items.push({productId, colorIndex, code: c.code||'', name: colorLabel(p.name, colorIndex), price, cost, qty, img: c.img||''});
       computedTotal += price * qty;
       costTotal += cost * qty;
       c.qty = Math.max(0, (c.qty||0) - qty);
     } else {
       const cost = p.cost || 0;
-      items.push({productId, name:p.name, price:p.price, cost, qty, img:p.img||''});
+      items.push({productId, code: p.code||'', name:p.name, price:p.price, cost, qty, img:p.img||''});
       computedTotal += p.price * qty;
       costTotal += cost * qty;
       p.qty = Math.max(0, p.qty - qty);
@@ -5902,5 +5905,6 @@ boot();
 <script src="app-back.js"></script>
 <script src="select-search.js"></script>
 <script src="stats.js"></script>
+<script src="returns.js"></script>
 </body>
 </html>
