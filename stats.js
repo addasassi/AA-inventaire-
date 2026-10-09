@@ -19,7 +19,9 @@
   const dayKey = d => { const x = new Date(d); return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0'); };
   const allOrders = () => (typeof orders !== 'undefined' && Array.isArray(orders)) ? orders : [];
   const allProducts = () => (typeof products !== 'undefined' && Array.isArray(products)) ? products : [];
-  const stageOf = o => (o.zr && o.zr.stage) || '';
+  const isHand = o => !!(o && o.customer && o.customer.deliveryType === 'main');   // 🤝 remise en main propre = livrée tout de suite
+  const stageOf = o => isHand(o) ? 'delivered' : ((o.zr && o.zr.stage) || '');
+  const Z = o => isHand(o) ? {stage: 'delivered', finalAt: o.createdAt, sentAt: o.createdAt, paid: true, deliveryPrice: 0, returnPrice: 0} : (o.zr || {});
   const isDelivered = o => stageOf(o) === 'delivered';
   const isReturned = o => stageOf(o) === 'returned';
   const wilayaOf = o => (o.customer && o.customer.wilaya) || '—';
@@ -150,10 +152,10 @@
     const profit = sum(cur, o => o.profit != null ? o.profit : o.total), profitP = sum(prev, o => o.profit != null ? o.profit : o.total);
     const delivered = cur.filter(isDelivered), returned = cur.filter(isReturned);
     const inProgress = cur.filter(o => o.zr && o.zr.parcelId && !isDelivered(o) && !isReturned(o));
-    const fees = sum(delivered, o => o.zr.deliveryPrice) + sum(returned, o => o.zr.returnPrice);
+    const fees = sum(delivered, o => Z(o).deliveryPrice) + sum(returned, o => Z(o).returnPrice);
     const net = sum(delivered, o => o.profit != null ? o.profit : o.total) - fees;
-    const atZr = ALL.filter(o => isDelivered(o) && o.zr.finalAt && !o.zr.paid);   // suivi de l'encaissement depuis la v8 du relais
-    const atZrMoney = sum(atZr, o => (Number(o.total) || 0) - (Number(o.zr.deliveryPrice) || 0));
+    const atZr = ALL.filter(o => isDelivered(o) && Z(o).finalAt && !Z(o).paid);   // suivi de l'encaissement depuis la v8 du relais
+    const atZrMoney = sum(atZr, o => (Number(o.total) || 0) - (Number(Z(o).deliveryPrice) || 0));
     const noCost = P.filter(p => !(Number(p.cost) > 0)).length;
 
     // livraison par wilaya + type + délai
@@ -161,11 +163,11 @@
     cur.forEach(o => {
       const w = wilayaOf(o); const x = wil[w] || (wil[w] = {n: 0, ca: 0, d: 0, r: 0, days: [], fee: 0});
       x.n++; x.ca += Number(o.total) || 0;
-      if(isDelivered(o)){ x.d++; if(o.zr.sentAt && o.zr.finalAt) x.days.push((Date.parse(o.zr.finalAt) - Date.parse(o.zr.sentAt)) / DAY); }
+      if(isDelivered(o)){ x.d++; if(Z(o).sentAt && Z(o).finalAt) x.days.push((Date.parse(Z(o).finalAt) - Date.parse(Z(o).sentAt)) / DAY); }
       if(isReturned(o)) x.r++;
     });
-    const types = {domicile: {n: 0, d: 0, r: 0}, stopdesk: {n: 0, d: 0, r: 0}};
-    cur.forEach(o => { const t = types[(o.customer && o.customer.deliveryType) === 'stopdesk' ? 'stopdesk' : 'domicile']; t.n++; if(isDelivered(o)) t.d++; if(isReturned(o)) t.r++; });
+    const types = {domicile: {n: 0, d: 0, r: 0}, stopdesk: {n: 0, d: 0, r: 0}, main: {n: 0, d: 0, r: 0}};
+    cur.forEach(o => { const dt0 = o.customer && o.customer.deliveryType; const t = types[dt0 === 'stopdesk' ? 'stopdesk' : (dt0 === 'main' ? 'main' : 'domicile')]; t.n++; if(isDelivered(o)) t.d++; if(isReturned(o)) t.r++; });
     const allDays = [].concat(...Object.values(wil).map(x => x.days));
     const avgDays = allDays.length ? allDays.reduce((a, b) => a + b, 0) / allDays.length : 0;
     const nrp = cur.filter(o => o.zr && (Number(o.zr.nrp) > 0 || /r[eé]pond pas/i.test(o.zr.situation || '')));
@@ -311,7 +313,7 @@
         </div>
         ${stackBar(S.delivered.length, S.inProgress.length, S.returned.length)}
         <h4>Domicile / Stop desk</h4>
-        ${table(['Type', 'Commandes', 'Livrées', 'Retours', 'Taux'], [['🏠 Domicile', S.types.domicile], ['🏢 Stop desk', S.types.stopdesk]].map(([l, t]) => ({cells: [l, t.n, t.d, t.r, t.d + t.r ? pct(t.d, t.d + t.r) : '—']})))}
+        ${table(['Type', 'Commandes', 'Livrées', 'Retours', 'Taux'], [['🏠 Domicile', S.types.domicile], ['🏢 Stop desk', S.types.stopdesk], ['🤝 En main propre', S.types.main]].map(([l, t]) => ({cells: [l, t.n, t.d, t.r, t.d + t.r ? pct(t.d, t.d + t.r) : '—']})))}
         <h4>Par wilaya</h4>
         ${table(['Wilaya', 'Cmd', 'Livrées', 'Retours', 'Taux', 'Délai'], wilRows.map(([w, x]) => ({cells: [esc(w), x.n, x.d, x.r ? `<b class="bad-t">${x.r}</b>` : 0, x.d + x.r ? pct(x.d, x.d + x.r) : '—', x.days.length ? (x.days.reduce((a, b) => a + b, 0) / x.days.length).toFixed(1).replace('.', ',') + ' j' : '—']})))}
       `)}
@@ -444,8 +446,8 @@
       if(typeof notifPrefEnabled === 'function' && !notifPrefEnabled()) return;
       const today = allOrders().filter(o => dayKey(o.createdAt) === dayKey(now));
       const ca = today.reduce((t, o) => t + (Number(o.total) || 0), 0);
-      const ret = allOrders().filter(o => isReturned(o) && o.zr.finalAt && dayKey(o.zr.finalAt) === dayKey(now)).length;
-      const del = allOrders().filter(o => isDelivered(o) && o.zr.finalAt && dayKey(o.zr.finalAt) === dayKey(now)).length;
+      const ret = allOrders().filter(o => isReturned(o) && Z(o).finalAt && dayKey(Z(o).finalAt) === dayKey(now)).length;
+      const del = allOrders().filter(o => isDelivered(o) && Z(o).finalAt && dayKey(Z(o).finalAt) === dayKey(now)).length;
       localStorage.setItem(key, '1');
       const body = `${today.length} commande(s) · ${money(ca)} · ${del} livrée(s) · ${ret} retour(s)`;
       if('Notification' in window && Notification.permission === 'granted' && navigator.serviceWorker){

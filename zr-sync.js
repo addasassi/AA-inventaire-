@@ -36,6 +36,7 @@
   /* ---------- Avant l'enregistrement d'une commande (nouvelle ou modifiée) ---------- */
   function prepare(o){
     if(!relay || !o || !o.customer) return;
+    if(o.customer.deliveryType === 'main') return;             // 🤝 remise en main propre : jamais envoyée à ZR
     const z = o.zr || null;
     const w0 = (typeof wilayasList !== 'undefined' ? wilayasList : []).find(x => norm(x.name) === norm(o.customer.wilaya));
     if(w0) o.customer.wilayaCode = w0.code;
@@ -674,6 +675,7 @@
   /* ---------- Commande modifiée alors que le colis est déjà chez ZR ---------- */
   async function updateParcel(o){
     if(!relay || !o || !o.zr || !o.zr.parcelId) return;
+    if(o.customer && o.customer.deliveryType === 'main'){ toast('🤝 En main propre : pensez à annuler le colis chez ZR (' + (o.zr.tracking || '') + ')', true); return; }
     if(o.zr.stage && o.zr.stage !== 'created'){ toast('⚠️ Colis déjà en route chez ZR : modification NON envoyée à ZR (contactez ZR)', true); return; }
     toast('🔄 Mise à jour du colis chez ZR Express…');
     try{

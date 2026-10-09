@@ -980,6 +980,7 @@
         <div class="auth-switch">
           <button type="button" id="dt-domicile" class="active">Livraison à domicile</button>
           <button type="button" id="dt-stopdesk">Stop Desk</button>
+          <button type="button" id="dt-main">🤝 En main propre</button>
         </div>
       </div>
       <div class="field">
@@ -1294,6 +1295,7 @@
       <div class="auth-switch">
         <button type="button" id="eo-dt-domicile" class="active">Livraison à domicile</button>
         <button type="button" id="eo-dt-stopdesk">Stop Desk</button>
+        <button type="button" id="eo-dt-main">🤝 En main propre</button>
       </div>
     </div>
     <div class="field">
@@ -4596,7 +4598,7 @@ function renderOrdersHistory(){
     const itemsTxt = o.items.map(it=> it.qty+'x '+escapeHtml(it.name)).join(', ');
     const d = new Date(o.createdAt);
     const dateTxt = d.toLocaleDateString('fr-FR') + ' ' + d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
-    const dtLabel = o.customer.deliveryType === 'stopdesk' ? 'Stop Desk' : 'Livraison à domicile';
+    const dtLabel = o.customer.deliveryType === 'stopdesk' ? 'Stop Desk' : (o.customer.deliveryType === 'main' ? '🤝 Remise en main propre ✅' : 'Livraison à domicile');
     const deferredBadge = o.deferred && o.deferredDate ? (()=>{
       const late = daysLate(o.deferredDate);
       const dLabel = new Date(o.deferredDate+'T00:00:00').toLocaleDateString('fr-FR');
@@ -4633,7 +4635,7 @@ function showOrderDetail(id){
   const o = orders.find(x=>x.id===id);
   if(!o) return;
   currentDetailOrderId = id;
-  const dtLabel = o.customer.deliveryType === 'stopdesk' ? 'Stop Desk' : 'Livraison à domicile';
+  const dtLabel = o.customer.deliveryType === 'stopdesk' ? 'Stop Desk' : (o.customer.deliveryType === 'main' ? '🤝 Remise en main propre ✅' : 'Livraison à domicile');
   const odBadgeEl = document.getElementById('od-deferred-badge');
   if(o.deferred && o.deferredDate){
     const late = daysLate(o.deferredDate);
@@ -4725,8 +4727,11 @@ function setEoDeliveryType(type){
   eoDeliveryType = type;
   document.getElementById('eo-dt-domicile').classList.toggle('active', type==='domicile');
   document.getElementById('eo-dt-stopdesk').classList.toggle('active', type==='stopdesk');
+  document.getElementById('eo-dt-main').classList.toggle('active', type==='main');
+  handFields('eo', type==='main');
   refreshEoCommuneOptions();
 }
+document.getElementById('eo-dt-main').addEventListener('click', ()=> setEoDeliveryType('main'));
 document.getElementById('eo-dt-domicile').addEventListener('click', ()=> setEoDeliveryType('domicile'));
 document.getElementById('eo-dt-stopdesk').addEventListener('click', ()=> setEoDeliveryType('stopdesk'));
 document.getElementById('eo-wilaya').addEventListener('change', refreshEoCommuneOptions);
@@ -4747,9 +4752,11 @@ function openEditOrderModal(id){
   document.getElementById('eo-deferred-date').value = o.deferredDate || '';
   document.getElementById('eo-deferred-date-field').style.display = o.deferred ? 'block' : 'none';
   populateEoWilayaSelect();
-  eoDeliveryType = o.customer.deliveryType === 'stopdesk' ? 'stopdesk' : 'domicile';
+  eoDeliveryType = o.customer.deliveryType === 'stopdesk' ? 'stopdesk' : (o.customer.deliveryType === 'main' ? 'main' : 'domicile');
   document.getElementById('eo-dt-domicile').classList.toggle('active', eoDeliveryType==='domicile');
   document.getElementById('eo-dt-stopdesk').classList.toggle('active', eoDeliveryType==='stopdesk');
+  document.getElementById('eo-dt-main').classList.toggle('active', eoDeliveryType==='main');
+  handFields('eo', eoDeliveryType==='main');
   document.getElementById('eo-wilaya').value = o.customer.wilaya || '';
   refreshEoCommuneOptions();
   if(o.customer.commune) document.getElementById('eo-commune').value = o.customer.commune;
@@ -4827,7 +4834,7 @@ document.getElementById('eo-save').addEventListener('click', async ()=>{
   const commune = document.getElementById('eo-commune').value;
   const address = document.getElementById('eo-address').value.trim();
   const total = parseFloat(document.getElementById('eo-total').value) || 0;
-  if(!name || !phone){ toast('Le nom et le téléphone sont requis', true); return; }
+  if(eoDeliveryType !== 'main' && (!name || !phone)){ toast('Le nom et le téléphone sont requis', true); return; }
   const eoIsDeferred = document.getElementById('eo-deferred-toggle').checked;
   const eoDeferredDate = document.getElementById('eo-deferred-date').value;
   if(eoIsDeferred && !eoDeferredDate){ toast('Choisissez la date d\'envoi prévue', true); return; }
@@ -4865,7 +4872,9 @@ document.getElementById('eo-save').addEventListener('click', async ()=>{
 
   const zrKey = x => JSON.stringify([x.customer && x.customer.name, x.customer && x.customer.phone, x.customer && x.customer.wilaya, x.customer && x.customer.commune, x.customer && x.customer.address, x.customer && x.customer.deliveryType, Math.round(Number(x.total)||0)]);
   const zrBefore = zrKey(o);
-  o.customer = Object.assign({}, o.customer, {name, phone, wilaya, commune, address, deliveryType: eoDeliveryType});
+  o.customer = eoDeliveryType === 'main'
+    ? Object.assign({}, o.customer, {name: name || 'Cliente (main propre)', phone, wilaya:'', commune:'', address, deliveryType:'main'})
+    : Object.assign({}, o.customer, {name, phone, wilaya, commune, address, deliveryType: eoDeliveryType});
   o.items = editingOrderItems;
   o.total = total;
   o.costTotal = editingOrderItems.reduce((s,it)=> s + (it.cost||0) * it.qty, 0);
@@ -5221,7 +5230,8 @@ document.getElementById('btn-save-order').addEventListener('click', async ()=>{
   const totalInput = document.getElementById('o-total').value.trim();
   const keys = Object.keys(cart);
   if(keys.length === 0){ toast('Ajoutez au moins un article à la commande', true); return; }
-  if(!name || !phone){ toast('Le nom et le téléphone du client sont requis', true); return; }
+  const isHandOrder = deliveryType === 'main';
+  if(!isHandOrder && (!name || !phone)){ toast('Le nom et le téléphone du client sont requis', true); return; }
   const isDeferred = document.getElementById('o-deferred-toggle').checked;
   const deferredDate = document.getElementById('o-deferred-date').value;
   if(isDeferred && !deferredDate){ toast('Choisissez la date d\'envoi prévue', true); return; }
@@ -5265,7 +5275,7 @@ document.getElementById('btn-save-order').addEventListener('click', async ()=>{
 
   const newOrder = {
     id: 'o'+Date.now()+Math.floor(Math.random()*1000),
-    customer:{name, phone, wilaya, commune, address, deliveryType},
+    customer: isHandOrder ? {name: name || 'Cliente (main propre)', phone, wilaya:'', commune:'', address, deliveryType:'main'} : {name, phone, wilaya, commune, address, deliveryType},
     items, total, costTotal, profit: total - costTotal,
     createdAt: new Date().toISOString(),
     createdBy: currentUser ? currentUser.name : '',
@@ -5450,14 +5460,28 @@ function officesForWilaya(name){
   const key = normalizeWilayaName(name);
   return ZR_OFFICES.filter(o=> normalizeWilayaName(o.wilaya) === key);
 }
+// 🤝 En main propre : pas de ZR, pas de wilaya/commune ; le champ adresse = lieu du rendez-vous
+function handFields(prefix, isHand){
+  ['wilaya','commune'].forEach(k=>{ const el = document.getElementById(prefix+'-'+k); const f = el && el.closest('.field'); if(f) f.style.display = isHand ? 'none' : ''; });
+  const addr = document.getElementById(prefix+'-address');
+  const af = addr && addr.closest('.field');
+  if(af){
+    const lb = af.querySelector('label');
+    if(lb){ if(!lb.dataset.orig) lb.dataset.orig = lb.textContent; lb.textContent = isHand ? 'Lieu du rendez-vous (facultatif)' : lb.dataset.orig; }
+    addr.placeholder = isHand ? 'Ex : devant la poste, centre-ville' : (addr.dataset.ph || addr.placeholder);
+  }
+}
 function setDeliveryType(type){
   deliveryType = type;
   document.getElementById('dt-domicile').classList.toggle('active', type==='domicile');
   document.getElementById('dt-stopdesk').classList.toggle('active', type==='stopdesk');
+  document.getElementById('dt-main').classList.toggle('active', type==='main');
   document.getElementById('o-commune-label').textContent = type==='stopdesk' ? 'Bureau ZR Express' : 'Commune';
   document.getElementById('o-address-field').style.display = type==='stopdesk' ? 'none' : 'block';
+  handFields('o', type==='main');
   refreshCommuneOrOfficeOptions();
 }
+document.getElementById('dt-main').addEventListener('click', ()=> setDeliveryType('main'));
 document.getElementById('dt-domicile').addEventListener('click', ()=> setDeliveryType('domicile'));
 document.getElementById('dt-stopdesk').addEventListener('click', ()=> setDeliveryType('stopdesk'));
 
