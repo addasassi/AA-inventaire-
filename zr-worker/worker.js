@@ -562,7 +562,7 @@ export default {
         const probes = Array.isArray(body.probe) ? body.probe.slice(0, 40) : [];
         for(const pr of probes){
           const u = String(pr).replace(/^POST /, '').replace('{id}', pid).replace('{tn}', encodeURIComponent((o.zr && o.zr.tracking) || ''));
-          try{ const r = await zr(env, u, pr.startsWith('POST ') ? {method: 'POST', body: JSON.stringify({parcelId: pid, pageNumber: 1, pageSize: 50})} : {}); out[pr] = JSON.stringify(r).slice(0, 3000); }
+          try{ const r = await zr(env, u, pr.startsWith('POST ') ? {method: 'POST', body: JSON.stringify({parcelId: pid, pageNumber: 1, pageSize: 50})} : {}); out[pr] = JSON.stringify(r).slice(0, 30000); }
           catch(e){ out[pr] = 'ERR ' + String(e && e.message || e).slice(0, 100); }
         }
         return json(out);
