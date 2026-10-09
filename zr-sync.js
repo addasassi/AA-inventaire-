@@ -356,6 +356,8 @@
       cuts = ((d.exists && d.data().list) || []).filter(c => c && c.at).sort((a, b) => b.at.localeCompare(a.at));
       const v = document.getElementById('view-commandes');
       if(v && v.classList.contains('active') && typeof renderOrdersHistory === 'function') renderOrdersHistory();
+      const h = document.getElementById('view-accueil');
+      if(h && h.classList.contains('active') && typeof renderDashboard === 'function') try{ renderDashboard(); }catch(e){}
     }, () => {});
   }
   async function saveCuts(list){

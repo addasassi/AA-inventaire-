@@ -729,8 +729,8 @@
     <div class="note" id="dash-date"></div>
     <div class="dash-section-title">Aujourd'hui</div>
     <div class="dash-grid">
-      <div class="dash-card" onclick="document.querySelector('.tab-btn[data-tab=&quot;commandes&quot;]').click();">
-        <div class="dash-ico ic-orders"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 7h12l1 13H5L6 7z"/><path d="M9 7a3 3 0 0 1 6 0"/></svg></div><div class="dash-label">Commandes</div>
+      <div class="dash-card" onclick="window.ocNewOnly = !!(window.ocLastCutAt && window.ocLastCutAt()); document.querySelector('.tab-btn[data-tab=&quot;commandes&quot;]').click();">
+        <div class="dash-ico ic-orders"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 7h12l1 13H5L6 7z"/><path d="M9 7a3 3 0 0 1 6 0"/></svg></div><div class="dash-label" id="dash-orders-label">Commandes</div>
         <div class="dash-value" id="dash-orders">0</div>
       </div>
       <div class="dash-card dash-out" id="dash-out-card" onclick="openStockFilter('out')">
@@ -2971,7 +2971,15 @@ function renderDashboard(){
   const ordersToday = orders.filter(o=> new Date(o.createdAt).toDateString() === todayStr).length;
   const outCount = countOutItems();
   const lowCount = products.filter(p=> p.qty > 0 && p.qty <= 2).length;
-  document.getElementById('dash-orders').textContent = ordersToday;
+  // après la dernière ligne ✂️ (comme dans Commandes), sinon celles d'aujourd'hui
+  const dashCut = window.ocLastCutAt ? window.ocLastCutAt() : '';
+  if(dashCut){
+    document.getElementById('dash-orders').textContent = orders.filter(o=> (o.createdAt || '') > dashCut).length;
+    document.getElementById('dash-orders-label').textContent = 'Commandes après ✂️';
+  } else {
+    document.getElementById('dash-orders').textContent = ordersToday;
+    document.getElementById('dash-orders-label').textContent = 'Commandes';
+  }
   document.getElementById('dash-out').textContent = outCount;
   document.getElementById('dash-low').textContent = lowCount;
   document.getElementById('dash-total').textContent = products.length;
