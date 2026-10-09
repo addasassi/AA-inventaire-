@@ -142,7 +142,29 @@
       <div class="rt-sec"><div class="rt-h">🟠 Retours à récupérer chez ZR <span>${todo.length}</span></div>
         ${todo.length ? todo.map(o => line(o, esc(o.zr.tracking || '') + '<br>' + (waitDays(o) > 7 ? '<b style="color:#b3261e">' : '<b>') + 'depuis ' + waitDays(o) + ' j</b>')).join('') : '<div class="rt-empty">Aucun retour en attente</div>'}</div>
       <div class="rt-sec"><div class="rt-h">🟢 Retours remis en stock <span>${done.length}</span></div>
-        ${done.length ? done.map(o => line(o, fmtDate(o.returnInfo.at) + (o.returnInfo.by ? '<br>' + esc(o.returnInfo.by) : ''))).join('') : '<div class="rt-empty">Aucun pour le moment</div>'}</div>`;
+        ${done.length ? done.map(doneCard).join('') : '<div class="rt-empty">Aucun pour le moment</div>'}</div>`;
+  }
+  // carte d'un retour remis en stock : photos + quantités, détail en touchant
+  function doneCard(o){
+    const c = o.customer || {}, ri = o.returnInfo || {};
+    const back = (ri.items && ri.items.length ? ri.items : (o.items || [])).map(x => {
+      const src = (o.items || []).find(i => i.name === x.name) || {};
+      return {name: x.name, qty: Number(x.qty) || 1, img: src.img || ''};
+    });
+    const pcs = back.reduce((n, x) => n + x.qty, 0);
+    const thumbs = back.map(x => `<div class="rt-th">${x.img ? `<img src="${esc(x.img)}" loading="lazy">` : '<i class="rt-ph">👗</i>'}<span>+${x.qty}</span></div>`).join('');
+    const rows = back.map(x => `<div class="rt-it">${x.img ? `<img src="${esc(x.img)}" loading="lazy">` : '<span class="rt-noimg"></span>'}<div>${esc(x.name)}</div><b>+${x.qty}</b></div>`).join('');
+    return `<details class="rt-done">
+      <summary>
+        <div class="rt-done-top"><div><b>${esc(c.name || 'Client')}</b> · ${esc(c.wilaya || '')}<br><span>✅ ${pcs} pièce${pcs > 1 ? 's' : ''} remise${pcs > 1 ? 's' : ''} en stock</span></div><small>${fmtDate(ri.at)}${ri.by ? '<br>' + esc(ri.by) : ''}</small></div>
+        <div class="rt-ths">${thumbs}</div>
+      </summary>
+      <div class="rt-done-body">
+        ${rows}
+        <div class="rt-meta">📞 ${esc(c.phone || '—')}${c.commune ? ' · ' + esc(c.commune) : ''}<br>🧾 Commande du ${fmtDate(o.createdAt)}${o.createdBy ? ' par ' + esc(o.createdBy) : ''}${o.zr && (o.zr.tracking || o.zr.previousTracking) ? '<br>🚚 ' + esc(o.zr.tracking || o.zr.previousTracking) : ''}</div>
+        ${typeof showOrderDetail === 'function' ? `<button class="rt-open" onclick="showOrderDetail('${esc(o.id)}')">Voir la commande</button>` : ''}
+      </div>
+    </details>`;
   }
 
   /* ---------- Caméra (QR + codes-barres) ---------- */
@@ -193,6 +215,23 @@
       .rt-row{display:flex;justify-content:space-between;gap:10px;background:var(--card,#fff);border:1px solid var(--line);border-radius:12px;padding:9px 10px;margin-bottom:6px;font-size:13px;}
       .rt-row span{opacity:.75;font-size:12px;} .rt-row small{text-align:right;opacity:.75;flex-shrink:0;font-size:11.5px;}
       .rt-empty{font-size:13px;opacity:.7;padding:4px 2px;}
+      #rt-code{padding:11px 12px;border:1px solid var(--line);border-radius:10px;font-size:14px;background:var(--card,#fff);color:inherit;box-sizing:border-box;}
+      .rt-done{background:var(--card,#fff);border:1px solid var(--line);border-left:5px solid #2e9d5b;border-radius:12px;margin-bottom:8px;overflow:hidden;}
+      .rt-done summary{list-style:none;padding:10px;cursor:pointer;}
+      .rt-done summary::-webkit-details-marker{display:none;}
+      .rt-done-top{display:flex;justify-content:space-between;gap:10px;font-size:13px;}
+      .rt-done-top span{color:#1e7b45;font-weight:700;font-size:12.5px;}
+      .rt-done-top small{text-align:right;opacity:.75;flex-shrink:0;font-size:11.5px;}
+      .rt-ths{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}
+      .rt-th{position:relative;width:52px;height:52px;border-radius:50%;overflow:visible;}
+      .rt-th img{width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid #cfe9d9;background:#eee;}
+      .rt-th span{position:absolute;right:-4px;bottom:-4px;background:#1e7b45;color:#fff;font-size:11px;font-weight:800;border-radius:999px;padding:1px 6px;border:2px solid var(--card,#fff);}
+      .rt-ph{display:flex;align-items:center;justify-content:center;width:52px;height:52px;border-radius:50%;background:#eee;border:2px solid #cfe9d9;font-style:normal;font-size:22px;box-sizing:border-box;}
+      .rt-done[open] .rt-ths{display:none;}
+      .rt-done-body{padding:0 10px 10px;}
+      .rt-done-body .rt-it{background:#f3faf6;}
+      .rt-meta{font-size:12.5px;opacity:.85;margin-top:8px;line-height:1.6;}
+      .rt-open{margin-top:8px;width:100%;border:1px solid var(--line);background:var(--cream,#f6efe9);color:var(--plum);border-radius:10px;padding:9px;font-weight:700;}
       #rt-cam{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px;}
       .rt-cam-card{width:100%;max-width:440px;background:#111;border-radius:16px;padding:12px;color:#fff;text-align:center;}
       .rt-cam-t{font-weight:700;margin-bottom:8px;} #rt-cam video,#rt-h5{width:100%;border-radius:12px;background:#000;}
