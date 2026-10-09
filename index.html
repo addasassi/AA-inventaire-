@@ -4430,6 +4430,13 @@ function showClientDetail(id){
   const clientOrders = orders.filter(o=> sanitizePhone(o.customer && o.customer.phone) === id)
     .sort((a,b)=> new Date(b.createdAt) - new Date(a.createdAt));
   const ordersWrap = document.getElementById('cd-orders');
+  // résumé livraison : livrées / retours de cette cliente
+  const cdDel = clientOrders.filter(o=> o.zr && o.zr.stage === 'delivered').length;
+  const cdRet = clientOrders.filter(o=> o.zr && o.zr.stage === 'returned').length;
+  let cdBox = document.getElementById('cd-returns');
+  if(!cdBox){ cdBox = document.createElement('div'); cdBox.id = 'cd-returns'; ordersWrap.parentNode.insertBefore(cdBox, ordersWrap); }
+  cdBox.style.cssText = 'border-radius:12px;padding:10px 12px;margin:10px 0;font-weight:700;font-size:14px;' + (cdRet ? 'background:#f8dedb;color:#8e2f27;' : 'background:#dcf3e6;color:#16502f;');
+  cdBox.innerHTML = cdRet ? `⛔ ${cdRet} retour${cdRet>1?'s':''} · ✅ ${cdDel} livrée${cdDel>1?'s':''}` : (cdDel ? `✅ ${cdDel} livrée${cdDel>1?'s':''} · aucun retour` : 'Aucun colis terminé pour le moment');
   if(clientOrders.length === 0){
     ordersWrap.innerHTML = '<div class="top-products-empty">Aucune commande trouvée.</div>';
   } else {
@@ -4437,9 +4444,10 @@ function showClientDetail(id){
       const d = new Date(o.createdAt);
       const dateTxt = d.toLocaleDateString('fr-FR') + ' ' + d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
       const itemsTxt = o.items.map(it=> it.qty+'x '+escapeHtml(it.name)).join(', ');
+      const stTag = o.zr && o.zr.stage === 'returned' ? ' <span style="color:#b3261e;font-weight:800;">↩️ Retour' + (o.returnInfo && o.returnInfo.at ? ' (remis en stock)' : '') + '</span>' : (o.zr && o.zr.stage === 'delivered' ? ' <span style="color:#1e7b45;font-weight:800;">✅ Livrée</span>' : '');
       return `<div class="order-card" onclick="showOrderDetail('${o.id}')">
         <div class="oc-top">
-          <div class="oc-name">${dateTxt}</div>
+          <div class="oc-name">${dateTxt}${stTag}</div>
           <div class="oc-total">${Number(o.total).toFixed(2)} DA</div>
         </div>
         ${orderThumbs(o)}<div class="oc-items">${itemsTxt}</div>

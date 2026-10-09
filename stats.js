@@ -264,6 +264,22 @@
     const wilRows = Object.entries(S.wil).sort((a, b) => b[1].ca - a[1].ca);
     const tops = Object.values(S.top).sort((a, b) => b.v - a.v).slice(0, 10);
     const topModels = Object.values(S.topModel).sort((a, b) => b.v - a.v).slice(0, 10);
+    // ↩️ retours : modèles les plus retournés (période) + retours à récupérer (toutes périodes)
+    const retAgg = {}, finAgg = {};
+    S.delivered.concat(S.returned).forEach(o => (o.items || []).forEach(it => {
+      const k = it.name || '?';
+      (finAgg[k] = finAgg[k] || {n: 0}).n += Number(it.qty) || 1;
+    }));
+    S.returned.forEach(o => (o.items || []).forEach(it => {
+      const k = it.name || '?';
+      const r = retAgg[k] = retAgg[k] || {label: k, v: 0, img: it.img || ''};
+      r.v += Number(it.qty) || 1;
+    }));
+    const topRet = Object.values(retAgg).sort((a, b) => b.v - a.v).slice(0, 10)
+      .map(r => Object.assign(r, {note: finAgg[r.label] && finAgg[r.label].n ? pct(r.v, finAgg[r.label].n) + ' de retour' : ''}));
+    const pendRet = allOrders().filter(o => isReturned(o) && !(o.returnInfo && o.returnInfo.at));
+    const oldRet = pendRet.filter(o => Date.now() - Date.parse((o.zr && (o.zr.finalAt || o.zr.updatedAt)) || o.createdAt) > 7 * 86400000);
+    const backRet = allOrders().filter(o => o.returnInfo && o.returnInfo.at && Date.parse(o.returnInfo.at) >= S.R.from && Date.parse(o.returnInfo.at) < S.R.to);
     const orderClick = id => `zrStatsOpen('${id}')`;
     const WD = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
     const bestH = S.hours.indexOf(Math.max(...S.hours)), bestD = S.wdays.indexOf(Math.max(...S.wdays));
@@ -315,6 +331,15 @@
       `)}
 
       ${section('🔁 À racheter bientôt', S.reorder.length ? hbars(S.reorder.map(x => ({label: x.name, v: x.s, img: x.img, note: x.qty <= 0 ? '— <b class="bad-t">rupture</b>' : `— reste ${x.qty}, ≈ ${Math.max(1, Math.round(x.left))} j`})), v => v + ' vendus/14 j', {cls: 'warn'}) : '<div class="st-empty ok">✅ Aucun article ne va manquer cette semaine</div>', 'Pièces vendues au moins 2 fois en 14 jours dont le stock tiendra moins d\'une semaine à ce rythme.')}
+
+      ${section('↩️ Retours', `<div class="st-grid">
+          ${tile('À récupérer chez ZR', num(pendRet.length), oldRet.length ? '<b class="bad-t">' + oldRet.length + ' depuis plus de 7 jours</b>' : 'tous récents')}
+          ${tile('Remis en stock', num(backRet.length), 'sur la période')}
+        </div>
+        <button class="st-more" onclick="document.querySelector('.tab-btn[data-tab=&quot;scan&quot;]').click();setTimeout(function(){var e=document.getElementById('rt-section');if(e)e.scrollIntoView({behavior:'smooth'})},250)">↩️ Ouvrir la réception des retours</button>
+        <h4>Modèles les plus retournés</h4>
+        ${topRet.length ? hbars(topRet, v => v + ' pcs', {cls: 'warn'}) : '<div class="st-empty ok">✅ Aucun retour sur la période</div>'}
+      `, 'Un modèle souvent retourné = taille, photo ou description à revoir.')}
 
       ${section('😴 Modèles qui dorment', S.dormant.length ? hbars(S.dormant, v => v + ' en stock', {cls: 'muted'}) : '<div class="st-empty ok">✅ Tout se vend</div>', 'En stock mais aucune vente depuis 30 jours — pensez à une promo ou une nouvelle photo.' + (S.historyDays < 30 ? ' (Historique de commandes encore court : liste plus fiable dans quelques semaines.)' : ''))}
 

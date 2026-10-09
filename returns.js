@@ -100,7 +100,7 @@
       lastUndo = {order: o, changes};
       beep(true);
       renderResult({order: o, changes});
-      renderLists();
+      renderLists(); try{ dashAlert(); }catch(e){}
     }catch(e){ beep(false); renderResult({error: 'Échec : ' + (e.message || e) + ' — réessayez'}); }
   }
 
@@ -140,7 +140,7 @@
     const line = (o, right) => { const c = o.customer || {}; return `<div class="rt-row"><div><b>${esc(c.name || '')}</b> · ${esc(c.wilaya || '')}<br><span>${(o.items || []).map(i => esc(i.name) + ' ×' + (i.qty || 1)).join(', ')}</span></div><small>${right}</small></div>`; };
     el.innerHTML = `
       <div class="rt-sec"><div class="rt-h">🟠 Retours à récupérer chez ZR <span>${todo.length}</span></div>
-        ${todo.length ? todo.map(o => line(o, esc(o.zr.tracking || ''))).join('') : '<div class="rt-empty">Aucun retour en attente</div>'}</div>
+        ${todo.length ? todo.map(o => line(o, esc(o.zr.tracking || '') + '<br>' + (waitDays(o) > 7 ? '<b style="color:#b3261e">' : '<b>') + 'depuis ' + waitDays(o) + ' j</b>')).join('') : '<div class="rt-empty">Aucun retour en attente</div>'}</div>
       <div class="rt-sec"><div class="rt-h">🟢 Retours remis en stock <span>${done.length}</span></div>
         ${done.length ? done.map(o => line(o, fmtDate(o.returnInfo.at) + (o.returnInfo.by ? '<br>' + esc(o.returnInfo.by) : ''))).join('') : '<div class="rt-empty">Aucun pour le moment</div>'}</div>`;
   }
@@ -215,8 +215,37 @@
     renderLists();
   }
 
+  /* ---------- Alerte sur l'accueil : retours à récupérer ---------- */
+  const waitDays = o => Math.floor((Date.now() - Date.parse((o.zr && (o.zr.finalAt || o.zr.updatedAt)) || o.createdAt)) / 86400000);
+  function dashAlert(){
+    const view = document.getElementById('view-accueil'); if(!view) return;
+    const list = (typeof orders !== 'undefined' && orders) || [];
+    const pend = list.filter(o => o.zr && o.zr.stage === 'returned' && !(o.returnInfo && o.returnInfo.at));
+    const old = pend.filter(o => waitDays(o) > 7);
+    let el = document.getElementById('rt-dash');
+    if(!pend.length){ if(el) el.remove(); return; }
+    if(!el){
+      el = document.createElement('div'); el.id = 'rt-dash';
+      el.style.cssText = 'display:flex;align-items:center;gap:10px;border-radius:14px;padding:12px 14px;margin:0 0 12px;font-weight:700;font-size:14px;cursor:pointer;';
+      el.onclick = () => { document.querySelector('.tab-btn[data-tab="scan"]').click(); setTimeout(() => { const s = document.getElementById('rt-section'); if(s) s.scrollIntoView({behavior: 'smooth'}); }, 250); };
+      const anchor = document.getElementById('dash-date');
+      if(anchor && anchor.parentNode === view) anchor.after(el); else view.prepend(el);
+    }
+    const bad = old.length > 0;
+    el.style.background = bad ? '#f8dedb' : '#fff1c9';
+    el.style.color = bad ? '#8e2f27' : '#6b4b00';
+    el.style.border = '1px solid ' + (bad ? '#e7b1aa' : '#efd98a');
+    el.innerHTML = `<span style="font-size:20px">↩️</span><span style="flex:1">${pend.length} retour${pend.length > 1 ? 's' : ''} à récupérer chez ZR${bad ? `<br><small style="font-weight:800">⚠️ ${old.length} depuis plus de 7 jours</small>` : ''}</span><span>›</span>`;
+  }
+  if(typeof window.renderDashboard === 'function'){
+    const orig = window.renderDashboard;
+    window.renderDashboard = function(){ const r = orig.apply(this, arguments); try{ dashAlert(); }catch(e){} return r; };
+  }
+  setInterval(() => { try{ dashAlert(); }catch(e){} }, 60000);
+
   function init(){
     ui();
+    setTimeout(() => { try{ dashAlert(); }catch(e){} }, 2500);
     document.querySelectorAll('.tab-btn[data-tab="scan"]').forEach(b => b.addEventListener('click', () => { ui(); if(typeof loadOrders === 'function') loadOrders().then(renderLists).catch(()=>{}); else renderLists(); }));
   }
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
