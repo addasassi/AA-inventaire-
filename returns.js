@@ -242,7 +242,7 @@
     sec.innerHTML = `
       <div class="rt-title">↩️ Réception d'un retour</div>
       <div class="note" style="margin-bottom:8px;">Scannez le QR / code-barres du bordereau ZR Express (ou tapez le n° de suivi) : tous les articles de la commande reviennent dans le stock.</div>
-      <div class="rt-row-in"><input type="text" id="rt-code" placeholder="Scan du bordereau…" autocomplete="off"><button id="rt-ok">OK</button><button id="rt-camera" title="Caméra">📷</button></div>
+      <div class="rt-row-in"><input type="text" id="rt-code" placeholder="Scan du bordereau…" autocomplete="off" inputmode="none"><button id="rt-ok">OK</button><button id="rt-camera" title="Caméra">📷</button></div>
       <div id="rt-result"></div>
       <div id="rt-lists"></div>`;
     view.appendChild(sec);
