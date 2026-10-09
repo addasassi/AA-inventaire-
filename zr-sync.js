@@ -699,6 +699,7 @@
     try{ if(typeof renderOrdersHistory === 'function') renderOrdersHistory(); }catch(e){}
   }
   window.zrUpdateParcel = updateParcel;
+  window.zrCall = call;
 
   window.zrPrepareOrder = prepare;
   window.zrAfterSave = afterSave;

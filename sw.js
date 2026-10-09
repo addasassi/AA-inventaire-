@@ -6,7 +6,7 @@
 // Les données (Firebase) ne passent PAS par ici : seulement les fichiers de l'app.
 
 const CACHE = 'atelier-app-v1';
-const SHELL = ['./', 'shopify-sync.js', 'zr-bureaux.js', 'zr-sync.js', 'app-update.js', 'app-back.js', 'select-search.js', 'stats.js', 'returns.js', 'hand.js',
+const SHELL = ['./', 'shopify-sync.js', 'zr-bureaux.js', 'zr-sync.js', 'app-update.js', 'app-back.js', 'select-search.js', 'stats.js', 'returns.js', 'hand.js', 'zr-suivi.js',
   'manifest.json', 'icon-192.png'];
 
 self.addEventListener('install', (event) => {
