@@ -26,6 +26,66 @@
   const isReturned = o => stageOf(o) === 'returned';
   const wilayaOf = o => (o.customer && o.customer.wilaya) || '—';
 
+  /* ---------- Bénéfice réel : tarifs ZR + sponsor (meta/sponsor) ----------
+     Bénéfice = ventes livrées − coût d'achat − livraison ZR − retours ZR − sponsor
+     Sponsor saisi en € par jour → $ (taux du jour) → DA (prix USDT réglable). */
+  const TARIF = {1:[1400,980],2:[750,530],3:[950,680],4:[800,530],5:[800,530],6:[800,530],7:[950,680],8:[1050,730],9:[750,530],10:[800,530],11:[1600,1130],12:[850,530],13:[700,530],14:[750,530],15:[800,530],16:[650,480],17:[950,680],18:[800,530],19:[800,530],20:[750,580],21:[800,530],22:[700,530],23:[850,530],24:[850,530],25:[800,530],26:[750,530],27:[700,530],28:[900,580],29:[700,530],30:[950,730],31:[500,380],32:[1000,680],34:[800,530],35:[800,530],36:[850,530],38:[750,530],39:[950,730],40:[800,530],41:[800,530],42:[800,530],43:[800,530],44:[750,530],45:[1000,680],46:[650,530],47:[950,680],48:[750,530],49:[1050,980],51:[950,680],52:[1600,980],53:[1600,1130],54:[1600,0],55:[950,730],57:[950,0],58:[950,730]};
+  let SP = {usdt: 254, retDefault: 250, days: {}}, spSub = null;
+  function subSponsor(){
+    if(spSub || typeof db === 'undefined') return;
+    try{
+      spSub = db.collection('meta').doc('sponsor').onSnapshot(d => {
+        const x = (d.exists && d.data()) || {};
+        SP = {usdt: Number(x.usdt) || 254, retDefault: x.retDefault != null && x.retDefault !== '' ? Number(x.retDefault) : 250, days: x.days || {}, lastRate: Number(x.lastRate) || 0};
+        maybeRender();
+      }, () => { spSub = null; });
+    }catch(e){ spSub = null; }
+  }
+  const spDa = e => Math.round((Number(e.eur) || 0) * (Number(e.rate) || SP.lastRate || 1.17) * SP.usdt);
+  const custOf = o => o.customer || {};
+  const deliveryFee = o => {
+    if(isHand(o)) return 0;
+    const z = o.zr || {};
+    if(Number(z.deliveryPrice) > 0) return Number(z.deliveryPrice);
+    const t = TARIF[Number(custOf(o).wilayaCode)];
+    return t ? (custOf(o).deliveryType === 'stopdesk' ? (t[1] || t[0]) : t[0]) : 0;
+  };
+  async function eurUsd(date){
+    const today = dayKey(Date.now());
+    const tries = [
+      async () => (await (await fetch('https://api.frankfurter.app/' + (date >= today ? 'latest' : date) + '?from=EUR&to=USD')).json()).rates.USD,
+      async () => (await (await fetch('https://open.er-api.com/v6/latest/EUR')).json()).rates.USD
+    ];
+    for(const f of tries){ try{ const r = Number(await f()); if(r > 0.5 && r < 2) return r; }catch(e){} }
+    return SP.lastRate || 1.17;
+  }
+  window.zrSpSave = async () => {
+    const d = document.getElementById('pf-date'), e = document.getElementById('pf-eur'), b = document.getElementById('pf-save');
+    const date = d && d.value, eur = Number(String(e && e.value || '').replace(',', '.'));
+    if(!date){ toast('Choisissez le jour', true); return; }
+    if(!(eur >= 0) || e.value === ''){ toast('Écrivez le montant en €', true); return; }
+    if(b){ b.disabled = true; b.textContent = '…'; }
+    try{
+      const rate = await eurUsd(date);
+      await db.collection('meta').doc('sponsor').set({lastRate: rate, days: {[date]: {eur, rate, at: new Date().toISOString(), by: (typeof currentUser !== 'undefined' && currentUser && currentUser.name) || ''}}}, {merge: true});
+      ['pf-eur', 'pf-date'].forEach(id => { const el = document.getElementById(id); if(el) delete el.dataset.touched; });
+      toast(eur ? `📣 ${eur} € → ${money(Math.round(eur * rate * SP.usdt))} enregistré` : '📣 Sponsor supprimé pour ce jour');
+    }catch(err){ toast('Échec de l\'enregistrement : ' + (err && err.message || err), true); }
+    if(b){ b.disabled = false; b.textContent = 'Enregistrer'; }
+  };
+  window.zrSpEdit = date => {
+    const d = document.getElementById('pf-date'), e = document.getElementById('pf-eur');
+    if(d){ d.value = date; d.dataset.touched = '1'; }
+    if(e){ const x = SP.days[date]; e.value = x && x.eur ? x.eur : ''; e.dataset.touched = '1'; e.focus(); }
+  };
+  window.zrSpSettings = async () => {
+    const u = Number(String(document.getElementById('pf-usdt').value).replace(',', '.'));
+    const r = Number(String(document.getElementById('pf-ret').value).replace(',', '.'));
+    if(!(u > 0)){ toast('Prix USDT invalide', true); return; }
+    try{ await db.collection('meta').doc('sponsor').set({usdt: u, retDefault: r >= 0 ? r : 250}, {merge: true}); ['pf-usdt', 'pf-ret'].forEach(id => { const el = document.getElementById(id); if(el) delete el.dataset.touched; }); toast('✅ Réglages enregistrés'); }
+    catch(err){ toast('Échec : ' + (err && err.message || err), true); }
+  };
+
   /* ---------- Période ---------- */
   let period = 'month', customFrom = '', customTo = '';
   function range(){
@@ -158,6 +218,25 @@
     const atZrMoney = sum(atZr, o => (Number(o.total) || 0) - (Number(Z(o).deliveryPrice) || 0));
     const noCost = P.filter(p => !(Number(p.cost) > 0)).length;
 
+    // 💰 bénéfice réel
+    const learned = {};
+    ALL.forEach(o => { const rp = Number((o.zr || {}).returnPrice); if(rp > 0){ const c = custOf(o); learned[c.wilayaCode + '|' + c.deliveryType] = rp; if(!learned[c.wilayaCode]) learned[c.wilayaCode] = rp; } });
+    let retEst = 0;
+    const returnFee = o => {
+      const rp = Number((o.zr || {}).returnPrice); if(rp > 0) return rp;
+      const c = custOf(o); retEst++;
+      return learned[c.wilayaCode + '|' + c.deliveryType] || learned[c.wilayaCode] || SP.retDefault;
+    };
+    const costOf = o => o.costTotal != null ? Number(o.costTotal) || 0 : (o.profit != null ? (Number(o.total) || 0) - Number(o.profit) : 0);
+    const pf = {sales: sum(delivered, o => o.total), cost: sum(delivered, costOf), deliv: sum(delivered, deliveryFee), ret: sum(returned, returnFee), retEst};
+    const fromK = dayKey(R.from), toK = dayKey(R.to - 1);
+    pf.spDays = Object.entries(SP.days || {}).filter(([d, e]) => e && Number(e.eur) > 0 && d >= fromK && d <= toK).sort((a, b) => b[0].localeCompare(a[0]));
+    pf.spEur = pf.spDays.reduce((t, [, e]) => t + Number(e.eur), 0);
+    pf.spDa = pf.spDays.reduce((t, [, e]) => t + spDa(e), 0);
+    pf.net = pf.sales - pf.cost - pf.deliv - pf.ret - pf.spDa;
+    const pend = cur.filter(o => !isDelivered(o) && !isReturned(o));
+    pf.pendN = pend.length; pf.pendProfit = sum(pend, o => (Number(o.total) || 0) - costOf(o) - deliveryFee(o));
+
     // livraison par wilaya + type + délai
     const wil = {};
     cur.forEach(o => {
@@ -258,7 +337,7 @@
     const hours = new Array(24).fill(0), wdays = new Array(7).fill(0);
     cur.forEach(o => { const d = new Date(o.createdAt); hours[d.getHours()]++; wdays[(d.getDay() + 6) % 7]++; });
 
-    return {R, cur, prev, ca, caP, profit, profitP, delivered, returned, inProgress, fees, net, atZr, atZrMoney, noCost,
+    return {R, cur, prev, ca, caP, profit, profitP, delivered, returned, inProgress, fees, net, pf, atZr, atZrMoney, noCost,
       wil, types, avgDays, nrp, watch, top, topModel, cats, reorder, dormant, historyDays, stockCost, stockPrice, stockN,
       loyal, black, topCust, custN: custList.length, team, hours, wdays};
   }
@@ -297,6 +376,9 @@
     const WD = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
     const bestH = S.hours.indexOf(Math.max(...S.hours)), bestD = S.wdays.indexOf(Math.max(...S.wdays));
 
+    const keep = {}; ['pf-date', 'pf-eur', 'pf-usdt', 'pf-ret'].forEach(id => { const el = document.getElementById(id); if(el && el.dataset.touched) keep[id] = el.value; });
+    const focusId = document.activeElement && document.activeElement.id;
+    const setOpen = !!document.querySelector('.pf-set[open]');
     root.innerHTML = `
       <div class="st-periods">${PERIODS.map(([k, l]) => `<button class="chip${period === k ? ' active' : ''}" onclick="zrStatsPeriod('${k}')">${l}</button>`).join('')}</div>
       <div class="st-custom" style="display:${period === 'custom' ? 'flex' : 'none'}">
@@ -304,13 +386,14 @@
       </div>
       <div class="st-range">${S.R.from.toLocaleDateString('fr-FR')} → ${new Date(S.R.to - 1).toLocaleDateString('fr-FR')}${S.historyDays < 30 ? ` · <span>historique : ${S.historyDays + 1} jour(s) de commandes</span>` : ''}</div>
 
-      ${section('💰 Chiffres clés', `<div class="st-grid">
-        ${tile("Chiffre d'affaires", money(S.ca), delta(S.ca, S.caP))}
+      ${profitSection(S)}
+
+      ${section('📊 Chiffres clés', `<div class="st-grid">
+        ${tile("Chiffre d'affaires", money(S.ca), delta(S.ca, S.caP) || 'toutes les commandes, même pas encore livrées')}
         ${tile('Commandes', num(n), delta(n, nP))}
-        ${tile('Bénéfice (articles)', money(S.profit), delta(S.profit, S.profitP))}
+        ${tile('Marge sur articles', money(S.profit), delta(S.profit, S.profitP) || 'vente − achat, toutes commandes')}
         ${tile('Panier moyen', money(n ? S.ca / n : 0), nP ? 'avant : ' + money(S.caP / nP) : '')}
-        ${tile('Bénéfice net estimé', money(S.net), 'livrées − frais ZR (' + money(S.fees) + ')', 'wide')}
-      </div>${S.noCost ? `<div class="st-warn">⚠️ ${S.noCost} produit(s) sans <b>coût d'achat</b> : leur bénéfice est compté comme le prix de vente. Ajoutez le coût dans la fiche produit pour un bénéfice juste.</div>` : ''}`)}
+      </div>`)}
 
       ${section('📈 Ventes ' + (S.R.days <= 1 ? 'heure par heure' : 'jour par jour'), lineChart(S.R, S.cur, S.prev), 'Touchez la courbe pour voir le détail.')}
 
@@ -382,6 +465,47 @@
     if(f) f.onchange = () => { customFrom = f.value; if(!customTo || customTo < customFrom) customTo = customFrom; render(); };
     if(t) t.onchange = () => { customTo = t.value; render(); };
     bindChart();
+    Object.entries(keep).forEach(([id, v]) => { const el = document.getElementById(id); if(el){ el.value = v; el.dataset.touched = '1'; } });
+    ['pf-date', 'pf-eur', 'pf-usdt', 'pf-ret'].forEach(id => { const el = document.getElementById(id); if(el) el.addEventListener('input', () => el.dataset.touched = '1'); });
+    if(setOpen){ const d = document.querySelector('.pf-set'); if(d) d.open = true; }
+    if(focusId && /^pf-/.test(focusId)){ const el = document.getElementById(focusId); if(el) el.focus(); }
+  }
+  function profitSection(S){
+    subSponsor();
+    const p = S.pf, today = dayKey(Date.now());
+    const line = (ic, l, v, sub, sign) => `<div class="pf-l"><span>${ic} ${l}${sub ? `<small>${sub}</small>` : ''}</span><b class="${sign < 0 ? 'neg' : 'pos'}">${sign < 0 ? '− ' : '+ '}${money(v)}</b></div>`;
+    const rate = SP.lastRate || 1.17;
+    const fmtDay = d => new Date(d + 'T00:00:00').toLocaleDateString('fr-FR', {weekday: 'short', day: 'numeric', month: 'short'});
+    const todayEntry = SP.days && SP.days[today];
+    return section('💰 Bénéfice réel', `
+      <div class="pf-big ${p.net < 0 ? 'neg' : ''}"><div class="pf-big-l">Ce qui reste dans ta poche</div><div class="pf-big-v">${money(p.net)}</div></div>
+      <div class="pf-lines">
+        ${line('💵', 'Ventes livrées', p.sales, S.delivered.length + ' commande' + (S.delivered.length > 1 ? 's' : ''), 1)}
+        ${line('🧵', "Prix d'achat des articles", p.cost, '', -1)}
+        ${line('🚚', 'Livraison ZR', p.deliv, '', -1)}
+        ${line('↩️', 'Retours ZR', p.ret, S.returned.length + ' retour' + (S.returned.length > 1 ? 's' : '') + (p.retEst ? ` · ${p.retEst} estimé${p.retEst > 1 ? 's' : ''}` : ''), -1)}
+        ${line('📣', 'Sponsor', p.spDa, p.spEur ? (Math.round(p.spEur * 100) / 100) + ' €' : 'rien saisi', -1)}
+        <div class="pf-l pf-tot"><span>= Bénéfice</span><b class="${p.net < 0 ? 'neg' : 'pos'}">${money(p.net)}</b></div>
+      </div>
+      ${p.pendN ? `<div class="pf-pend">⏳ <b>${p.pendN}</b> commande${p.pendN > 1 ? 's' : ''} pas encore livrée${p.pendN > 1 ? 's' : ''} : jusqu'à <b>${money(p.pendProfit)}</b> de plus si elles sont livrées.</div>` : ''}
+      ${S.noCost ? `<div class="st-warn">⚠️ ${S.noCost} produit(s) sans prix d'achat — ajoutez-le pour un bénéfice juste.</div>` : ''}
+
+      <h4>📣 Sponsor du jour</h4>
+      <div class="pf-sp">
+        <input type="date" id="pf-date" value="${today}" max="${today}" onchange="zrSpEdit(this.value)">
+        <input type="text" id="pf-eur" inputmode="decimal" placeholder="Montant en €" value="${todayEntry && todayEntry.eur ? todayEntry.eur : ''}">
+        <button id="pf-save" onclick="zrSpSave()">Enregistrer</button>
+      </div>
+      <div class="st-hint" style="margin:6px 0 0">1 € ≈ ${rate.toFixed(3).replace('.', ',')} $ · 1 USDT = ${SP.usdt} DA → <b>1 € ≈ ${Math.round(rate * SP.usdt)} DA</b>. Le taux € → $ du jour est pris automatiquement.</div>
+      ${p.spDays.length ? `<div class="pf-days">${p.spDays.map(([d, e]) => `<div class="pf-day" onclick="zrSpEdit('${d}')"><span>${fmtDay(d)}</span><span>${e.eur} €</span><b>${money(spDa(e))}</b><i>✏️</i></div>`).join('')}</div>` : ''}
+
+      <details class="pf-set"><summary>⚙️ Réglages (prix USDT, retour)</summary>
+        <label>Prix d'achat de 1 USDT (DA)<input type="text" inputmode="decimal" id="pf-usdt" value="${SP.usdt}"></label>
+        <label>Prix d'un retour quand ZR ne l'indique pas (DA)<input type="text" inputmode="decimal" id="pf-ret" value="${SP.retDefault}"></label>
+        <button onclick="zrSpSettings()">Enregistrer les réglages</button>
+        <div class="st-hint" style="margin:8px 0 0">Livraison et retour : prix donnés par ZR pour chaque colis. Sinon tarif ZR de la wilaya (livraison) ou le prix ci-dessus (retour).</div>
+      </details>
+    `, 'Commandes de la période qui sont livrées, moins tous les frais.');
   }
   function vbars(arr, labels){
     const max = Math.max(...arr, 1);
@@ -403,7 +527,8 @@
     rows.push(['Statistiques A&A VÊTEMENTS', R.from.toLocaleDateString('fr-FR') + ' → ' + new Date(R.to - 1).toLocaleDateString('fr-FR')]);
     rows.push([]);
     rows.push(['Chiffre d\'affaires', Math.round(S.ca)], ['Commandes', S.cur.length], ['Bénéfice (articles)', Math.round(S.profit)],
-      ['Bénéfice net estimé', Math.round(S.net)], ['Frais ZR', Math.round(S.fees)], ['Livrées', S.delivered.length], ['Retours', S.returned.length],
+      [], ['Ventes livrées', Math.round(S.pf.sales)], ['Prix d\'achat', -Math.round(S.pf.cost)], ['Livraison ZR', -Math.round(S.pf.deliv)], ['Retours ZR', -Math.round(S.pf.ret)],
+      ['Sponsor (€)', Math.round(S.pf.spEur * 100) / 100], ['Sponsor (DA)', -Math.round(S.pf.spDa)], ['BÉNÉFICE RÉEL', Math.round(S.pf.net)], [], ['Livrées', S.delivered.length], ['Retours', S.returned.length],
       ['Argent chez ZR', Math.round(S.atZrMoney)]);
     rows.push([], ['Wilaya', 'Commandes', 'CA', 'Livrées', 'Retours']);
     Object.entries(S.wil).sort((a, b) => b[1].ca - a[1].ca).forEach(([w, x]) => rows.push([w, x.n, Math.round(x.ca), x.d, x.r]));
@@ -575,6 +700,27 @@
       .st-vb-v{font-size:9.5px;color:var(--mauve-dark);margin-bottom:2px;height:12px;line-height:12px;}
       .st-vb-l{font-size:9.5px;color:var(--mauve-dark);margin-top:4px;height:12px;line-height:12px;white-space:nowrap;flex-shrink:0;}
       .st-vb-b{flex-shrink:1;}
+      .pf-big{border-radius:14px;padding:14px;background:color-mix(in srgb,var(--st-ok) 13%,transparent);text-align:center;}
+      .pf-big.neg{background:color-mix(in srgb,var(--st-bad) 13%,transparent);}
+      .pf-big-l{font-size:12.5px;color:var(--mauve-dark);}
+      .pf-big-v{font-size:clamp(26px,8vw,34px);font-weight:900;color:var(--st-ok);margin-top:2px;}
+      .pf-big.neg .pf-big-v{color:var(--st-bad);}
+      .pf-lines{margin-top:10px;}
+      .pf-l{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 2px;border-bottom:1px solid var(--line);font-size:13.5px;}
+      .pf-l span{min-width:0;} .pf-l small{display:block;font-size:11px;color:var(--mauve-dark);margin-left:22px;}
+      .pf-l b{white-space:nowrap;} .pf-l b.neg{color:var(--st-bad);} .pf-l b.pos{color:var(--st-ok);}
+      .pf-tot{border-bottom:none;font-size:15px;font-weight:800;}
+      .pf-pend{margin-top:10px;font-size:12.5px;line-height:1.45;padding:10px 12px;border-radius:12px;background:color-mix(in srgb,var(--st-cur) 9%,transparent);}
+      .pf-sp{display:flex;gap:6px;flex-wrap:wrap;}
+      .pf-sp input{flex:1;min-width:0;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:inherit;font:inherit;font-size:14px;}
+      .pf-sp input[type=date]{flex:1 1 140px;} .pf-sp #pf-eur{flex:1 1 100px;}
+      .pf-sp button,.pf-set button{border:none;border-radius:10px;padding:10px 14px;background:var(--plum);color:#fff;font:inherit;font-weight:700;cursor:pointer;}
+      .pf-days{margin-top:10px;display:flex;flex-direction:column;gap:4px;}
+      .pf-day{display:grid;grid-template-columns:1fr auto auto 20px;gap:10px;align-items:center;font-size:13px;padding:7px 10px;border-radius:10px;background:color-mix(in srgb,var(--line) 35%,transparent);cursor:pointer;}
+      .pf-day i{font-style:normal;font-size:12px;opacity:.6;}
+      .pf-set{margin-top:12px;font-size:13px;} .pf-set summary{cursor:pointer;color:var(--mauve-dark);font-weight:700;padding:4px 0;}
+      .pf-set label{display:flex;flex-direction:column;gap:4px;margin:10px 0;font-size:12.5px;color:var(--mauve-dark);}
+      .pf-set input{padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:inherit;font:inherit;font-size:14px;}
       .st-export{margin-top:18px;}
       .st-export .btn-primary{width:100%;}
       .st-black-alert{margin-top:8px;padding:10px 12px;border-radius:12px;font-size:13px;line-height:1.45;background:#fde8e6;color:#8f2418;border:1px solid #f3b8b0;}
