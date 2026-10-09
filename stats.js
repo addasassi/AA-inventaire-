@@ -73,6 +73,20 @@
     }catch(err){ toast('Échec de l\'enregistrement : ' + (err && err.message || err), true); }
     if(b){ b.disabled = false; b.textContent = 'Enregistrer'; }
   };
+  let ncOpen = false;
+  window.zrNcToggle = v => { ncOpen = v; };
+  window.zrNcOpen = id => { if(typeof openProductModal === 'function') openProductModal(id); };
+  window.zrNcSave = async id => {
+    const inp = document.getElementById('nc-' + id);
+    const v = Number(String(inp && inp.value || '').replace(',', '.').replace(/\s/g, ''));
+    if(!(v > 0)){ toast('Écrivez le prix d\'achat', true); return; }
+    try{
+      await db.collection('products').doc(id).set({cost: v}, {merge: true});
+      const p = allProducts().find(x => x.id === id); if(p) p.cost = v;
+      toast('✅ Prix d\'achat enregistré : ' + money(v));
+      render();
+    }catch(e){ toast('Échec : ' + (e.message || e), true); }
+  };
   window.zrSpEdit = date => {
     const d = document.getElementById('pf-date'), e = document.getElementById('pf-eur');
     if(d){ d.value = date; d.dataset.touched = '1'; }
@@ -216,7 +230,8 @@
     const net = sum(delivered, o => o.profit != null ? o.profit : o.total) - fees;
     const atZr = ALL.filter(o => isDelivered(o) && Z(o).finalAt && !Z(o).paid);   // suivi de l'encaissement depuis la v8 du relais
     const atZrMoney = sum(atZr, o => (Number(o.total) || 0) - (Number(Z(o).deliveryPrice) || 0));
-    const noCost = P.filter(p => !(Number(p.cost) > 0)).length;
+    const noCostList = P.filter(p => !(Number(p.cost) > 0));
+    const noCost = noCostList.length;
 
     // 💰 bénéfice réel
     const learned = {};
@@ -337,7 +352,7 @@
     const hours = new Array(24).fill(0), wdays = new Array(7).fill(0);
     cur.forEach(o => { const d = new Date(o.createdAt); hours[d.getHours()]++; wdays[(d.getDay() + 6) % 7]++; });
 
-    return {R, cur, prev, ca, caP, profit, profitP, delivered, returned, inProgress, fees, net, pf, atZr, atZrMoney, noCost,
+    return {R, cur, prev, ca, caP, profit, profitP, delivered, returned, inProgress, fees, net, pf, atZr, atZrMoney, noCost, noCostList,
       wil, types, avgDays, nrp, watch, top, topModel, cats, reorder, dormant, historyDays, stockCost, stockPrice, stockN,
       loyal, black, topCust, custN: custList.length, team, hours, wdays};
   }
@@ -376,7 +391,8 @@
     const WD = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
     const bestH = S.hours.indexOf(Math.max(...S.hours)), bestD = S.wdays.indexOf(Math.max(...S.wdays));
 
-    const keep = {}; ['pf-date', 'pf-eur', 'pf-usdt', 'pf-ret'].forEach(id => { const el = document.getElementById(id); if(el && el.dataset.touched) keep[id] = el.value; });
+    const keepIds = ['pf-date', 'pf-eur', 'pf-usdt', 'pf-ret'].concat([...document.querySelectorAll('#statsPage input[id^="nc-"]')].map(e => e.id));
+    const keep = {}; keepIds.forEach(id => { const el = document.getElementById(id); if(el && el.dataset.touched) keep[id] = el.value; });
     const focusId = document.activeElement && document.activeElement.id;
     const setOpen = !!document.querySelector('.pf-set[open]');
     root.innerHTML = `
@@ -466,9 +482,9 @@
     if(t) t.onchange = () => { customTo = t.value; render(); };
     bindChart();
     Object.entries(keep).forEach(([id, v]) => { const el = document.getElementById(id); if(el){ el.value = v; el.dataset.touched = '1'; } });
-    ['pf-date', 'pf-eur', 'pf-usdt', 'pf-ret'].forEach(id => { const el = document.getElementById(id); if(el) el.addEventListener('input', () => el.dataset.touched = '1'); });
+    ['pf-date', 'pf-eur', 'pf-usdt', 'pf-ret'].concat([...document.querySelectorAll('#statsPage input[id^="nc-"]')].map(e => e.id)).forEach(id => { const el = document.getElementById(id); if(el) el.addEventListener('input', () => el.dataset.touched = '1'); });
     if(setOpen){ const d = document.querySelector('.pf-set'); if(d) d.open = true; }
-    if(focusId && /^pf-/.test(focusId)){ const el = document.getElementById(focusId); if(el) el.focus(); }
+    if(focusId && /^(pf|nc)-/.test(focusId)){ const el = document.getElementById(focusId); if(el) el.focus(); }
   }
   function profitSection(S){
     subSponsor();
@@ -488,7 +504,10 @@
         <div class="pf-l pf-tot"><span>= Bénéfice</span><b class="${p.net < 0 ? 'neg' : 'pos'}">${money(p.net)}</b></div>
       </div>
       ${p.pendN ? `<div class="pf-pend">⏳ <b>${p.pendN}</b> commande${p.pendN > 1 ? 's' : ''} pas encore livrée${p.pendN > 1 ? 's' : ''} : jusqu'à <b>${money(p.pendProfit)}</b> de plus si elles sont livrées.</div>` : ''}
-      ${S.noCost ? `<div class="st-warn">⚠️ ${S.noCost} produit(s) sans prix d'achat — ajoutez-le pour un bénéfice juste.</div>` : ''}
+      ${S.noCost ? `<details class="st-warn nc"${ncOpen ? ' open' : ''} ontoggle="zrNcToggle(this.open)"><summary>⚠️ <b>${S.noCost} produit(s) sans prix d'achat</b> — touchez pour les compléter</summary>
+        ${S.noCostList.map(p => `<div class="nc-r"><img src="${esc(p.img || '')}" onclick="zrNcOpen('${esc(p.id)}')" loading="lazy"><div class="nc-n" onclick="zrNcOpen('${esc(p.id)}')"><b>${esc(p.name)}</b><small>#${esc(p.code || '')} · vendu ${money(p.price)}</small></div>
+          <input type="text" inputmode="decimal" id="nc-${esc(p.id)}" placeholder="Achat DA"><button onclick="zrNcSave('${esc(p.id)}')">OK</button></div>`).join('')}
+      </details>` : ''}
 
       <h4>📣 Sponsor du jour</h4>
       <div class="pf-sp">
@@ -721,6 +740,12 @@
       .pf-set{margin-top:12px;font-size:13px;} .pf-set summary{cursor:pointer;color:var(--mauve-dark);font-weight:700;padding:4px 0;}
       .pf-set label{display:flex;flex-direction:column;gap:4px;margin:10px 0;font-size:12.5px;color:var(--mauve-dark);}
       .pf-set input{padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:inherit;font:inherit;font-size:14px;}
+      .st-warn.nc summary{cursor:pointer;list-style:none;} .st-warn.nc summary::-webkit-details-marker{display:none;}
+      .nc-r{display:flex;align-items:center;gap:8px;margin-top:8px;background:var(--card);border-radius:10px;padding:6px;}
+      .nc-r img{width:42px;height:42px;border-radius:8px;object-fit:cover;flex-shrink:0;background:var(--rose);cursor:pointer;}
+      .nc-n{flex:1;min-width:0;cursor:pointer;} .nc-n b{display:block;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;} .nc-n small{font-size:11px;color:var(--mauve-dark);}
+      .nc-r input{width:84px;padding:8px;border:1px solid var(--line);border-radius:9px;background:var(--card);color:inherit;font:inherit;font-size:14px;}
+      .nc-r button{border:none;border-radius:9px;padding:8px 12px;background:var(--plum);color:#fff;font-weight:800;cursor:pointer;}
       .st-export{margin-top:18px;}
       .st-export .btn-primary{width:100%;}
       .st-black-alert{margin-top:8px;padding:10px 12px;border-radius:12px;font-size:13px;line-height:1.45;background:#fde8e6;color:#8f2418;border:1px solid #f3b8b0;}
