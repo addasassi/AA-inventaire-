@@ -153,6 +153,7 @@
 
   /* ---------- Courbe des ventes (période vs période précédente) ---------- */
   let chartData = null;
+  const cmd = n => n + ' commande' + (n > 1 ? 's' : '');
   function lineChart(R, cur, prev){
     const byHour = R.days <= 1;
     const n = byHour ? 24 : R.days;
@@ -161,7 +162,7 @@
       list.forEach(o => {
         const t = Date.parse(o.createdAt);
         const i = byHour ? new Date(t).getHours() : Math.floor((dayStart(t) - start) / DAY);
-        if(i >= 0 && i < n) arr[i] += Number(o.total) || 0;
+        if(i >= 0 && i < n) arr[i] += 1;
       });
       return arr;
     };
@@ -175,7 +176,7 @@
     const path = arr => arr.map((v, i) => (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1)).join(' ');
     const ticks = [0, Math.floor((n - 1) / 2), n - 1].filter((v, i, s) => s.indexOf(v) === i);
     return `<div class="st-chart" id="st-chart">
-      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Chiffre d'affaires ${byHour ? 'par heure' : 'par jour'}">
+      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Commandes ${byHour ? 'par heure' : 'par jour'}">
         <line x1="${L}" x2="${W - Rr}" y1="${y(0)}" y2="${y(0)}" class="st-axis"/>
         <line x1="${L}" x2="${W - Rr}" y1="${y(max / 2)}" y2="${y(max / 2)}" class="st-gl"/>
         ${b ? `<path d="${path(b)}" class="st-prev"/>` : ''}
@@ -185,7 +186,7 @@
         <circle id="st-dot" r="4" class="st-dot" style="display:none"/>
       </svg>
       <div class="st-tip" id="st-tip" style="display:none"></div>
-      <div class="st-legend"><span><i class="cur"></i>Cette période</span>${b ? '<span><i class="prev"></i>Période précédente</span>' : ''}<span class="st-max">max ${money(max)}</span></div>
+      <div class="st-legend"><span><i class="cur"></i>Cette période</span>${b ? '<span><i class="prev"></i>Période précédente</span>' : ''}<span class="st-max">max ${cmd(max)}</span></div>
     </div>`;
   }
   function bindChart(){
@@ -201,7 +202,7 @@
       const xx = L + (n === 1 ? (W - L - Rr) / 2 : i * (W - L - Rr) / (n - 1));
       cross.setAttribute('x1', xx); cross.setAttribute('x2', xx); cross.style.display = '';
       dot.setAttribute('cx', xx); dot.setAttribute('cy', T + (H - T - B) * (1 - a[i] / max)); dot.style.display = '';
-      tip.innerHTML = `<b>${esc(labels[i])}</b><br>${money(a[i])}${b ? `<br><span>avant : ${money(b[i])}</span>` : ''}`;
+      tip.innerHTML = `<b>${esc(labels[i])}</b><br>${cmd(a[i])}${b ? `<br><span>avant : ${cmd(b[i])}</span>` : ''}`;
       tip.style.display = '';
       const left = Math.min(r.width - tip.offsetWidth - 4, Math.max(4, xx / W * r.width - tip.offsetWidth / 2));
       tip.style.left = left + 'px';
@@ -411,7 +412,7 @@
         ${tile('Panier moyen', money(n ? S.ca / n : 0), nP ? 'avant : ' + money(S.caP / nP) : '')}
       </div>`)}
 
-      ${section('📈 Ventes ' + (S.R.days <= 1 ? 'heure par heure' : 'jour par jour'), lineChart(S.R, S.cur, S.prev), 'Touchez la courbe pour voir le détail.')}
+      ${section('📈 Commandes ' + (S.R.days <= 1 ? 'heure par heure' : 'jour par jour'), lineChart(S.R, S.cur, S.prev), 'Touchez la courbe pour voir le détail.')}
 
       ${section('🚚 Livraison ZR', `
         <div class="st-grid">
