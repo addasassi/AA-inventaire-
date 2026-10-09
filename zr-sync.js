@@ -88,7 +88,7 @@
   }
   function sitBadge(o){
     const t = o && o.zr && o.zr.situation;
-    if(!t || o.zr.stage === 'delivered' || o.zr.stage === 'returned') return '';
+    if(!t || /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(t) || o.zr.stage === 'delivered' || o.zr.stage === 'returned') return '';
     const s = sitStyle(t);
     return `<div class="zr-badge" style="color:${s[1]};background:${s[2]}">${s[0]} ${esc(t)}</div>`;
   }

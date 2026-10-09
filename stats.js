@@ -175,6 +175,7 @@
     // commandes à surveiller (toutes périodes)
     const now = Date.now(), todayIso = dayKey(now);
     const watch = [];
+    const wnorm = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
     ALL.forEach(o => {
       const z = o.zr || {};
       if(isDelivered(o) || isReturned(o)) return;
@@ -182,8 +183,18 @@
       if(z.status === 'error') watch.push({o, why: '❌ Erreur ZR : ' + (z.error || ''), lvl: 3});
       else if(o.deferred && o.deferredDate && o.deferredDate <= todayIso && !z.parcelId) watch.push({o, why: '🕓 Reportée — à envoyer (' + new Date(o.deferredDate + 'T00:00:00').toLocaleDateString('fr-FR') + ')', lvl: 2});
       else if(o.zr && !z.parcelId && !o.deferred && age > 1 / 24) watch.push({o, why: '📦 Pas encore envoyée à ZR', lvl: 2});
-      else if(z.situation) watch.push({o, why: '📞 ' + z.situation, lvl: 2});
-      else if(z.sentAt && (now - Date.parse(z.sentAt)) / DAY > 5) watch.push({o, why: '🐢 En route depuis ' + Math.floor((now - Date.parse(z.sentAt)) / DAY) + ' jours', lvl: 1});
+      else {
+        // seulement ce qui demande une action : annulée, sans réponse, colis bloqué au même état
+        const sit = /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(z.situation || '') ? '' : (z.situation || '');
+        const sk = wnorm(sit), stk = wnorm(z.state);
+        const since = Math.floor((now - Date.parse(z.stateAt || z.sentAt || o.createdAt)) / DAY);
+        const where = (o.customer && o.customer.deliveryType === 'stopdesk') ? ' · Stop desk' : ' · Domicile';
+        if(/annul/.test(sk)) watch.push({o, why: '❌ ' + sit + where, lvl: 3});
+        else if(/ne repond pas|sans reponse|injoignable|nrp|refus/.test(sk)) watch.push({o, why: '📵 ' + sit + where, lvl: 2});
+        else if(z.parcelId && /confirme au bureau|au bureau|chez partenaire/.test(stk) && since >= 3) watch.push({o, why: '🏢 ' + (z.state || 'Au bureau') + ' depuis ' + since + ' j — pas récupéré' + where, lvl: 2});
+        else if(z.parcelId && /vers wilaya|dispatch|transit|expedi/.test(stk) && since >= 4) watch.push({o, why: '🐢 ' + (z.state || 'Vers wilaya') + ' depuis ' + since + ' j', lvl: 1});
+        else if(z.parcelId && z.stage === 'out_for_delivery' && since >= 3) watch.push({o, why: '🛵 ' + (z.state || 'En livraison') + ' depuis ' + since + ' j', lvl: 1});
+      }
     });
     watch.sort((a, b) => b.lvl - a.lvl || Date.parse(a.o.createdAt) - Date.parse(b.o.createdAt));
 
@@ -322,7 +333,7 @@
           <div><b>${esc((w.o.customer && w.o.customer.name) || 'Client')}</b> · ${esc(wilayaOf(w.o))}<br><span>${esc(w.why)}</span></div>
           <div class="st-w-r">${money(w.o.total)}<br><small>${new Date(w.o.createdAt).toLocaleDateString('fr-FR')}</small></div></div>`).join('')
           + (S.watch.length > 12 ? `<button class="st-more" onclick="this.parentNode.querySelectorAll('[data-more]').forEach(e=>e.style.display='');this.remove()">Voir tout (${Math.min(60, S.watch.length)})</button>` : '') + '</div>'
-        : '<div class="st-empty ok">✅ Rien à signaler</div>', 'Toutes périodes : erreurs ZR, commandes pas envoyées, reportées arrivées à échéance, « Ne répond pas », colis en route depuis plus de 5 jours.')}
+        : '<div class="st-empty ok">✅ Rien à signaler</div>', 'Toutes périodes : erreurs ZR, pas envoyées, annulées, « Ne répond pas », colis bloqués (au bureau depuis 3 j, vers wilaya depuis 4 j, en livraison depuis 3 j).')}
 
       ${section('👗 Les plus vendus', `
         <div class="st-tabs"><button class="on" onclick="zrStatsTab(this,'st-top-c')">Par couleur</button><button onclick="zrStatsTab(this,'st-top-m')">Par modèle</button></div>

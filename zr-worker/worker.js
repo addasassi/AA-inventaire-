@@ -57,18 +57,19 @@ function stageOf(state){
 /* ---------- Situation de livraison (Ne répond pas 1/2/3, Commune erronée, SMS envoyé…) ----------
    ZR la donne à part de l'état. On cherche tout champ « situation » du colis
    (texte, objet {name/description/label} ou liste → la dernière). */
+const isUuid = v => typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v.trim());
 function txt(v){
   if(!v) return '';
-  if(typeof v === 'string') return v;
+  if(typeof v === 'string') return isUuid(v) ? '' : v;
   if(Array.isArray(v)) return v.length ? txt(v[v.length - 1]) : '';
   if(typeof v === 'object') return txt(v.description || v.label || v.title || v.name || v.situation || v.value || '');
   return '';
 }
 function situationOf(p){
   if(!p || typeof p !== 'object') return '';
-  for(const k of Object.keys(p)){
-    if(/situation/i.test(k)){ const t = txt(p[k]); if(t) return t; }
-  }
+  // ZR : situation = {id, name} ; on ignore les identifiants (situationId, UUID…)
+  const keys = Object.keys(p).filter(k => /situation/i.test(k) && !/id$/i.test(k)).sort((a, b) => (a === 'situation' ? -1 : 0) - (b === 'situation' ? -1 : 0));
+  for(const k of keys){ const t = txt(p[k]); if(t) return t; }
   for(const k of ['lastAttempt', 'deliveryAttempt', 'attempt', 'lastEvent']){
     if(p[k] && typeof p[k] === 'object'){ const t = situationOf(p[k]); if(t) return t; }
   }
@@ -394,6 +395,9 @@ async function trackOrder(env, o){
     situation: isNoSituation(sit) ? '' : sit,
     deliveryPrice: Number(p.deliveryPrice) || z.deliveryPrice || 0, returnPrice: Number(p.returnPrice) || z.returnPrice || 0,
     finalAt, paid, nrp,
+    // depuis quand l'état / la situation n'ont pas changé (pour repérer les colis bloqués)
+    stateAt: ((p.state && (p.state.description || p.state.name)) || z.state) !== z.state ? nowIso : (z.stateAt || z.sentAt || nowIso),
+    situationAt: (isNoSituation(sit) ? '' : sit) !== (z.situation || '') ? nowIso : (z.situationAt || nowIso),
     status: final ? stage : 'sent', active: !final || keep, lastCheck: Date.now(), updatedAt: nowIso};
   await saveZr(o.id, nz);
   return nz;
