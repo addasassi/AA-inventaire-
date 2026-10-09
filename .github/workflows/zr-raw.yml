@@ -1,0 +1,14 @@
+name: Diagnostic colis ZR
+on:
+  workflow_dispatch:
+    inputs:
+      tn: {description: 'N° de suivi', required: true}
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '20'}
+      - run: node tools/zr-raw.mjs
+        env: {TN: '${{ github.event.inputs.tn }}'}

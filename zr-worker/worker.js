@@ -554,6 +554,14 @@ export default {
         if(!o) return json({ok: false, error: 'Commande introuvable'}, 404);
         return json({ok: true, zr: await trackOrder(env, o)});
       }
+      if(path === '/raw'){   // diagnostic : colis brut renvoyé par ZR
+        const o = await getOrder(id);
+        const pid = o && o.zr && o.zr.parcelId;
+        if(!pid) return json({ok: false, error: 'pas de colis'}, 400);
+        const out = {parcel: await zr(env, '/parcels/' + pid)};
+        for(const sub of ['/history', '/situations', '/events', '/timeline']){ try{ out[sub] = await zr(env, '/parcels/' + pid + sub); }catch(e){ out[sub] = String(e && e.message || e).slice(0, 120); } }
+        return json(out);
+      }
       if(path === '/label'){
         const o = await getOrder(id);
         const t = o && o.zr && o.zr.tracking;
