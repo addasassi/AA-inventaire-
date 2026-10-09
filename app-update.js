@@ -5,7 +5,7 @@
    l'app se recharge avec la nouvelle version.
    ===================================================================== */
 (function(){
-  const FILES = [location.pathname, 'shopify-sync.js', 'zr-bureaux.js', 'zr-sync.js', 'app-update.js', 'app-back.js', 'select-search.js', 'stats.js'];
+  const FILES = [location.pathname, 'shopify-sync.js', 'zr-bureaux.js', 'zr-sync.js', 'app-update.js', 'app-back.js', 'select-search.js', 'stats.js', 'returns.js', 'hand.js', 'zr-suivi.js'];
   const base = {};
   let shown = false;
 
