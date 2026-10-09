@@ -162,13 +162,20 @@
     try{
       const j = await call('/history', {id: o.id});
       const ev = j.events || [];
-      const fmt = iso => { const d = new Date(iso); return d.toLocaleDateString('fr-FR', {day: '2-digit', month: 'short'}) + ' · ' + d.toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'}); };
+      const fmt = iso => { const d = new Date(iso); return d.toLocaleDateString('fr-FR', {day: '2-digit', month: 'short'}) + ' à ' + d.toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'}); };
       const sitCol = t => { const k = String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
         return /livre/.test(k) ? '#16a34a' : /report/.test(k) ? '#10b981' : /annul|refus|retour/.test(k) ? '#dc2626' : /repond pas|injoignable/.test(k) ? '#f59e0b' : '#1e88e5'; };
-      box.innerHTML = ev.length ? '<div class="zr-tl">' + ev.map(e => `<div class="zr-ev ${e.kind}"><div class="zr-ev-d">${fmt(e.at)}</div>
-          <div class="zr-ev-b"><span class="zr-ev-l" style="--c:${e.kind === 'state' ? (e.color || '#555') : sitCol(e.label)}">${esc(e.label || '—')}</span>
-          ${e.date ? `<div class="zr-ev-n">📅 pour le <b>${new Date(e.date + 'T00:00:00').toLocaleDateString('fr-FR', {weekday: 'long', day: 'numeric', month: 'long'})}</b></div>` : ''}
-          ${e.hub ? `<div class="zr-ev-n">📍 ${esc(e.hub)}</div>` : ''}${e.note ? `<div class="zr-ev-n">💬 ${esc(e.note)}</div>` : ''}</div></div>`).join('') + '</div>'
+      const pill = e => { const k = String(e.label || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        if(e.kind === 'state') return ['#eef0f3', '#334155'];
+        if(/repond pas|injoignable/.test(k)) return ['#FFCC00', '#111'];
+        if(/report/.test(k)) return ['#16a34a', '#fff'];
+        if(/annul|refus|retour/.test(k)) return ['#dc2626', '#fff'];
+        if(/livre/.test(k)) return ['#16a34a', '#fff'];
+        return ['#1e88e5', '#fff']; };
+      const sd = iso => new Date(iso + 'T00:00:00').toLocaleDateString('fr-FR', {day: 'numeric', month: 'short'});
+      box.innerHTML = ev.length ? '<div class="zr-tl"><div class="zr-tl-h"><span>Date</span><span>Situation</span></div>' + ev.map((e, i) => { const c = pill(e);
+          return `<div class="zr-ev"${i >= 10 ? ' data-more style="display:none"' : ''}><div class="zr-ev-d">${fmt(e.at)}</div><div class="zr-ev-b"><span class="zr-ev-l" style="background:${c[0]};color:${c[1]}">${esc(e.label || '—')}</span>${e.date ? `<span class="zr-ev-x">📅 ${sd(e.date)}</span>` : ''}${e.hub ? `<span class="zr-ev-x">📍 ${esc(e.hub.replace(/\s+[\u0600-\u06FF].*$/, ''))}</span>` : ''}${e.note ? `<span class="zr-ev-x">💬 ${esc(e.note)}</span>` : ''}</div></div>`; }).join('')
+          + (ev.length > 10 ? `<button class="zr-tl-more" onclick="this.parentNode.querySelectorAll('[data-more]').forEach(x=>x.style.display='');this.remove()">Voir tout (${ev.length})</button>` : '') + '</div>'
         : '<div class="zr-sub">Pas encore d\'historique.</div>';
       box.dataset.open = '1'; btn.textContent = '📜 Masquer';
     }catch(e){ toast('Historique : ' + (e.message || e), true); btn.textContent = '📜 Historique'; }
@@ -235,13 +242,14 @@
       .zr-sub{font-size:12.5px;margin-top:6px;opacity:.85;}
       .zr-err{font-size:12.5px;margin-top:8px;color:#a4483f;font-weight:700;}
       .zr-hist:empty{display:none;} .zr-hist{margin-top:12px;}
-      .zr-tl{position:relative;padding-left:4px;}
-      .zr-ev{display:grid;grid-template-columns:92px 1fr;gap:10px;padding:9px 0;border-top:1px solid var(--line);}
-      .zr-ev-d{font-size:12px;font-weight:700;color:var(--mauve-dark);line-height:1.35;}
-      .zr-ev-l{display:inline-block;font-size:13px;font-weight:800;border-radius:999px;padding:3px 10px;}
-      .zr-ev.state .zr-ev-l{background:var(--c);color:#fff;}
-      .zr-ev.sit .zr-ev-l{background:color-mix(in srgb,var(--c) 18%,#fff);color:#111;border:1.5px solid var(--c);}
-      .zr-ev-n{font-size:12.5px;margin-top:4px;line-height:1.4;}
+      .zr-tl{border:1px solid var(--line);border-radius:12px;overflow:hidden;font-size:12.5px;}
+      .zr-tl-h{display:grid;grid-template-columns:96px 1fr;gap:8px;padding:7px 10px;font-weight:800;font-size:12px;background:color-mix(in srgb,var(--line) 40%,transparent);}
+      .zr-ev{display:grid;grid-template-columns:96px 1fr;gap:8px;align-items:center;padding:6px 10px;border-top:1px solid var(--line);}
+      .zr-ev-d{font-size:11.5px;white-space:nowrap;}
+      .zr-ev-b{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;min-width:0;}
+      .zr-ev-l{display:inline-block;font-size:11.5px;font-weight:700;border-radius:999px;padding:2px 9px;white-space:nowrap;}
+      .zr-ev-x{font-size:11px;opacity:.85;}
+      .zr-tl-more{display:block;width:100%;border:none;border-top:1px solid var(--line);background:transparent;color:inherit;font:inherit;font-size:12px;font-weight:700;padding:8px;cursor:pointer;}
       .zr-track{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;}
       .zr-track span{opacity:.7;}
       .zr-track b{direction:ltr;letter-spacing:.3px;background:#FFCC00;color:#111;font-family:monospace;font-weight:800;padding:3px 9px;border-radius:7px;}
