@@ -1,0 +1,29 @@
+name: Sauvegarde quotidienne
+on:
+  schedule:
+    - cron: '23 2 * * *'   # chaque nuit (~3h20 en Algérie)
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency: backup
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {path: app}
+      - uses: actions/setup-node@v4
+        with: {node-version: '20'}
+      - name: Branche backups
+        run: |
+          git clone -q --depth 1 --branch backups "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" bk || {
+            mkdir bk && cd bk && git init -q && git checkout -q --orphan backups && git remote add origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"; }
+      - run: node app/tools/backup.mjs bk
+      - run: |
+          cd bk
+          git config user.name "atelier-stock-bot"; git config user.email "atelier-stock-bot@users.noreply.github.com"
+          # un seul commit (historique remplacé) : le dépôt ne grossit pas jour après jour
+          git checkout -q --orphan fresh
+          git add -A backup
+          git commit -qm "Sauvegarde $(date -u +%F)"
+          git push -q -f origin fresh:backups

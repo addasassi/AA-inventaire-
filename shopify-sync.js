@@ -254,6 +254,7 @@
       }, {merge:true});
       return log;
     });
+    try{ await importOrders(orders); }catch(e){ console.warn('import commandes Shopify', e); }
     if(applied && applied.length && !silent){
       toast('🛍️ Commandes du site : ' + applied.join(', '));
     } else if(applied && applied.length){
@@ -261,6 +262,108 @@
     }
     return applied ? applied.length : 0;
   }
+
+  /* ---------- Commandes du site → commandes de l'app (à confirmer puis envoyer à ZR) ---------- */
+  const nrm = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9؀-ۿ]+/g, ' ').trim();
+  function findWilaya(...texts){
+    const list = (typeof wilayasList !== 'undefined' && wilayasList) || [];
+    const ar = (typeof wilayaArList !== 'undefined' && wilayaArList) || [];
+    for(const raw of texts){
+      const t = nrm(raw); if(!t) continue;
+      const m = t.match(/^(\d{1,2})\b/) || t.match(/\b(\d{1,2})$/);
+      if(m){ const w = list.find(x => x.code === Number(m[1])); if(w) return w; }
+      let w = list.find(x => nrm(x.name) === t) || list.find(x => t.includes(nrm(x.name)) && nrm(x.name).length > 3);
+      if(w) return w;
+      const a = ar.find(x => x.ar && String(raw).includes(x.ar));
+      if(a){ w = list.find(x => x.code === Number(a.code)); if(w) return w; }
+    }
+    return null;
+  }
+  function attr(o, re){ const a = (o.customAttributes || []).find(x => re.test(x.key || '')); return a ? String(a.value || '').trim() : ''; }
+  function itemFromLine(li){
+    const sku = String((li.variant && li.variant.sku) || li.sku || '');
+    const size = ((li.variant && li.variant.selectedOptions) || []).find(x => !/couleur|color|اللون|لون/i.test(x.name || '') && /^(xs|s|m|l|xl|xxl|xxxl|\d{2})$/i.test(String(x.value || '').trim()));
+    const price = Number(((li.discountedUnitPriceSet || li.originalUnitPriceSet || {}).shopMoney || {}).amount) || 0;
+    const qty = Number(li.quantity) || 1;
+    for(const p of (typeof products !== 'undefined' ? products : [])){
+      const ci = (p.colors || []).findIndex(c => c && String(c.code) === sku);
+      if(ci >= 0){
+        const c = p.colors[ci];
+        return {productId: p.id, colorIndex: ci, code: sku, name: (typeof colorLabel === 'function' ? colorLabel(p.name, ci) : p.name) + (size ? ' — ' + size.value : ''),
+          price, cost: Number(c.cost != null && c.cost !== '' ? c.cost : p.cost) || 0, qty, img: c.img || p.img || ''};
+      }
+      if(String(p.code) === sku) return {productId: p.id, colorIndex: null, code: sku, name: p.name + (size ? ' — ' + size.value : ''), price, cost: Number(p.cost) || 0, qty, img: p.img || ''};
+    }
+    return {productId: '', colorIndex: null, code: sku, name: (li.title || 'Article') + (li.variantTitle ? ' (' + li.variantTitle + ')' : ''), price, cost: 0, qty, img: ''};
+  }
+  const ORDER_FIELDS = `id name createdAt cancelledAt note phone customAttributes{ key value }
+    totalPriceSet{ shopMoney{ amount } } subtotalPriceSet{ shopMoney{ amount } } totalShippingPriceSet{ shopMoney{ amount } }
+    shippingLines(first:3){ nodes{ title } }
+    shippingAddress{ name firstName lastName phone address1 address2 city province provinceCode zip }
+    lineItems(first:50){ nodes{ sku quantity title variantTitle variant{ sku selectedOptions{ name value } }
+      originalUnitPriceSet{ shopMoney{ amount } } discountedUnitPriceSet{ shopMoney{ amount } } } }`;
+  async function importOrders(list){
+    if(typeof db === 'undefined' || !db || typeof orders === 'undefined') return;
+    // détails (client, adresse, prix) seulement pour les commandes pas encore dans l'app
+    const need = list.filter(so => !so.cancelledAt && !orders.some(x => x.id === 'shop' + String(so.id).split('/').pop())).map(so => so.id);
+    const full = {};
+    if(need.length){
+      try{
+        const d = await gql(`query N($q:String){ orders(first:50, query:$q){ nodes{ ${ORDER_FIELDS} } } }`, {q: need.slice(0, 50).map(i => 'id:' + String(i).split('/').pop()).join(' OR ')});
+        d.nodes = d.orders.nodes;
+        (d.nodes || []).forEach(n => { if(n && n.id) full[n.id] = n; });
+      }catch(e){
+        try{   // sans l'adresse (si l'accès aux données client est refusé)
+          const d = await gql(`query N($q:String){ orders(first:50, query:$q){ nodes{ ${ORDER_FIELDS.replace(/shippingAddress\{[^}]*\}/, '')} } } }`, {q: need.slice(0, 50).map(i => 'id:' + String(i).split('/').pop()).join(' OR ')});
+          d.nodes = d.orders.nodes;
+          (d.nodes || []).forEach(n => { if(n && n.id) full[n.id] = n; });
+        }catch(e2){ console.warn('détails commandes Shopify', e2); }
+      }
+    }
+    for(const so0 of list){
+      const so = full[so0.id] || so0;
+      const id = 'shop' + String(so.id).split('/').pop();
+      const local = orders.find(x => x.id === id);
+      if(so.cancelledAt){
+        // annulée sur le site : on retire la commande de l'app (le stock est déjà remis par la synchro) si pas encore chez ZR
+        const o = local || (await db.collection('orders').doc(id).get().then(d => d.exists ? Object.assign({id}, d.data()) : null).catch(() => null));
+        if(o && !(o.zr && o.zr.parcelId) && !o.shopifyCancelled){
+          await db.collection('orders').doc(id).delete().catch(() => {});
+          const i = orders.findIndex(x => x.id === id); if(i >= 0) orders.splice(i, 1);
+          toast('🛍️ Commande du site ' + so.name + ' annulée — retirée');
+        }
+        continue;
+      }
+      if(local) continue;
+      const exists = await db.collection('orders').doc(id).get().then(d => d.exists).catch(() => true);
+      if(exists) continue;
+      const sa = so.shippingAddress || {}, cu = so.customer || {};
+      const name = (sa.name || [sa.firstName, sa.lastName].filter(Boolean).join(' ') || [cu.firstName, cu.lastName].filter(Boolean).join(' ') || attr(so, /name|nom|اسم/i) || 'Cliente site').trim();
+      const phone = (sa.phone || so.phone || (cu.defaultPhoneNumber && cu.defaultPhoneNumber.phoneNumber) || attr(so, /phone|t[eé]l|هاتف|رقم/i) || '').replace(/^\+213/, '0').replace(/\s+/g, '');
+      const w = findWilaya(attr(so, /wilaya|ولاية|province|state/i), sa.province, sa.provinceCode, sa.city);
+      const ship = [(so.shippingLines && so.shippingLines.nodes || []).map(x => x.title).join(' '), (so.customAttributes || []).map(x => x.key + ' ' + x.value).join(' ')].join(' ');
+      const stop = /stop|desk|bureau|agence|relais|pickup|مكتب|وكالة/i.test(ship);
+      const commune = attr(so, /commune|بلدية|baladia|city|ville/i) || sa.city || '';
+      const items = (so.lineItems && so.lineItems.nodes || []).map(itemFromLine);
+      const subtotal = Number(((so.subtotalPriceSet || {}).shopMoney || {}).amount) || items.reduce((t, i) => t + i.price * i.qty, 0);
+      const costTotal = items.reduce((t, i) => t + (i.cost || 0) * i.qty, 0);
+      const o = {
+        id,
+        customer: {name, phone, wilaya: w ? w.name : (sa.province || ''), wilayaCode: w ? w.code : '', commune, address: [sa.address1, sa.address2].filter(Boolean).join(', '), deliveryType: stop ? 'stopdesk' : 'domicile'},
+        items, total: subtotal, costTotal, profit: subtotal - costTotal,
+        createdAt: so.createdAt || new Date().toISOString(), createdBy: 'Site Shopify',
+        deferred: false, deferredDate: '',
+        source: 'shopify', toConfirm: true,
+        shopify: {id: so.id, name: so.name, total: Number(((so.totalPriceSet || {}).shopMoney || {}).amount) || 0, shipping: Number(((so.totalShippingPriceSet || {}).shopMoney || {}).amount) || 0, note: so.note || ''}
+      };
+      await db.collection('orders').doc(id).set(o);
+      orders.push(o);
+      try{ if(typeof upsertCustomer === 'function') await upsertCustomer(o); }catch(e){}
+      toast('🛍️ Nouvelle commande du site ' + so.name + ' — ' + name + ' (à confirmer)');
+      try{ if(typeof renderOrdersHistory === 'function') renderOrdersHistory(); if(typeof renderDashboard === 'function') renderDashboard(); }catch(e){}
+    }
+  }
+  window.shopifyImportOrders = importOrders;
 
   /* ---------- Atelier → Shopify ---------- */
   async function pushAll(log){

@@ -42,7 +42,7 @@
     if(w0) o.customer.wilayaCode = w0.code;
     if(z && z.parcelId) return;                                // déjà chez ZR : remplacé via zrUpdateParcel après l'enregistrement
     // anciennes commandes (avant le branchement ZR) : jamais envoyées automatiquement
-    if(!z && Date.now() - Date.parse(o.createdAt || 0) > 10*60*1000) return;
+    if(!z && !o._force && Date.now() - Date.parse(o.createdAt || 0) > 10*60*1000) return;
     const w = (typeof wilayasList !== 'undefined' ? wilayasList : []).find(x => norm(x.name) === norm(o.customer.wilaya));
     if(w) o.customer.wilayaCode = w.code;
     o.zrDesc = 'ملابس نسائية';   // texte affiché sur le bordereau (pas le détail des articles)
@@ -107,6 +107,7 @@
     return [s[0], z.state || s[1], s[2], s[3]];
   }
   function badge(o){
+    if(o && o.source === 'shopify' && !o.zr) return '<div class="zr-badges"><div class="zr-badge" style="color:#5b2a86;background:#efe3fb">🛍️ Site Shopify — à confirmer</div></div>';
     if(o && o.customer && o.customer.deliveryType === 'main' && !(o.zr && o.zr.parcelId)){
       const planned = o.deferred && o.deferredDate && !o.handDone;
       return planned
@@ -132,7 +133,7 @@
     }
     if(!relay){ el.innerHTML = ''; return; }
     if(!z){
-      el.innerHTML = `<div class="zr-box"><div class="zr-h">🚚 ZR Express</div><div class="zr-sub">Commande pas envoyée à ZR.</div>
+      el.innerHTML = `<div class="zr-box"><div class="zr-h">🚚 ZR Express</div><div class="zr-sub">${o.source === 'shopify' ? '🛍️ Commande du site ' + esc((o.shopify && o.shopify.name) || '') + ' — appelez la cliente pour confirmer (vérifiez la wilaya, la commune' + (o.customer && o.customer.deliveryType === 'stopdesk' ? ' et le bureau Stop desk' : '') + '), puis envoyez.' + (o.shopify && o.shopify.shipping ? '<br>Livraison payée sur le site : ' + Math.round(o.shopify.shipping) + ' DA · total site : ' + Math.round(o.shopify.total) + ' DA' : '') : 'Commande pas envoyée à ZR.'}</div>
         <button class="zr-btn" data-zr="send">Envoyer à ZR Express</button></div>`;
     }else{
       const i = info(o);
@@ -191,7 +192,12 @@
     const old = btn.textContent; btn.disabled = true; btn.textContent = '⏳';
     try{
       if(kind === 'send' || kind === 'retry'){
-        if(kind === 'send'){ prepare(o); await db.collection('orders').doc(o.id).set({zr: o.zr, zrDesc: o.zrDesc, customer: o.customer}, {merge: true}); }
+        if(kind === 'send'){
+          o._force = true; prepare(o); delete o._force;
+          if(!o.zr) throw new Error('non configuré');
+          o.toConfirm = false;
+          await db.collection('orders').doc(o.id).set({zr: o.zr, zrDesc: o.zrDesc, customer: o.customer, toConfirm: false}, {merge: true});
+        }
         const j = await call('/send', {id: o.id, force: true});
         if(j.zr && j.zr.tracking) toast('🚚 Envoyée à ZR Express — ' + j.zr.tracking);
         else if(j.zr && j.zr.error) toast('ZR Express : ' + j.zr.error, true);
