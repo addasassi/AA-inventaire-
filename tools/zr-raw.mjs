@@ -9,5 +9,10 @@ const doc = rows.find(r => r.document);
 const id = doc.document.name.split('/').pop();
 const meta = await (await fetch(`${FS}/meta/zr?key=${KEY}`)).json();
 const relay = meta.fields.url.stringValue.replace(/\/+$/, '');
-const r = await fetch(relay + '/history', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id})});
-console.log(r.status, JSON.stringify(await r.json(), null, 1));
+const r = await fetch(relay + '/raw', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id, probe: ['/parcels/{id}/state-history']})});
+const j = await r.json();
+console.log('SITUATION', JSON.stringify(j.parcel && j.parcel.situation, null, 1));
+const keys = Object.keys(j.parcel || {}).filter(k => /reason|motif|cause|comment|note|situation|attempt/i.test(k));
+keys.forEach(k => console.log('KEY', k, JSON.stringify(j.parcel[k]).slice(0, 400)));
+let h = []; try{ h = JSON.parse(j['/parcels/{id}/state-history']); }catch(e){}
+h.forEach(e => (e.situations || []).forEach(x => console.log('HSIT', JSON.stringify(x))));
