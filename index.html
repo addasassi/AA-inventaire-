@@ -1203,7 +1203,7 @@
     <div id="pm-scan-wrap" class="pm-scan-wrap" style="display:none;">
       <label>Scanner pour ajouter +1</label>
       <div class="manual-row">
-        <input type="text" id="pm-scan-input" placeholder="Scannez le code-barres…" autocomplete="off">
+        <input type="text" id="pm-scan-input" placeholder="Scannez le code-barres…" autocomplete="off" inputmode="none">
         <button id="pm-scan-btn">+1</button>
       </div>
     </div>
@@ -2408,7 +2408,7 @@ document.getElementById('sidebarBackdrop').addEventListener('click', closeSideba
 
 /* ---------- Onglets ---------- */
 /* Champs de scan (douchette) : focus sans clavier ; le clavier s'ouvre seulement si on touche le champ */
-const SCAN_INPUTS = '#manualCode, #manualCodeAdd, #rt-code';
+const SCAN_INPUTS = '#manualCode, #manualCodeAdd, #rt-code, #pm-scan-input, [id^="color-scan-"]';
 function scanKbOff(){ document.querySelectorAll(SCAN_INPUTS).forEach(el=>{ if(document.activeElement !== el || el.inputMode !== 'text') el.inputMode = 'none'; }); }
 document.addEventListener('pointerdown', e=>{
   const el = e.target && e.target.closest && e.target.closest(SCAN_INPUTS);
@@ -3233,7 +3233,7 @@ function openProductModal(id){
   }
 
   document.getElementById('productModal').classList.add('show');
-  if(isAdmin) setTimeout(()=>document.getElementById('pm-scan-input').focus(), 80);
+  // pas de focus automatique : le clavier ne s'ouvre que si on touche la case « Scanner »
 }
 document.getElementById('productModal').addEventListener('click', (e)=>{
   if(e.target.id === 'productModal') closeProductModal();
@@ -3353,7 +3353,7 @@ function renderColorsGrid(){
         </div>
         <label style="margin-top:10px;">Scanner pour ajouter +1</label>
         <div class="manual-row">
-          <input type="text" id="color-scan-${i}" placeholder="Scannez le code-barres…" autocomplete="off">
+          <input type="text" id="color-scan-${i}" placeholder="Scannez le code-barres…" autocomplete="off" inputmode="none">
           <button onclick="scanColorAddQty(${i})">+1</button>
         </div>
       </div>` : ''}
