@@ -14,10 +14,9 @@ if(TN === 'LIST'){
     const relay = meta.fields.url.stringValue.replace(/\/+$/, '');
     for(const d of docs){ const f = d.fields; const z = f.zr && f.zr.mapValue && f.zr.mapValue.fields || {};
       const st = z.stage && z.stage.stringValue; if(!(z.parcelId && z.parcelId.stringValue)) continue;
-      if(!f.createdAt || f.createdAt.stringValue < '2026-10-06') continue;
       const id = d.name.split('/').pop();
       const h = await (await fetch(relay + '/history', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id})})).json();
-      (h.events || []).filter(e => /report/i.test(e.label) && String(e.at) >= '2026-10-09').forEach(e => console.log('REP', id, st, z.tracking && z.tracking.stringValue, e.at, e.label, e.date));
+      (h.events || []).filter(e => e.kind === 'sit' && String(e.at) >= '2026-10-10' && !/appel|sms/i.test(e.label)).forEach(e => console.log('EV', id, st, z.tracking && z.tracking.stringValue, (f.customer.mapValue.fields.name||{}).stringValue, e.at, e.label, e.slug, e.date, e.note));
     }
   }
   process.exit(0);
