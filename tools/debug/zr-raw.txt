@@ -1,0 +1,18 @@
+SITUATION {
+ "id": "e2432904-a6e9-40ca-9f8f-3ead69360901",
+ "name": "Ne répond pas 1",
+ "description": "Ne réponds pas 1",
+ "slug": "ne_repond_pas_1",
+ "metadata": {
+  "comment": "Injoignable / Éteint."
+ }
+}
+KEY lastStateSituationId "57a2e1f2-4745-4367-85db-4bc060c46a5a"
+KEY situation {"id":"e2432904-a6e9-40ca-9f8f-3ead69360901","name":"Ne répond pas 1","description":"Ne réponds pas 1","slug":"ne_repond_pas_1","metadata":{"comment":"Injoignable / Éteint."}}
+KEY lastSituationUpdateAt "2026-10-10T17:53:09.8701633"
+HSIT {"situationName":"Appel téléphonique","situationSlug":"appel_telephonique","situationDescription":"Appel téléphonique","createdAt":"2026-10-10T11:26:43.9925029+00:00","metadata":null}
+HSIT {"situationName":"Appel téléphonique","situationSlug":"appel_telephonique","situationDescription":"Appel téléphonique","createdAt":"2026-10-10T12:53:50.9312649+00:00","metadata":null}
+HSIT {"situationName":"Appel téléphonique","situationSlug":"appel_telephonique","situationDescription":"Appel téléphonique","createdAt":"2026-10-10T15:33:14.5420269+00:00","metadata":null}
+HSIT {"situationName":"Ne répond pas 1","situationSlug":"ne_repond_pas_1","situationDescription":"Ne réponds pas 1","createdAt":"2026-10-10T17:53:09.8701627+00:00","metadata":{"comment":"Injoignable / Éteint."}}
+HSIT {"situationName":"SMS envoyé","situationSlug":"sms_envoye","situationDescription":null,"createdAt":"2026-10-10T17:53:09.8701699+00:00","metadata":null}
+TRACK {"situation":"Ne réponds pas 1","situationNote":"Injoignable / Éteint."}
