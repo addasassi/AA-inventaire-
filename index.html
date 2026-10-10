@@ -5438,6 +5438,9 @@ async function loadAlgeriaData(){
     communesByWilaya = {};
     wilayaArList = [];
     communeArByCode = {};
+    // les 11 nouvelles wilayas (59-69) : ZR range encore leurs communes dans l'ancienne wilaya
+    const NEW_W = {59:3, 60:5, 61:7, 62:12, 63:13, 64:14, 65:17, 66:17, 67:26, 68:28, 69:32};
+    data.forEach(c=>{ const n = Number(c.wilaya_code); if(NEW_W[n]){ const parent = data.find(x=> Number(x.wilaya_code) === NEW_W[n]); if(parent){ c.wilaya_code = String(NEW_W[n]); c.wilaya_name_fr = parent.wilaya_name_fr; c.wilaya_name_ar = parent.wilaya_name_ar; } } });
     data.filter(c=> Number(c.wilaya_code) <= 58).forEach(c=>{
       const code = String(c.wilaya_code);
       if(!seen.has(code)){
@@ -6085,5 +6088,6 @@ boot();
 <script src="returns.js"></script>
 <script src="hand.js"></script>
 <script src="zr-suivi.js"></script>
+<script src="order-parse.js"></script>
 </body>
 </html>

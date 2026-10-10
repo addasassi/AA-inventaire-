@@ -2,6 +2,15 @@
 const FS = 'https://firestore.googleapis.com/v1/projects/aa-inventaire/databases/(default)/documents';
 const KEY = 'AIzaSyAfMIEi1MynF82Jp1j1J1BFQM5w8182JTo';
 const TN = process.env.TN;
+if(TN === 'PARSE'){
+  const meta = await (await fetch(`${FS}/meta/zr?key=${KEY}`)).json();
+  const relay = meta.fields.url.stringValue.replace(/\/+$/, '');
+  for(const t of ['راني فالعلمة ولاية سطيف\nليلى\n0555443322 نجي نديه من المكتب', 'salam khti ana f wahran hay sabah nesmi souad 0661 22 33 44']){
+    const r = await fetch(relay + '/parse', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({text: t})});
+    console.log(r.status, await r.text());
+  }
+  process.exit(0);
+}
 if(TN === 'GEO'){
   const fs = await import('fs');
   const t = await (await fetch('https://cdn.jsdelivr.net/npm/geoalgeria/data/ecommerce/communes.json')).text();

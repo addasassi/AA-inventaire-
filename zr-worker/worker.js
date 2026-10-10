@@ -527,6 +527,26 @@ export default {
     let body = {}; try{ body = await req.json(); }catch(e){}
     const id = String(body.id || '').trim();
     try{
+      if(path === '/parse'){   // 🤖 lecture d'un message client (IA Cloudflare)
+        const text = String(body.text || '').slice(0, 2000);
+        if(!text.trim()) return json({ok: false, error: 'texte vide'}, 400);
+        if(!env.AI) return json({ok: false, error: 'IA non activée'}, 501);
+        const sys = `Tu lis un message de cliente algérienne (arabe, darija, français, arabizi) pour une commande livrée par ZR Express.
+Réponds UNIQUEMENT avec un objet JSON, sans texte autour :
+{"name": nom et prénom ou "", "phone": numéro algérien 0XXXXXXXXX ou "", "wilaya_code": numéro de wilaya 1-58 ou null, "wilaya": nom officiel de la wilaya en français ou "", "commune": nom officiel de la commune en français ou "", "address": quartier / rue / repère ou "", "delivery": "stopdesk" si elle récupère au bureau/agence/stop desk, "domicile" si livraison à la maison, sinon null, "office": ville du bureau stop desk ou ""}
+Règles : n'invente rien ; une commune seule permet de déduire sa wilaya ; "دزاير/العاصمة"=Alger, "بقاية/بجاية"=Béjaïa.`;
+        const models = ['@cf/meta/llama-3.3-70b-instruct-fp8-fast', '@cf/meta/llama-3.1-8b-instruct'];
+        let out = null, err = '';
+        for(const m of models){
+          try{
+            const r = await env.AI.run(m, {messages: [{role: 'system', content: sys}, {role: 'user', content: text}], max_tokens: 300, temperature: 0});
+            const raw = typeof r === 'string' ? r : (r && (r.response || r.result || '')) || '';
+            const obj = typeof raw === 'object' ? raw : JSON.parse((String(raw).match(/\{[\s\S]*\}/) || ['{}'])[0]);
+            if(obj && typeof obj === 'object'){ out = obj; break; }
+          }catch(e){ err = String(e && e.message || e).slice(0, 200); }
+        }
+        return out ? json({ok: true, data: out}) : json({ok: false, error: err || 'réponse IA illisible'}, 502);
+      }
       if(path === '/test'){
         const t = await territories(env, 'alger');
         return json({ok: true, message: 'Connexion ZR Express OK', sample: t.length});
