@@ -194,7 +194,12 @@
       document.querySelectorAll('.view').forEach(x => x.classList.remove('active'));
       btn.classList.add('active'); v.classList.add('active');
       if(typeof closeSidebar === 'function') closeSidebar();
-      const go = () => render();
+      // après un rechargement de la page (glisser vers le bas) : « Actualiser » automatiquement, une fois
+      let isReload = false;
+      try{ const nv = performance.getEntriesByType('navigation')[0]; isReload = !!nv && nv.type === 'reload'; }catch(e){}
+      const auto = isReload && !window.__zsAutoDone;
+      if(auto) window.__zsAutoDone = true;
+      const go = () => { render(); if(auto) setTimeout(() => { if(v.classList.contains('active')) window.zsRefresh(); }, 1200); };
       if(typeof loadOrders === 'function') loadOrders().then(go, go); else go();
     });
     // rafraîchit tout seul quand les commandes changent
