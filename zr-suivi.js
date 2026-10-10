@@ -25,7 +25,7 @@
     ['nrp2', '#fbbf24', 'Ne répond pas 2', o => !final(o) && nrpN(o) === 2],
     ['nrp3', '#f59e0b', 'Ne répond pas 3', o => !final(o) && nrpN(o) >= 3],
     ['ann',  '#ef4444', 'Commande annulée', o => !final(o) && /annul|refus/.test(norm(sitOf(o)))],
-    ['rep',  '#10b981', 'Commande reportée', o => !final(o) && (/report/.test(norm(sitOf(o))) || (o.zr.reportDate && o.zr.reportDate >= today()))],
+    ['rep',  '#10b981', 'Commande reportée', o => !final(o) && /report/.test(norm(sitOf(o)))],
   ];
   const FLOW = [
     ['new',  '#94a3b8', 'Créées — pas encore récupérées', o => !final(o) && (o.zr.stage || 'created') === 'created'],
@@ -49,7 +49,7 @@
       <div class="zs-o-m"><div class="zs-o-n">${esc(c.name || 'Cliente')}</div>
         <div class="zs-o-w">📍 ${esc(c.wilaya || '')}${c.commune ? ' — ' + esc(c.commune) : ''}</div>
         <div class="zs-o-s"><span class="zs-pill">${esc(sit || z.state || '—')}</span>${z.situationNote ? `<span class="zs-why">${esc(String(z.situationNote).replace(/\.$/, ''))}</span>` : ''}<span class="zs-when">${when}</span></div>
-        ${(/report/.test(norm(sit)) || (z.reportDate && z.reportDate >= today() && !final(o))) ? `<div class="zs-rep">📅 ${z.reportDate ? 'Reportée au <b>' + fmtDay(z.reportDate) + '</b>' : 'Date du report pas indiquée par ZR'}${(z.reportedAt || z.situationAt) ? ' · reportée le ' + fmtDay(dayKey(z.reportedAt || z.situationAt)) : ''}</div>` : ''}
+        ${/report/.test(norm(sit)) ? `<div class="zs-rep">📅 ${z.reportDate ? 'Reportée au <b>' + fmtDay(z.reportDate) + '</b>' : 'Date du report pas indiquée par ZR'}${(z.reportedAt || z.situationAt) ? ' · reportée le ' + fmtDay(dayKey(z.reportedAt || z.situationAt)) : ''}</div>` : ''}
 
         ${z.tracking ? `<div class="zs-o-t">${esc(z.tracking)}</div>` : ''}</div>
       <div class="zs-o-r"><div class="zs-o-p">${money(o.total)}</div>${c.phone ? `<a href="tel:${esc(c.phone)}" onclick="event.stopPropagation()" aria-label="Appeler">📞</a>` : ''}</div></div>`;
