@@ -4916,7 +4916,16 @@ document.getElementById('eo-cancel').addEventListener('click', ()=>{
   editingOrderItems = [];
   eoBackToOrders();
 });
+let savingEdit = false;
 document.getElementById('eo-save').addEventListener('click', async ()=>{
+  if(savingEdit){ toast('⏳ Enregistrement en cours… patientez'); return; }
+  const btn = document.getElementById('eo-save'); const old = btn.textContent;
+  savingEdit = true; btn.disabled = true; btn.textContent = '⏳ Enregistrement…'; btn.style.opacity = '.7';
+  try{ await saveEditedOrder(); }
+  catch(e){ console.error(e); toast('Erreur : ' + ((e && e.message) || e) + ' — réessayez', true); }
+  finally{ savingEdit = false; btn.disabled = false; btn.textContent = old; btn.style.opacity = ''; }
+});
+async function saveEditedOrder(){
   const o = orders.find(x=>x.id===editingOrderId);
   if(!o) return;
   const name = document.getElementById('eo-name').value.trim();
@@ -4989,7 +4998,7 @@ document.getElementById('eo-save').addEventListener('click', async ()=>{
   eoBackToOrders();
   toast('Commande modifiée — stock mis à jour');
   renderOrdersHistory();
-});
+}
 
 async function deleteOrder(id){
   const order = orders.find(o=>o.id===id);
@@ -5312,7 +5321,19 @@ function renderCart(){
 document.getElementById('o-deferred-toggle').addEventListener('change', (e)=>{
   document.getElementById('o-deferred-date-field').style.display = e.target.checked ? 'block' : 'none';
 });
+/* Enregistrer la commande : bouton bloqué pendant l'enregistrement (évite les doubles commandes
+   quand le réseau est lent) + message d'erreur visible si quelque chose plante */
+let savingOrder = false;
 document.getElementById('btn-save-order').addEventListener('click', async ()=>{
+  if(savingOrder){ toast('⏳ Enregistrement en cours… patientez'); return; }
+  const btn = document.getElementById('btn-save-order');
+  const old = btn.textContent;
+  savingOrder = true; btn.disabled = true; btn.textContent = '⏳ Enregistrement…'; btn.style.opacity = '.7';
+  try{ await saveNewOrder(); }
+  catch(e){ console.error(e); toast('Erreur : ' + ((e && e.message) || e) + ' — réessayez', true); }
+  finally{ savingOrder = false; btn.disabled = false; btn.textContent = old; btn.style.opacity = ''; }
+});
+async function saveNewOrder(){
   const name = document.getElementById('o-name').value.trim();
   const phone = document.getElementById('o-phone').value.trim();
   const wilaya = document.getElementById('o-wilaya').value.trim();
@@ -5391,7 +5412,7 @@ document.getElementById('btn-save-order').addEventListener('click', async ()=>{
   toast('Commande enregistrée');
   showOrdersHome();
   renderOrdersHistory();
-});
+}
 
 /* ---------- Wilayas & Communes d'Algérie ---------- */
 let wilayasList = [];
