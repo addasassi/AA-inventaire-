@@ -1,0 +1,2 @@
+200 {"ok":true,"data":{"address":"","commune":"El Eulma","delivery":"stopdesk","name":"ليلى","office":"سطيف","phone":"0555443322","wilaya":"Sétif","wilaya_code":19}}
+200 {"ok":true,"data":{"address":"","commune":"","delivery":null,"name":"Souad","office":"","phone":"0661223344","wilaya":"Oran","wilaya_code":31}}
