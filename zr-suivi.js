@@ -199,7 +199,7 @@
       try{ const nv = performance.getEntriesByType('navigation')[0]; isReload = !!nv && nv.type === 'reload'; }catch(e){}
       const auto = isReload && !window.__zsAutoDone;
       if(auto) window.__zsAutoDone = true;
-      const go = () => { render(); if(auto) setTimeout(() => { if(v.classList.contains('active')) window.zsRefresh(); }, 1200); };
+      const go = () => { render(); if(auto) setTimeout(() => { if(v.classList.contains('active')) window.zsRefresh(); }, 3000); };
       if(typeof loadOrders === 'function') loadOrders().then(go, go); else go();
     });
     // rafraîchit tout seul quand les commandes changent
