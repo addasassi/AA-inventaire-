@@ -7,7 +7,7 @@ if(TN === 'LIST'){
   do{ const r = await (await fetch(`${FS}/orders?pageSize=300&key=${KEY}${tok ? '&pageToken=' + tok : ''}`)).json(); (r.documents || []).forEach(d => docs.push(d)); tok = r.nextPageToken; }while(tok);
   const v = x => x == null ? null : ('stringValue' in x ? x.stringValue : 'booleanValue' in x ? x.booleanValue : 'integerValue' in x ? x.integerValue : 'mapValue' in x ? Object.fromEntries(Object.entries(x.mapValue.fields || {}).map(([k, y]) => [k, v(y)])) : null);
   docs.forEach(d => { const f = Object.fromEntries(Object.entries(d.fields).map(([k, y]) => [k, v(y)])); const z = f.zr || {};
-    if(/report/i.test(z.situation || '') || f.deferred || /report/i.test(z.state || '')) console.log('ORD', d.name.split('/').pop(), JSON.stringify({name: f.customer && f.customer.name, type: f.customer && f.customer.deliveryType, deferred: f.deferred, deferredDate: f.deferredDate, stage: z.stage, state: z.state, situation: z.situation, parcel: !!z.parcelId, reportDate: z.reportDate, status: z.status, createdAt: f.createdAt}));
+    if(z.parcelId && z.stage !== 'delivered' && z.stage !== 'returned') console.log('ORD', d.name.split('/').pop(), JSON.stringify({name: f.customer && f.customer.name, type: f.customer && f.customer.deliveryType, deferred: f.deferred, deferredDate: f.deferredDate, stage: z.stage, state: z.state, situation: z.situation, tn: z.tracking, upd: z.updatedAt, sitAt: z.situationAt, reportDate: z.reportDate, status: z.status, createdAt: f.createdAt}));
   });
   process.exit(0);
 }
