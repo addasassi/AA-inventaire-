@@ -3761,17 +3761,21 @@ document.getElementById('pm-setprice-btn').addEventListener('click', async ()=>{
   if(!p) return;
   const prevPrice = p.price;
   p.price = newPrice;
+  // toutes les couleurs prennent le même prix
+  const prevColorsprice = (p.colors || []).map(c => c ? c.price : undefined);
+  (p.colors || []).forEach(c => { if(c) c.price = newPrice; });
   refreshCurrentInventoryView();
   openProductModal(id);
   const ok = await saveProductDoc(p);
   if(!ok){
     p.price = prevPrice;
+    (p.colors || []).forEach((c, i) => { if(c) c.price = prevColorsprice[i]; });
     refreshCurrentInventoryView();
     openProductModal(id);
     toast('Échec — prix NON enregistré, réessayez', true);
     return;
   }
-  toast('Prix mis à jour');
+  toast('Prix mis à jour' + ((p.colors || []).length ? ' (+ ' + p.colors.length + ' couleur' + (p.colors.length > 1 ? 's' : '') + ')' : ''));
 });
 document.getElementById('pm-bundle-btn').addEventListener('click', async ()=>{
   const id = document.getElementById('pm-setqty-wrap').dataset.productId;
@@ -3830,17 +3834,21 @@ document.getElementById('pm-setcost-btn').addEventListener('click', async ()=>{
   if(!p) return;
   const prevCost = p.cost;
   p.cost = newCost;
+  // toutes les couleurs prennent le même coût
+  const prevColorscost = (p.colors || []).map(c => c ? c.cost : undefined);
+  (p.colors || []).forEach(c => { if(c) c.cost = newCost; });
   refreshCurrentInventoryView();
   openProductModal(id);
   const ok = await saveProductDoc(p);
   if(!ok){
     p.cost = prevCost;
+    (p.colors || []).forEach((c, i) => { if(c) c.cost = prevColorscost[i]; });
     refreshCurrentInventoryView();
     openProductModal(id);
     toast('Échec — coût NON enregistré, réessayez', true);
     return;
   }
-  toast('Coût mis à jour');
+  toast('Coût mis à jour' + ((p.colors || []).length ? ' (+ ' + p.colors.length + ' couleur' + (p.colors.length > 1 ? 's' : '') + ')' : ''));
 });
 document.getElementById('pm-photo-input').addEventListener('change', async (e)=>{
   const file = e.target.files[0];
