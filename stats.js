@@ -598,7 +598,7 @@
   function eveningSummary(){
     try{
       if(typeof currentUser === 'undefined' || !currentUser || currentUser.role !== 'admin') return;
-      const now = new Date(); if(now.getHours() < 21) return;
+      const now = new Date(); if(now.getHours() * 60 + now.getMinutes() < 30) return;
       const key = 'stEvening-' + dayKey(now);
       if(localStorage.getItem(key)) return;
       if(typeof notifPrefEnabled === 'function' && !notifPrefEnabled()) return;
@@ -614,22 +614,22 @@
     }catch(e){}
   }
 
-  /* ---------- 📣 Rappel du soir : sponsor du jour pas saisi ---------- */
+  /* ---------- 📣 Rappel à 00:30 : sponsor de la veille pas saisi ---------- */
   function sponsorReminder(){
     try{
       if(typeof currentUser === 'undefined' || !currentUser || currentUser.role !== 'admin') return;
-      const now = new Date(); if(now.getHours() < 21) return;
+      const now = new Date(); if(now.getHours() * 60 + now.getMinutes() < 30) return;
       subSponsor();
       if(!spSub || !spLoaded) return;
-      const day = dayKey(now);
+      const day = dayKey(now.getTime() - DAY);                  // la journée qui vient de finir
       if(SP.days && SP.days[day]) return;                       // déjà saisi (même 0)
       let snooze = 0; try{ snooze = Number(localStorage.getItem('spRemind-' + day) || 0); }catch(e){}
       if(snooze > Date.now() || document.getElementById('spRemind')) return;
       const m = document.createElement('div'); m.id = 'spRemind';
-      m.innerHTML = `<div class="spr-card"><h3>📣 Sponsor d'aujourd'hui</h3><p>Combien as-tu dépensé en sponsor aujourd'hui ? (en €)</p>
+      m.innerHTML = `<div class="spr-card"><h3>📣 Sponsor d'hier</h3><p>Combien as-tu dépensé en sponsor hier (${new Date(day + 'T00:00:00').toLocaleDateString('fr-FR', {weekday: 'long', day: 'numeric', month: 'long'})}) ? (en €)</p>
         <input type="text" inputmode="decimal" id="spr-eur" placeholder="Montant en €">
         <button class="spr-ok" id="spr-ok">Enregistrer</button>
-        <button class="spr-none" id="spr-none">Pas de sponsor aujourd'hui</button>
+        <button class="spr-none" id="spr-none">Pas de sponsor hier</button>
         <button class="spr-later" id="spr-later">Me le rappeler dans 1 h</button></div>`;
       document.body.appendChild(m);
       const close = () => m.remove();
@@ -637,7 +637,7 @@
         try{
           const rate = await eurUsd(day);
           await db.collection('meta').doc('sponsor').set({lastRate: rate, days: {[day]: {eur, rate, at: new Date().toISOString(), by: currentUser.name || ''}}}, {merge: true});
-          toast(eur ? `📣 ${eur} € → ${money(Math.round(eur * rate * SP.usdt))} enregistré` : '📣 Noté : pas de sponsor aujourd\'hui');
+          toast(eur ? `📣 ${eur} € → ${money(Math.round(eur * rate * SP.usdt))} enregistré` : '📣 Noté : pas de sponsor hier');
           close();
         }catch(e){ toast('Échec : ' + (e.message || e), true); }
       };
@@ -645,7 +645,7 @@
       m.querySelector('#spr-none').onclick = () => save(0);
       m.querySelector('#spr-later').onclick = () => { try{ localStorage.setItem('spRemind-' + day, String(Date.now() + 3600e3)); }catch(e){} close(); };
       if(document.hidden && 'Notification' in window && Notification.permission === 'granted' && navigator.serviceWorker){
-        navigator.serviceWorker.ready.then(reg => reg.showNotification('📣 Sponsor du jour', {body: 'Écris combien tu as dépensé en sponsor aujourd\'hui', icon: 'icon-192.png', tag: 'sponsor-' + day})).catch(() => {});
+        navigator.serviceWorker.ready.then(reg => reg.showNotification('📣 Sponsor d\'hier', {body: 'Écris combien tu as dépensé en sponsor hier', icon: 'icon-192.png', tag: 'sponsor-' + day})).catch(() => {});
       }
     }catch(e){}
   }
