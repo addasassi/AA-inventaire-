@@ -2903,7 +2903,7 @@ document.getElementById('btn-back-cats').addEventListener('click', showCatFolder
 
 function renderList(cat){
   const wrap = document.getElementById('listWrap');
-  const items = products.filter(p=>p.cat===cat);
+  const items = products.filter(p=>p.cat===cat).reverse();   // les derniers ajoutés en premier
   const isAdmin = currentUser && currentUser.role === 'admin';
   const addTile = isAdmin ? `<div class="product add-product" onclick="goToAddProduct('${cat}')">
       <div class="add-plus">+</div>
@@ -2915,7 +2915,7 @@ function renderList(cat){
       : `<div class="empty"><h3>Aucun produit</h3><p>Aucun article dans cette catégorie pour le moment.</p></div>`;
     return;
   }
-  let html = '<div class="grid-wrap">';
+  let html = '<div class="grid-wrap">' + addTile;
   items.forEach((p)=>{
     const isOut = p.qty <= 0;
     const isLow = !isOut && p.qty <= 2;
@@ -2936,7 +2936,7 @@ function renderList(cat){
       </div>
     </div>`;
   });
-  html += addTile + '</div>';
+  html += '</div>';
   wrap.innerHTML = html;
 }
 let dashStatsPeriod = 'today';
@@ -3203,8 +3203,8 @@ function openProductModal(id){
     ${isAdmin ? `
     <button onclick="modalAdjustQty('${p.id}',1)">+1</button>
     <button onclick="modalAdjustQty('${p.id}',-1)">-1</button>
-    <button ${idx===0?'disabled':''} onclick="modalMoveProduct('${p.id}',-1)">▲ Monter</button>
-    <button ${idx===items.length-1?'disabled':''} onclick="modalMoveProduct('${p.id}',1)">▼ Descendre</button>
+    <button ${idx===items.length-1?'disabled':''} onclick="modalMoveProduct('${p.id}',1)">▲ Monter</button>
+    <button ${idx===0?'disabled':''} onclick="modalMoveProduct('${p.id}',-1)">▼ Descendre</button>
     <button class="del full" onclick="modalDeleteProduct('${p.id}')">Supprimer</button>` : ''}
   `;
 
@@ -5147,7 +5147,7 @@ function openOrderCategory(cat){
 }
 function renderOrderProducts(cat){
   const wrap = document.getElementById('orderProductsGrid');
-  const items = products.filter(p=>p.cat===cat);
+  const items = products.filter(p=>p.cat===cat).reverse();   // les derniers ajoutés en premier
   if(items.length===0){
     wrap.innerHTML = '<div class="empty"><h3>Aucun produit</h3></div>';
     return;
