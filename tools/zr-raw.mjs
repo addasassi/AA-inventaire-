@@ -7,8 +7,19 @@ if(TN === 'LIST'){
   do{ const r = await (await fetch(`${FS}/orders?pageSize=300&key=${KEY}${tok ? '&pageToken=' + tok : ''}`)).json(); (r.documents || []).forEach(d => docs.push(d)); tok = r.nextPageToken; }while(tok);
   const v = x => x == null ? null : ('stringValue' in x ? x.stringValue : 'booleanValue' in x ? x.booleanValue : 'integerValue' in x ? x.integerValue : 'mapValue' in x ? Object.fromEntries(Object.entries(x.mapValue.fields || {}).map(([k, y]) => [k, v(y)])) : null);
   docs.forEach(d => { const f = Object.fromEntries(Object.entries(d.fields).map(([k, y]) => [k, v(y)])); const z = f.zr || {};
-    if(z.parcelId && z.stage !== 'delivered' && z.stage !== 'returned') console.log('ORD', d.name.split('/').pop(), JSON.stringify({name: f.customer && f.customer.name, type: f.customer && f.customer.deliveryType, deferred: f.deferred, deferredDate: f.deferredDate, stage: z.stage, state: z.state, situation: z.situation, tn: z.tracking, upd: z.updatedAt, sitAt: z.situationAt, reportDate: z.reportDate, status: z.status, createdAt: f.createdAt}));
+    if(z.parcelId && z.stage !== 'delivered' && z.stage !== 'returned') if(!process.env.HIST) console.log('ORD', d.name.split('/').pop(), JSON.stringify({name: f.customer && f.customer.name, type: f.customer && f.customer.deliveryType, deferred: f.deferred, deferredDate: f.deferredDate, stage: z.stage, state: z.state, situation: z.situation, tn: z.tracking, upd: z.updatedAt, sitAt: z.situationAt, reportDate: z.reportDate, status: z.status, createdAt: f.createdAt}));
   });
+  if(process.env.HIST){
+    const meta = await (await fetch(`${FS}/meta/zr?key=${KEY}`)).json();
+    const relay = meta.fields.url.stringValue.replace(/\/+$/, '');
+    for(const d of docs){ const f = d.fields; const z = f.zr && f.zr.mapValue && f.zr.mapValue.fields || {};
+      const st = z.stage && z.stage.stringValue; if(!(z.parcelId && z.parcelId.stringValue)) continue;
+      if(!f.createdAt || f.createdAt.stringValue < '2026-10-06') continue;
+      const id = d.name.split('/').pop();
+      const h = await (await fetch(relay + '/history', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id})})).json();
+      (h.events || []).filter(e => /report/i.test(e.label) && String(e.at) >= '2026-10-09').forEach(e => console.log('REP', id, st, z.tracking && z.tracking.stringValue, e.at, e.label, e.date));
+    }
+  }
   process.exit(0);
 }
 const q = await fetch(`${FS}:runQuery?key=${KEY}`, {method: 'POST', headers: {'Content-Type': 'application/json'},
