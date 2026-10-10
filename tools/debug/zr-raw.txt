@@ -1,0 +1,24 @@
+SITUATION {
+ "id": "c80af024-9759-40cc-84fc-10743e1a2c7a",
+ "name": "Ne répond pas 2",
+ "description": "Ne réponds pas 2",
+ "slug": "ne_repond_pas_2"
+}
+KEY lastStateSituationId "5e180f3c-56b6-4095-a093-cff6943eef06"
+KEY situation {"id":"c80af024-9759-40cc-84fc-10743e1a2c7a","name":"Ne répond pas 2","description":"Ne réponds pas 2","slug":"ne_repond_pas_2"}
+KEY lastSituationUpdateAt "2026-10-10T12:12:30.9997662"
+HSIT {"situationName":"Appel téléphonique","situationSlug":"appel_telephonique","situationDescription":"Appel téléphonique","createdAt":"2026-10-09T08:33:04.5575832+00:00","metadata":null}
+HSIT {"situationName":"Appel téléphonique","situationSlug":"appel_telephonique","situationDescription":"Appel téléphonique","createdAt":"2026-10-09T08:34:04.1586887+00:00","metadata":null}
+HSIT {"situationName":"Appel téléphonique","situationSlug":"appel_telephonique","situationDescription":"Appel téléphonique","createdAt":"2026-10-09T09:49:18.4252732+00:00","metadata":null}
+HSIT {"situationName":"Appel téléphonique","situationSlug":"appel_telephonique","situationDescription":"Appel téléphonique","createdAt":"2026-10-09T14:13:32.6985611+00:00","metadata":null}
+HSIT {"situationName":"Reporté à une date ultérieure","situationSlug":"reporter_a_une_date_ulterieure","situationDescription":"Reporté à une date ultérieure","createdAt":"2026-10-09T14:14:23.970364+00:00","metadata":{"scheduledDate":"2026-10-10T14:14:00+00:00"}}
+HSIT {"situationName":"SMS envoyé","situationSlug":"sms_envoye","situationDescription":null,"createdAt":"2026-10-09T14:14:23.9703724+00:00","metadata":null}
+HSIT {"situationName":"Appel téléphonique","situationSlug":"appel_telephonique","situationDescription":"Appel téléphonique","createdAt":"2026-10-10T08:24:22.0517001+00:00","metadata":null}
+HSIT {"situationName":"Appel téléphonique","situationSlug":"appel_telephonique","situationDescription":"Appel téléphonique","createdAt":"2026-10-10T09:47:05.9581837+00:00","metadata":null}
+HSIT {"situationName":"Appel téléphonique","situationSlug":"appel_telephonique","situationDescription":"Appel téléphonique","createdAt":"2026-10-10T09:47:22.8459948+00:00","metadata":null}
+HSIT {"situationName":"Appel téléphonique","situationSlug":"appel_telephonique","situationDescription":"Appel téléphonique","createdAt":"2026-10-10T12:12:11.1927325+00:00","metadata":null}
+HSIT {"situationName":"Ne répond pas 1","situationSlug":"ne_repond_pas_1","situationDescription":"Ne réponds pas 1","createdAt":"2026-10-10T12:12:26.2452938+00:00","metadata":null}
+HSIT {"situationName":"SMS envoyé","situationSlug":"sms_envoye","situationDescription":null,"createdAt":"2026-10-10T12:12:26.2453023+00:00","metadata":null}
+HSIT {"situationName":"Ne répond pas 2","situationSlug":"ne_repond_pas_2","situationDescription":"Ne réponds pas 2","createdAt":"2026-10-10T12:12:30.9997657+00:00","metadata":null}
+HSIT {"situationName":"Appel téléphonique","situationSlug":"appel_telephonique","situationDescription":"Appel téléphonique","createdAt":"2026-10-10T16:03:15.976537+00:00","metadata":null}
+TRACK {"situation":"Ne réponds pas 2","situationNote":"","reportDate":"2026-10-10","reportedAt":"2026-10-09T14:14:23.970364+00:00"}
