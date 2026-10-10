@@ -4693,6 +4693,34 @@ function orderThumbs(o){
   return '<div class="oc-thumbs">' + (o.items||[]).map(it=>
     `<div class="oc-th" title="${escapeHtml(it.name)}"><img src="${it.img || placeholderImg()}" loading="lazy">${it.qty>1?`<span>${it.qty}</span>`:''}</div>`).join('') + '</div>';
 }
+/* ---------- 🔍 Photo en grand (touchez une photo dans le détail d'une commande) ---------- */
+function openImgViewer(src, productId, colorIndex, label){
+  let m = document.getElementById('imgViewerModal');
+  if(!m){
+    m = document.createElement('div'); m.id = 'imgViewerModal';
+    m.innerHTML = '<button id="iv-close" aria-label="Fermer">✕</button><div class="iv-wrap"><img id="iv-img" alt=""></div><div id="iv-cap"></div>';
+    document.body.appendChild(m);
+    m.addEventListener('click', e => { if(e.target === m || e.target.classList.contains('iv-wrap') || e.target.id === 'iv-close') m.classList.remove('show'); });
+    const st = document.createElement('style');
+    st.textContent = '#imgViewerModal{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:10060;display:none;flex-direction:column;align-items:center;justify-content:center;}'
+      + '#imgViewerModal.show{display:flex;}'
+      + '#imgViewerModal .iv-wrap{flex:1;width:100%;display:flex;align-items:center;justify-content:center;overflow:auto;touch-action:pinch-zoom pan-x pan-y;}'
+      + '#iv-img{max-width:100%;max-height:calc(100vh - 90px);object-fit:contain;}'
+      + '#iv-close{position:absolute;top:calc(12px + env(safe-area-inset-top));right:12px;z-index:2;width:44px;height:44px;border-radius:50%;border:none;background:rgba(255,255,255,.18);color:#fff;font-size:22px;}'
+      + '#iv-cap{color:#fff;font-size:15px;font-weight:700;padding:10px 16px calc(14px + env(safe-area-inset-bottom));text-align:center;}'
+      + '.od-item-img{cursor:zoom-in;}';
+    document.head.appendChild(st);
+  }
+  const img = m.querySelector('#iv-img');
+  img.src = src;
+  m.querySelector('#iv-cap').textContent = label || '';
+  m.classList.add('show');
+  // version haute qualité de la photo
+  const p = (typeof products !== 'undefined' ? products : []).find(x => x.id === productId);
+  const o = p ? ((colorIndex != null && p.colors && p.colors[colorIndex]) ? p.colors[colorIndex] : p) : null;
+  if(o && typeof fullImg === 'function') fullImg(o).then(hd => { if(hd && m.classList.contains('show') && img.src === src) img.src = hd; }).catch(()=>{});
+}
+window.openImgViewer = openImgViewer;
 function showOrderDetail(id){
   const o = orders.find(x=>x.id===id);
   if(!o) return;
@@ -4715,7 +4743,7 @@ function showOrderDetail(id){
   document.getElementById('od-items').innerHTML = o.items.map(it=>{
     const sub = it.price * it.qty;
     return `<div class="od-item-row">
-      <img src="${it.img || placeholderImg()}" class="od-item-img">
+      <img src="${it.img || placeholderImg()}" class="od-item-img" onclick="openImgViewer(this.src, '${escapeHtml(String(it.productId || ''))}', ${it.colorIndex == null ? 'null' : Number(it.colorIndex)}, this.closest('.od-item-row').querySelector('.oi-name').textContent)">
       <div class="od-item-info">
         <div class="oi-name">${it.qty} × ${escapeHtml(it.name)}</div>
         <div class="oi-unit">${Number(it.price).toFixed(2)} DA / unité</div>
