@@ -534,7 +534,7 @@ export default {
         const sys = `Tu lis un message de cliente algérienne (arabe, darija, français, arabizi) pour une commande livrée par ZR Express.
 Réponds UNIQUEMENT avec un objet JSON, sans texte autour :
 {"name": nom et prénom ou "", "phone": numéro algérien 0XXXXXXXXX ou "", "wilaya_code": numéro de wilaya 1-58 ou null, "wilaya": nom officiel de la wilaya en français ou "", "commune": nom officiel de la commune en français ou "", "address": quartier / rue / repère ou "", "delivery": "stopdesk" si elle récupère au bureau/agence/stop desk, "domicile" si livraison à la maison, sinon null, "office": ville du bureau stop desk ou ""}
-Règles : n'invente rien ; une commune seule permet de déduire sa wilaya ; "دزاير/العاصمة"=Alger, "بقاية/بجاية"=Béjaïa.`;
+Règles : n'invente rien ; une ville/commune citée (ex. "فالعلمة" = El Eulma, "بوسعادة" = Bou Saada) va dans "commune" et permet de déduire la wilaya ; "دزاير/العاصمة"=Alger, "بقاية/بجاية"=Béjaïa, "وهران/wahran"=Oran ; "اسمي/nesmi/smiti" = "je m'appelle" (ne fait pas partie du nom).`;
         const models = ['@cf/meta/llama-3.3-70b-instruct-fp8-fast', '@cf/meta/llama-3.1-8b-instruct'];
         let out = null, err = '';
         for(const m of models){
