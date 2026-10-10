@@ -1,3 +1,0 @@
-EV o179141975657234 out_for_delivery 09-80I7QTROHU-ZR بن جنيدي فاطمة 2026-10-10T12:12:30.9997657+00:00 Ne réponds pas 2 ne_repond_pas_2  
-EV o179141975657234 out_for_delivery 09-80I7QTROHU-ZR بن جنيدي فاطمة 2026-10-10T12:12:26.2452938+00:00 Ne réponds pas 1 ne_repond_pas_1  
-EV o1791419920630448 out_for_delivery 22-8035ZOM0ZW-ZR Bougherara abdermane 2026-10-10T17:43:44.6873763+00:00 Ne réponds pas 2 ne_repond_pas_2  Appel sans réponse

@@ -21,6 +21,14 @@ if(TN === 'LIST'){
   }
   process.exit(0);
 }
+if(TN.startsWith('FIND:')){
+  const want = TN.slice(5).toLowerCase();
+  const docs = []; let tok = '';
+  do{ const r = await (await fetch(`${FS}/orders?pageSize=300&key=${KEY}${tok ? '&pageToken=' + tok : ''}`)).json(); (r.documents || []).forEach(d => docs.push(d)); tok = r.nextPageToken; }while(tok);
+  docs.forEach(d => { const t = JSON.stringify(d.fields).toLowerCase(); if(t.includes(want)) console.log('HIT', d.name.split('/').pop(), JSON.stringify(d.fields).slice(0, 1500)); });
+  console.log('total', docs.length);
+  process.exit(0);
+}
 const q = await fetch(`${FS}:runQuery?key=${KEY}`, {method: 'POST', headers: {'Content-Type': 'application/json'},
   body: JSON.stringify({structuredQuery: {from: [{collectionId: 'orders'}], where: {fieldFilter: {field: {fieldPath: 'zr.tracking'}, op: 'EQUAL', value: {stringValue: TN}}}, limit: 1}})});
 const rows = await q.json();
