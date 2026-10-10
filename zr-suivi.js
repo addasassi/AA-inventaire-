@@ -143,6 +143,38 @@
   };
   window.renderZsPage = render;
 
+  /* ---------- 📵 Alerte « Ne répond pas 2 / 3 » : appeler la cliente avant le retour ---------- */
+  const seenKey = 'nrpSeen';
+  const getSeen = () => { try{ return JSON.parse(localStorage.getItem(seenKey) || '{}'); }catch(e){ return {}; } };
+  const setSeen = v => { try{ localStorage.setItem(seenKey, JSON.stringify(v)); }catch(e){} };
+  function nrpCheck(){
+    if(typeof currentUser === 'undefined' || !currentUser || document.getElementById('nrpModal')) return;
+    const seen = getSeen();
+    const list = parcels().filter(o => !final(o) && nrpN(o) >= 2);
+    // nettoyage : oublie les colis qui ne sont plus en « Ne répond pas »
+    const keep = {}; list.forEach(o => { if(seen[o.id]) keep[o.id] = seen[o.id]; });
+    const fresh = list.filter(o => (keep[o.id] || 0) < nrpN(o));
+    if(Object.keys(keep).length !== Object.keys(seen).length) setSeen(keep);
+    if(!fresh.length) return;
+    fresh.sort((a, b) => nrpN(b) - nrpN(a));
+    const m = document.createElement('div'); m.id = 'nrpModal';
+    m.innerHTML = `<div class="nrp-card"><h3>📵 Ne répond pas — appelez la cliente</h3>
+      <p>${fresh.length > 1 ? fresh.length + ' colis risquent' : 'Ce colis risque'} de revenir en retour. Appelez la cliente pour qu'elle prenne son colis.</p>
+      ${fresh.map(o => { const c = o.customer || {}, n = nrpN(o); return `<div class="nrp-o lv${Math.min(3, n)}">
+        <div class="nrp-m" onclick="zsOpen('${esc(o.id)}')"><b>${esc(c.name || 'Cliente')}</b> · ${esc(c.wilaya || '')}<br><span class="nrp-p">Ne répond pas ${n}</span> <span class="nrp-t">${esc((o.zr && o.zr.tracking) || '')}</span><br><small>${money(o.total)}${c.phone ? ' · ' + esc(c.phone) : ''}</small></div>
+        ${c.phone ? `<a href="tel:${esc(c.phone)}" class="nrp-call">📞</a>` : ''}</div>`; }).join('')}
+      <button class="nrp-ok" id="nrp-ok">OK, compris</button></div>`;
+    document.body.appendChild(m);
+    m.querySelector('#nrp-ok').onclick = () => { const v = getSeen(); fresh.forEach(o => { v[o.id] = nrpN(o); }); setSeen(v); m.remove(); };
+    m.querySelectorAll('.nrp-m').forEach(x => x.addEventListener('click', () => { const v = getSeen(); fresh.forEach(o => { v[o.id] = nrpN(o); }); setSeen(v); m.remove(); }));
+    if(document.hidden && 'Notification' in window && Notification.permission === 'granted' && navigator.serviceWorker){
+      navigator.serviceWorker.ready.then(reg => reg.showNotification('📵 Ne répond pas', {body: fresh.map(o => ((o.customer || {}).name || 'Cliente') + ' — NRP ' + nrpN(o)).join(', '), icon: 'icon-192.png', tag: 'nrp'})).catch(() => {});
+    }
+  }
+  setInterval(nrpCheck, 60 * 1000); setTimeout(nrpCheck, 8000);
+  document.addEventListener('visibilitychange', () => { if(!document.hidden) setTimeout(nrpCheck, 2500); });
+  window.nrpCheck = nrpCheck;
+
   /* ---------- Onglet + page ---------- */
   function mount(){
     if(document.getElementById('view-zrsuivi')) return;
@@ -208,6 +240,17 @@
       .zs-o-r a{text-decoration:none;font-size:20px;background:#dcf3e6;border-radius:12px;padding:6px 9px;}
       .zs-empty{font-size:13px;color:var(--mauve-dark);padding:6px 4px;}
       .zs-cap{font-weight:800;font-size:13px;color:var(--mauve-dark);margin:18px 2px 8px;text-transform:uppercase;letter-spacing:.04em;}
+      #nrpModal{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10045;display:flex;align-items:flex-end;justify-content:center;}
+      #nrpModal .nrp-card{background:var(--card,#fff);color:var(--plum,#222);width:100%;max-width:520px;max-height:88vh;overflow:auto;border-radius:20px 20px 0 0;padding:18px 16px 22px;box-sizing:border-box;}
+      #nrpModal h3{margin:0 0 6px;} #nrpModal p{margin:0 0 12px;font-size:14px;line-height:1.45;}
+      .nrp-o{display:flex;align-items:center;gap:10px;border:1px solid var(--line,#ddd);border-left:6px solid #fbbf24;border-radius:12px;padding:10px;margin-bottom:8px;}
+      .nrp-o.lv3{border-left-color:#ef4444;}
+      .nrp-m{flex:1;min-width:0;font-size:14px;cursor:pointer;} .nrp-m small{opacity:.8;}
+      .nrp-p{display:inline-block;background:#FFCC00;color:#111;font-weight:800;font-size:12px;border-radius:999px;padding:2px 9px;margin-top:4px;}
+      .nrp-o.lv3 .nrp-p{background:#ef4444;color:#fff;}
+      .nrp-t{font-family:monospace;font-size:12px;font-weight:700;}
+      .nrp-call{font-size:22px;text-decoration:none;background:#dcf3e6;border-radius:12px;padding:8px 11px;}
+      .nrp-ok{display:block;width:100%;border:none;border-radius:12px;padding:13px;font:inherit;font-weight:800;margin-top:8px;background:var(--plum,#3b2433);color:#fff;cursor:pointer;}
       .zs-hint{font-size:12px;color:var(--mauve-dark);line-height:1.45;margin:4px 2px 30px;}`;
     document.head.appendChild(st);
   }

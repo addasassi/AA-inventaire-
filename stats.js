@@ -30,12 +30,13 @@
      Bénéfice = ventes livrées − coût d'achat − livraison ZR − retours ZR − sponsor
      Sponsor saisi en € par jour → $ (taux du jour) → DA (prix USDT réglable). */
   const TARIF = {1:[1400,980],2:[750,530],3:[950,680],4:[800,530],5:[800,530],6:[800,530],7:[950,680],8:[1050,730],9:[750,530],10:[800,530],11:[1600,1130],12:[850,530],13:[700,530],14:[750,530],15:[800,530],16:[650,480],17:[950,680],18:[800,530],19:[800,530],20:[750,580],21:[800,530],22:[700,530],23:[850,530],24:[850,530],25:[800,530],26:[750,530],27:[700,530],28:[900,580],29:[700,530],30:[950,730],31:[500,380],32:[1000,680],34:[800,530],35:[800,530],36:[850,530],38:[750,530],39:[950,730],40:[800,530],41:[800,530],42:[800,530],43:[800,530],44:[750,530],45:[1000,680],46:[650,530],47:[950,680],48:[750,530],49:[1050,980],51:[950,680],52:[1600,980],53:[1600,1130],54:[1600,0],55:[950,730],57:[950,0],58:[950,730]};
-  let SP = {usdt: 254, retDefault: 200, days: {}}, spSub = null;
+  let SP = {usdt: 254, retDefault: 200, days: {}}, spSub = null, spLoaded = false;
   function subSponsor(){
     if(spSub || typeof db === 'undefined') return;
     try{
       spSub = db.collection('meta').doc('sponsor').onSnapshot(d => {
         const x = (d.exists && d.data()) || {};
+        spLoaded = true;
         SP = {usdt: Number(x.usdt) || 254, retDefault: x.retDefault != null && x.retDefault !== '' ? Number(x.retDefault) : 200, days: x.days || {}, lastRate: Number(x.lastRate) || 0};
         maybeRender();
       }, () => { spSub = null; });
@@ -477,6 +478,7 @@
         <h4>Par heure</h4>${vbars(S.hours, S.hours.map((_, i) => i % 3 === 0 ? i + 'h' : ''))}
       `)}
 
+      ${section('🗄️ Sauvegarde automatique', `<div id="st-backup">${backupHtml()}</div>`, 'Chaque nuit, une copie de tous les produits, commandes et clientes est enregistrée à part.')}
       <div class="st-export"><button class="btn-primary" onclick="zrStatsExport()">⬇️ Exporter ces statistiques (Excel)</button></div>`;
     const f = document.getElementById('st-from'), t = document.getElementById('st-to');
     if(f) f.onchange = () => { customFrom = f.value; if(!customTo || customTo < customFrom) customTo = customFrom; render(); };
@@ -612,18 +614,72 @@
     }catch(e){}
   }
 
+  /* ---------- 📣 Rappel du soir : sponsor du jour pas saisi ---------- */
+  function sponsorReminder(){
+    try{
+      if(typeof currentUser === 'undefined' || !currentUser || currentUser.role !== 'admin') return;
+      const now = new Date(); if(now.getHours() < 21) return;
+      subSponsor();
+      if(!spSub || !spLoaded) return;
+      const day = dayKey(now);
+      if(SP.days && SP.days[day]) return;                       // déjà saisi (même 0)
+      let snooze = 0; try{ snooze = Number(localStorage.getItem('spRemind-' + day) || 0); }catch(e){}
+      if(snooze > Date.now() || document.getElementById('spRemind')) return;
+      const m = document.createElement('div'); m.id = 'spRemind';
+      m.innerHTML = `<div class="spr-card"><h3>📣 Sponsor d'aujourd'hui</h3><p>Combien as-tu dépensé en sponsor aujourd'hui ? (en €)</p>
+        <input type="text" inputmode="decimal" id="spr-eur" placeholder="Montant en €">
+        <button class="spr-ok" id="spr-ok">Enregistrer</button>
+        <button class="spr-none" id="spr-none">Pas de sponsor aujourd'hui</button>
+        <button class="spr-later" id="spr-later">Me le rappeler dans 1 h</button></div>`;
+      document.body.appendChild(m);
+      const close = () => m.remove();
+      const save = async eur => {
+        try{
+          const rate = await eurUsd(day);
+          await db.collection('meta').doc('sponsor').set({lastRate: rate, days: {[day]: {eur, rate, at: new Date().toISOString(), by: currentUser.name || ''}}}, {merge: true});
+          toast(eur ? `📣 ${eur} € → ${money(Math.round(eur * rate * SP.usdt))} enregistré` : '📣 Noté : pas de sponsor aujourd\'hui');
+          close();
+        }catch(e){ toast('Échec : ' + (e.message || e), true); }
+      };
+      m.querySelector('#spr-ok').onclick = () => { const v = Number(String(m.querySelector('#spr-eur').value).replace(',', '.')); if(!(v > 0)){ toast('Écrivez le montant en €', true); return; } save(v); };
+      m.querySelector('#spr-none').onclick = () => save(0);
+      m.querySelector('#spr-later').onclick = () => { try{ localStorage.setItem('spRemind-' + day, String(Date.now() + 3600e3)); }catch(e){} close(); };
+      if(document.hidden && 'Notification' in window && Notification.permission === 'granted' && navigator.serviceWorker){
+        navigator.serviceWorker.ready.then(reg => reg.showNotification('📣 Sponsor du jour', {body: 'Écris combien tu as dépensé en sponsor aujourd\'hui', icon: 'icon-192.png', tag: 'sponsor-' + day})).catch(() => {});
+      }
+    }catch(e){}
+  }
+
+  /* ---------- 🗄️ Sauvegarde : état + clé ---------- */
+  let bkInfo = null;
+  async function loadBackup(){
+    try{ const d = await db.collection('meta').doc('backup').get(); bkInfo = d.exists ? d.data() : null; }catch(e){ bkInfo = null; }
+    const el = document.getElementById('st-backup'); if(el) el.innerHTML = backupHtml();
+  }
+  function backupHtml(){
+    if(!bkInfo || !bkInfo.last) return '<div class="st-empty">Première sauvegarde cette nuit.</div>';
+    const l = bkInfo.last; let c = {}; try{ c = JSON.parse(l.counts || '{}'); }catch(e){}
+    const old = Date.now() - Date.parse(l.at) > 2 * 86400e3;
+    return `<div class="${old ? 'st-warn' : 'pf-pend'}">${old ? '⚠️' : '✅'} Dernière sauvegarde : <b>${new Date(l.at).toLocaleString('fr-FR', {dateStyle: 'short', timeStyle: 'short'})}</b><br>
+      ${c.products || 0} produits · ${c.orders || 0} commandes · ${c.customers || 0} clientes (+ photos) — gardées 14 jours, chiffrées.</div>
+      <button class="st-more" style="margin-top:8px" onclick="var k=this.nextElementSibling;k.style.display=k.style.display==='none'?'block':'none'">🔑 Afficher la clé de sauvegarde</button>
+      <div style="display:none" class="bk-key"><code>${esc(bkInfo.key || '')}</code><div class="st-hint" style="margin:6px 0 0">Gardez cette clé (capture d'écran ou note) : elle sert à récupérer vos données si un jour il y a un problème.</div></div>`;
+  }
+
   /* ---------- Rafraîchissement ---------- */
   let t = null;
   function maybeRender(){
     const v = document.getElementById('view-statistiques');
     if(v && v.classList.contains('active')){ clearTimeout(t); t = setTimeout(render, 400); }
   }
-  window.renderStatsPage = render;
+  window.renderStatsPage = function(){ render(); if(!bkInfo) loadBackup(); };
   window.statsOnData = maybeRender;
   function init(){
     css();
     bindBlacklist('o-phone'); bindBlacklist('eo-phone');
     setInterval(eveningSummary, 5 * 60 * 1000); setTimeout(eveningSummary, 20000);
+    setInterval(sponsorReminder, 5 * 60 * 1000); setTimeout(sponsorReminder, 15000);
+    document.addEventListener('visibilitychange', () => { if(!document.hidden) setTimeout(sponsorReminder, 2000); });
     let last = '';
     setInterval(() => {   // données changées (nouvelle commande, suivi ZR…) pendant que la page est ouverte
       const sig = allOrders().length + '|' + allOrders().reduce((t, o) => t + ((o.zr && o.zr.updatedAt) || ''), '').length + '|' + allProducts().length;
@@ -747,6 +803,13 @@
       .nc-n{flex:1;min-width:0;cursor:pointer;} .nc-n b{display:block;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;} .nc-n small{font-size:11px;color:var(--mauve-dark);}
       .nc-r input{width:84px;padding:8px;border:1px solid var(--line);border-radius:9px;background:var(--card);color:inherit;font:inherit;font-size:14px;}
       .nc-r button{border:none;border-radius:9px;padding:8px 12px;background:var(--plum);color:#fff;font-weight:800;cursor:pointer;}
+      #spRemind{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10040;display:flex;align-items:flex-end;justify-content:center;}
+      #spRemind .spr-card{background:var(--card,#fff);color:var(--plum,#222);width:100%;max-width:520px;border-radius:20px 20px 0 0;padding:18px 16px 22px;box-sizing:border-box;}
+      #spRemind h3{margin:0 0 6px;} #spRemind p{margin:0 0 10px;font-size:14px;}
+      #spRemind input{width:100%;box-sizing:border-box;padding:12px;border:1px solid var(--line,#ddd);border-radius:12px;font:inherit;font-size:16px;background:var(--card,#fff);color:inherit;}
+      #spRemind button{display:block;width:100%;border:none;border-radius:12px;padding:13px;font:inherit;font-weight:800;margin-top:8px;cursor:pointer;}
+      .spr-ok{background:var(--plum,#3b2433);color:#fff;} .spr-none{background:#dcf3e6;color:#1f7a4a;} .spr-later{background:transparent;color:var(--mauve-dark,#7a5a6a);}
+      .bk-key code{display:block;margin-top:8px;padding:10px;border-radius:10px;background:color-mix(in srgb,var(--line) 40%,transparent);font-size:13px;word-break:break-all;user-select:all;}
       .st-export{margin-top:18px;}
       .st-export .btn-primary{width:100%;}
       .st-black-alert{margin-top:8px;padding:10px 12px;border-radius:12px;font-size:13px;line-height:1.45;background:#fde8e6;color:#8f2418;border:1px solid #f3b8b0;}
