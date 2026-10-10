@@ -415,6 +415,17 @@ async function trackOrder(env, o){
   const final = stage === 'delivered' || stage === 'returned';
   const sit = situationOf(p);
   const nowIso = new Date().toISOString();
+  // dernier « reporté » (date prévue) : lu dans l'historique quand la situation change
+  let rep = {};
+  if(!final && (!z.reportScan || (sit || '') !== (z.situation || ''))){
+    try{
+      const h = await zr(env, '/parcels/' + z.parcelId + '/state-history');
+      (Array.isArray(h) ? h : []).forEach(e => (e.situations || []).forEach(x => {
+        const d = x.metadata && x.metadata.scheduledDate;
+        if(d && /report/i.test(x.situationSlug || x.situationName || '') && String(x.createdAt) > String(rep.at || '')) rep = {at: x.createdAt, date: toIsoDay(String(d))};
+      }));
+    }catch(e){}
+  }
   // statistiques : date de fin (livré / retour), argent encaissé par ZR, nombre max de « Ne répond pas »
   const stateKey = strip((p.state && (p.state.name || p.state.description)) || '').toLowerCase();
   const paid = !!z.paid || (stage === 'delivered' && /encaiss|recouvert|paye|virement/.test(stateKey));
@@ -428,7 +439,8 @@ async function trackOrder(env, o){
     situation: isNoSituation(sit) ? '' : sit,
     deliveryPrice: Number(p.deliveryPrice) || z.deliveryPrice || 0, returnPrice: Number(p.returnPrice) || z.returnPrice || 0,
     finalAt, paid, nrp,
-    reportDate: /report/i.test(sit || '') ? (reportDateOf(p) || (/report/i.test(z.situation || '') ? z.reportDate || '' : '')) : '',
+    reportDate: final ? '' : (/report/i.test(sit || '') ? (reportDateOf(p) || z.reportDate || '') : (rep.date || z.reportDate || '')),
+    reportedAt: final ? '' : (rep.at || z.reportedAt || ''), reportScan: 1,
     situationNote: noteOf(p) || '',
     // depuis quand l'état / la situation n'ont pas changé (pour repérer les colis bloqués)
     stateAt: ((p.state && (p.state.description || p.state.name)) || z.state) !== z.state ? nowIso : (z.stateAt || z.sentAt || nowIso),
