@@ -2,6 +2,15 @@
 const FS = 'https://firestore.googleapis.com/v1/projects/aa-inventaire/databases/(default)/documents';
 const KEY = 'AIzaSyAfMIEi1MynF82Jp1j1J1BFQM5w8182JTo';
 const TN = process.env.TN;
+if(TN === 'LIST'){
+  const docs = []; let tok = '';
+  do{ const r = await (await fetch(`${FS}/orders?pageSize=300&key=${KEY}${tok ? '&pageToken=' + tok : ''}`)).json(); (r.documents || []).forEach(d => docs.push(d)); tok = r.nextPageToken; }while(tok);
+  const v = x => x == null ? null : ('stringValue' in x ? x.stringValue : 'booleanValue' in x ? x.booleanValue : 'integerValue' in x ? x.integerValue : 'mapValue' in x ? Object.fromEntries(Object.entries(x.mapValue.fields || {}).map(([k, y]) => [k, v(y)])) : null);
+  docs.forEach(d => { const f = Object.fromEntries(Object.entries(d.fields).map(([k, y]) => [k, v(y)])); const z = f.zr || {};
+    if(/report/i.test(z.situation || '') || f.deferred || /report/i.test(z.state || '')) console.log('ORD', d.name.split('/').pop(), JSON.stringify({name: f.customer && f.customer.name, type: f.customer && f.customer.deliveryType, deferred: f.deferred, deferredDate: f.deferredDate, stage: z.stage, state: z.state, situation: z.situation, parcel: !!z.parcelId, reportDate: z.reportDate, status: z.status, createdAt: f.createdAt}));
+  });
+  process.exit(0);
+}
 const q = await fetch(`${FS}:runQuery?key=${KEY}`, {method: 'POST', headers: {'Content-Type': 'application/json'},
   body: JSON.stringify({structuredQuery: {from: [{collectionId: 'orders'}], where: {fieldFilter: {field: {fieldPath: 'zr.tracking'}, op: 'EQUAL', value: {stringValue: TN}}}, limit: 1}})});
 const rows = await q.json();
