@@ -2,6 +2,11 @@
 const FS = 'https://firestore.googleapis.com/v1/projects/aa-inventaire/databases/(default)/documents';
 const KEY = 'AIzaSyAfMIEi1MynF82Jp1j1J1BFQM5w8182JTo';
 const TN = process.env.TN;
+if(TN === 'GEO'){
+  const fs = await import('fs');
+  const t = await (await fetch('https://cdn.jsdelivr.net/npm/geoalgeria/data/ecommerce/communes.json')).text();
+  fs.writeFileSync('tools/debug/communes.json', t); console.log('ok', t.length); process.exit(0);
+}
 if(TN === 'LIST'){
   const docs = []; let tok = '';
   do{ const r = await (await fetch(`${FS}/orders?pageSize=300&key=${KEY}${tok ? '&pageToken=' + tok : ''}`)).json(); (r.documents || []).forEach(d => docs.push(d)); tok = r.nextPageToken; }while(tok);
