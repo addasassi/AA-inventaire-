@@ -745,6 +745,7 @@
   }
   window.zrUpdateParcel = updateParcel;
   window.zrCall = call;
+  window.zrReady = () => !!relay;
 
   window.zrPrepareOrder = prepare;
   window.zrAfterSave = afterSave;
