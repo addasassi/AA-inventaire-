@@ -16,3 +16,5 @@ const keys = Object.keys(j.parcel || {}).filter(k => /reason|motif|cause|comment
 keys.forEach(k => console.log('KEY', k, JSON.stringify(j.parcel[k]).slice(0, 400)));
 let h = []; try{ h = JSON.parse(j['/parcels/{id}/state-history']); }catch(e){}
 h.forEach(e => (e.situations || []).forEach(x => console.log('HSIT', JSON.stringify(x))));
+const t = await (await fetch(relay + '/track', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id})})).json();
+console.log('TRACK', JSON.stringify({situation: t.zr && t.zr.situation, situationNote: t.zr && t.zr.situationNote}));

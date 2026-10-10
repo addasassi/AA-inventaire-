@@ -48,9 +48,9 @@
     return `<div class="zs-o" style="--c:${col}" onclick="zsOpen('${esc(o.id)}')">
       <div class="zs-o-m"><div class="zs-o-n">${esc(c.name || 'Cliente')}</div>
         <div class="zs-o-w">📍 ${esc(c.wilaya || '')}${c.commune ? ' — ' + esc(c.commune) : ''}</div>
-        <div class="zs-o-s"><span class="zs-pill">${esc(sit || z.state || '—')}</span><span class="zs-when">${when}</span></div>
+        <div class="zs-o-s"><span class="zs-pill">${esc(sit || z.state || '—')}</span>${z.situationNote ? `<span class="zs-why">${esc(String(z.situationNote).replace(/\.$/, ''))}</span>` : ''}<span class="zs-when">${when}</span></div>
         ${/report/.test(norm(sit)) ? `<div class="zs-rep">📅 ${z.reportDate ? 'Reportée au <b>' + fmtDay(z.reportDate) + '</b>' : 'Date du report pas indiquée par ZR'}${z.situationAt ? ' · reportée le ' + fmtDay(dayKey(z.situationAt)) : ''}</div>` : ''}
-        ${z.situationNote ? `<div class="zs-note">💬 ${esc(z.situationNote)}</div>` : ''}
+
         ${z.tracking ? `<div class="zs-o-t">${esc(z.tracking)}</div>` : ''}</div>
       <div class="zs-o-r"><div class="zs-o-p">${money(o.total)}</div>${c.phone ? `<a href="tel:${esc(c.phone)}" onclick="event.stopPropagation()" aria-label="Appeler">📞</a>` : ''}</div></div>`;
   }
@@ -161,7 +161,7 @@
     m.innerHTML = `<div class="nrp-card"><h3>📵 Ne répond pas — appelez la cliente</h3>
       <p>${fresh.length > 1 ? fresh.length + ' colis risquent' : 'Ce colis risque'} de revenir en retour. Appelez la cliente pour qu'elle prenne son colis.</p>
       ${fresh.map(o => { const c = o.customer || {}, n = nrpN(o); return `<div class="nrp-o lv${Math.min(3, n)}">
-        <div class="nrp-m" onclick="zsOpen('${esc(o.id)}')"><b>${esc(c.name || 'Cliente')}</b> · ${esc(c.wilaya || '')}<br><span class="nrp-p">Ne répond pas ${n}</span> <span class="nrp-t">${esc((o.zr && o.zr.tracking) || '')}</span><br><small>${money(o.total)}${c.phone ? ' · ' + esc(c.phone) : ''}</small></div>
+        <div class="nrp-m" onclick="zsOpen('${esc(o.id)}')"><b>${esc(c.name || 'Cliente')}</b> · ${esc(c.wilaya || '')}<br><span class="nrp-p">Ne répond pas ${n}</span>${o.zr && o.zr.situationNote ? ' <small class="nrp-why">' + esc(String(o.zr.situationNote).replace(/\.$/, '')) + '</small>' : ''} <span class="nrp-t">${esc((o.zr && o.zr.tracking) || '')}</span><br><small>${money(o.total)}${c.phone ? ' · ' + esc(c.phone) : ''}</small></div>
         ${c.phone ? `<a href="tel:${esc(c.phone)}" class="nrp-call">📞</a>` : ''}</div>`; }).join('')}
       <button class="nrp-ok" id="nrp-ok">OK, compris</button></div>`;
     document.body.appendChild(m);
@@ -235,6 +235,7 @@
       .zs-o-n{font-weight:800;font-size:15.5px;}
       .zs-o-w{font-size:13.5px;font-weight:600;margin-top:3px;overflow-wrap:anywhere;}
       .zs-rep{margin-top:7px;font-size:13.5px;font-weight:600;background:#d1fae5;color:#065f46;border-radius:9px;padding:6px 9px;}
+      .zs-why{background:#fff;color:#92600a;border:1.5px dashed #f2c14e;font-weight:700;font-size:12.5px;padding:3px 9px;border-radius:999px;}
       .zs-note{margin-top:6px;font-size:13px;font-style:italic;}
       .zs-o-s{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px;}
       .zs-pill{background:color-mix(in srgb,var(--c) 28%,#fff);border:1.5px solid var(--c);color:#111;font-weight:800;font-size:12.5px;padding:3px 9px;border-radius:999px;}

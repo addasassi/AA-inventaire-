@@ -91,7 +91,8 @@
     if(!t || /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(t) || o.zr.stage === 'delivered' || o.zr.stage === 'returned') return '';
     const s = sitStyle(t);
     const rd = o.zr.reportDate && /report/i.test(t) ? ' → ' + new Date(o.zr.reportDate + 'T00:00:00').toLocaleDateString('fr-FR', {day: 'numeric', month: 'short'}) : '';
-    return `<div class="zr-badge" style="color:${s[1]};background:${s[2]}">${s[0]} ${esc(t)}${rd}</div>`;
+    const why = o.zr.situationNote && !/report/i.test(t) ? ' · ' + esc(String(o.zr.situationNote).replace(/\.$/, '')) : '';
+    return `<div class="zr-badge" style="color:${s[1]};background:${s[2]}">${s[0]} ${esc(t)}${rd}${why}</div>`;
   }
 
   function info(o){

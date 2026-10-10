@@ -104,7 +104,8 @@ function reportDateOf(p, depth){
 }
 function noteOf(p){
   const s = p && (p.situation || p.lastSituation);
-  const c = s && typeof s === 'object' ? (s.comment || s.note || s.remark || s.observation) : '';
+  const md = (s && typeof s === 'object' && s.metadata) || {};
+  const c = s && typeof s === 'object' ? (md.comment || md.reason || s.comment || s.note || s.remark || s.observation) : '';
   return typeof c === 'string' ? c.slice(0, 200) : '';
 }
 const isNoSituation = t => !t || /pas de situation/i.test(strip(t));
@@ -568,7 +569,7 @@ export default {
           (e.situations || []).forEach(x => {
             const md = x.metadata || {};
             ev.push({at: x.createdAt || e.createdAt, kind: 'sit', label: x.situationDescription || x.situationName || '', slug: x.situationSlug || '',
-              date: md.scheduledDate ? toIsoDay(String(md.scheduledDate)) : '', note: typeof x.comment === 'string' ? x.comment : ''});
+              date: md.scheduledDate ? toIsoDay(String(md.scheduledDate)) : '', note: String(md.comment || md.reason || (typeof x.comment === 'string' ? x.comment : '') || '').replace(/\.$/, '')});
           });
         });
         ev.sort((a, b) => String(b.at).localeCompare(String(a.at)));
