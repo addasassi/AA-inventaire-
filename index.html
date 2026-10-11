@@ -4774,6 +4774,15 @@ function showOrderDetail(id){
   if(window.zrDetail) window.zrDetail(o);
   document.getElementById('orderDetailModal').classList.add('show');
 }
+// toucher en dehors de la fenêtre (le fond sombre) la ferme
+['orderDetailModal', 'colorsModal', 'colorViewModal', 'barcodeModal'].forEach(id=>{
+  const m = document.getElementById(id);
+  if(m) m.addEventListener('click', e=>{
+    if(e.target !== m) return;
+    const btn = [...m.querySelectorAll('button')].find(b => /(^|[-_])(close|cancel|back|fermer)([-_]|$)/i.test(b.id || '') || /^\s*(✕|×|fermer|close)/i.test(b.textContent || ''));
+    if(btn) btn.click(); else m.classList.remove('show');
+  });
+});
 document.getElementById('od-close').addEventListener('click', ()=>{
   document.getElementById('orderDetailModal').classList.remove('show');
 });
