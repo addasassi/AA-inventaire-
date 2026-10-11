@@ -280,6 +280,29 @@
     return null;
   }
   function attr(o, re){ const a = (o.customAttributes || []).find(x => re.test(x.key || '')); return a ? String(a.value || '').trim() : ''; }
+  // Packs du site : chaque choix "N nom" → code couleur de l'Atelier
+  const PACKS = {
+    PACK3: {'1':'631332086904','2':'959714558796','3':'628757558942','4':'002940924939','5':'716846577984','6':'887049632064','7':'887049636143','8':'887049639823','9':'557206051689'}
+  };
+  function packItems(li){
+    const sku = String((li.variant && li.variant.sku) || li.sku || '');
+    const map = PACKS[sku];
+    if(!map) return null;
+    const opts = ((li.variant && li.variant.selectedOptions) || []).map(o => String(o.value || '').trim());
+    const codes = opts.map(v => map[(v.match(/^\d+/) || [''])[0]]).filter(Boolean);
+    if(!codes.length) return null;
+    const total = Number(((li.discountedUnitPriceSet || li.originalUnitPriceSet || {}).shopMoney || {}).amount) || 0;
+    const each = Math.round(total / codes.length);
+    return codes.map((code, k) => {
+      const it = itemFromLine({variant:{sku: code, selectedOptions: []}, quantity: li.quantity, title: opts[k] || li.title,
+        originalUnitPriceSet: {shopMoney: {amount: k === codes.length - 1 ? total - each * (codes.length - 1) : each}}});
+      it.pack = sku;
+      return it;
+    });
+  }
+  function itemsFromLines(lines){
+    return (lines || []).flatMap(li => packItems(li) || [itemFromLine(li)]);
+  }
   function itemFromLine(li){
     const sku = String((li.variant && li.variant.sku) || li.sku || '');
     const size = ((li.variant && li.variant.selectedOptions) || []).find(x => !/couleur|color|اللون|لون/i.test(x.name || '') && /^(xs|s|m|l|xl|xxl|xxxl|\d{2})$/i.test(String(x.value || '').trim()));
@@ -344,7 +367,7 @@
       const ship = [(so.shippingLines && so.shippingLines.nodes || []).map(x => x.title).join(' '), (so.customAttributes || []).map(x => x.key + ' ' + x.value).join(' ')].join(' ');
       const stop = /stop|desk|bureau|agence|relais|pickup|مكتب|وكالة/i.test(ship);
       const commune = attr(so, /commune|بلدية|baladia|city|ville/i) || sa.city || '';
-      const items = (so.lineItems && so.lineItems.nodes || []).map(itemFromLine);
+      const items = itemsFromLines(so.lineItems && so.lineItems.nodes);
       const subtotal = Number(((so.subtotalPriceSet || {}).shopMoney || {}).amount) || items.reduce((t, i) => t + i.price * i.qty, 0);
       const costTotal = items.reduce((t, i) => t + (i.cost || 0) * i.qty, 0);
       const o = {
