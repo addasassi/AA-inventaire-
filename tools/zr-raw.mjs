@@ -2,6 +2,13 @@
 const FS = 'https://firestore.googleapis.com/v1/projects/aa-inventaire/databases/(default)/documents';
 const KEY = 'AIzaSyAfMIEi1MynF82Jp1j1J1BFQM5w8182JTo';
 const TN = process.env.TN;
+if(TN.startsWith('SEND:')){
+  const meta = await (await fetch(`${FS}/meta/zr?key=${KEY}`)).json();
+  const relay = meta.fields.url.stringValue.replace(/\/+$/, '');
+  const r = await fetch(relay + '/send', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id: TN.slice(5), force: true})});
+  console.log(r.status, (await r.text()).slice(0, 800));
+  process.exit(0);
+}
 if(TN === 'PARSE'){
   const meta = await (await fetch(`${FS}/meta/zr?key=${KEY}`)).json();
   const relay = meta.fields.url.stringValue.replace(/\/+$/, '');

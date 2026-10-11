@@ -307,17 +307,28 @@ async function hubs(env){
 const officeName = c => String(c || '').replace(/\s*\([^)]*\)\s*$/, '').trim();
 async function resolveHub(env, city, communeRaw){
   const commune = officeName(communeRaw);
+  // « Constantine (Zouaghi) (Bureau) » → on essaie d'abord « Zouaghi » (le quartier du bureau), puis « Constantine »
+  const inner = [...String(communeRaw || '').matchAll(/\(([^)]+)\)/g)].map(m => m[1].trim())
+    .filter(t => !/^(bureau|centre de tri|agence|point relais|hub|stop ?desk)$/i.test(t));
+  const base = commune.replace(/\s*\([^)]*\)/g, '').trim();
+  const names = [...new Set([...inner, commune, base].filter(Boolean))];
   const list = (await hubs(env)).filter(h => h.isPickupPoint !== false);
-  let district = null;
-  try{ district = await resolveDistrict(env, commune, city, true); }catch(e){}
   const inCity = list.filter(h => h.address && h.address.cityTerritoryId === city.id);
-  const n = norm(commune);
-  const h = (district && list.find(x => x.address && x.address.districtTerritoryId === district.id))
-         || inCity.find(x => norm(x.name) === n)
-         || inCity.find(x => norm(x.name).split(' ').includes(n) || norm(x.name).startsWith(n))
-         || inCity.find(x => norm(x.name).includes(n))
-         || list.find(x => norm(x.name).includes(norm(commune)))
-         || (inCity.length === 1 ? inCity[0] : null);
+  let h = null;
+  for(const nm of names){
+    const n = norm(nm);
+    if(!n) continue;
+    h = inCity.find(x => norm(x.name) === n)
+      || inCity.find(x => norm(x.name).split(' ').includes(n))
+      || inCity.find(x => norm(x.name).includes(n))
+      || (n.length >= 5 ? list.find(x => norm(x.name).includes(n)) : null);
+    if(h) break;
+  }
+  if(!h){
+    let district = null;
+    try{ district = await resolveDistrict(env, inner[0] || base || commune, city, true); }catch(e){}
+    h = (district && list.find(x => x.address && x.address.districtTerritoryId === district.id)) || (inCity.length === 1 ? inCity[0] : null);
+  }
   if(!h) throw new ZrError(`Bureau Stop Desk « ${commune} » introuvable chez ZR (bureaux de la wilaya : ${inCity.map(x => x.name).join(', ') || 'aucun'})`, true);
   return h;
 }
