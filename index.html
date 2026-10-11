@@ -505,7 +505,7 @@
 
   .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);
     background:var(--plum);color:var(--cream);padding:12px 20px;border-radius:30px;font-size:14px;font-weight:600;
-    opacity:0;transition:all .25s ease;z-index:300;max-width:90%;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,0.25);}
+    opacity:0;transition:all .25s ease;z-index:300;max-width:90%;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,0.25);pointer-events:none;}   /* un message (même invisible) ne doit jamais bloquer un bouton en dessous */
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
   .toast.err{background:var(--danger);}
 
@@ -3244,7 +3244,7 @@ function openProductModal(id){
   // pas de focus automatique : le clavier ne s'ouvre que si on touche la case « Scanner »
 }
 document.getElementById('productModal').addEventListener('click', (e)=>{
-  if(e.target.id === 'productModal') closeProductModal();
+  if(e.target.id === 'productModal'){ e.stopPropagation(); swallowClicks(); closeProductModal(); }
 });
 function closeProductModal(){
   document.getElementById('productModal').classList.remove('show');
@@ -4774,11 +4774,19 @@ function showOrderDetail(id){
   if(window.zrDetail) window.zrDetail(o);
   document.getElementById('orderDetailModal').classList.add('show');
 }
+// après fermeture par le fond : on ignore les « clics fantômes » qui toucheraient ce qu'il y a derrière
+function swallowClicks(ms){
+  const until = Date.now() + (ms || 450);
+  const block = ev => { if(Date.now() < until){ ev.preventDefault(); ev.stopPropagation(); } else document.removeEventListener('click', block, true); };
+  document.addEventListener('click', block, true);
+  setTimeout(()=> document.removeEventListener('click', block, true), (ms || 450) + 50);
+}
 // toucher en dehors de la fenêtre (le fond sombre) la ferme
 ['orderDetailModal', 'colorsModal', 'colorViewModal', 'barcodeModal'].forEach(id=>{
   const m = document.getElementById(id);
   if(m) m.addEventListener('click', e=>{
     if(e.target !== m) return;
+    e.preventDefault(); e.stopPropagation(); swallowClicks();
     const btn = [...m.querySelectorAll('button')].find(b => /(^|[-_])(close|cancel|back|fermer)([-_]|$)/i.test(b.id || '') || /^\s*(✕|×|fermer|close)/i.test(b.textContent || ''));
     if(btn) btn.click(); else m.classList.remove('show');
   });
