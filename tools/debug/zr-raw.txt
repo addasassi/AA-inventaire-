@@ -1,0 +1,1 @@
+200 {"ok":true,"zr":{"status":"sent","active":true,"parcelId":"fbe4d4ff-b021-48cb-8565-5287a1daf731","tracking":"25-BF6DABSO2O-ZR","state":"Commande reçue","stage":"created","situation":"","sentAt":"2026-10-11T15:03:39.078Z","updatedAt":"2026-10-11T15:03:41.050Z","lastCheck":1791731021050,"error":"","attempts":2}}
