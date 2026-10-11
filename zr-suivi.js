@@ -21,11 +21,15 @@
   // lignes du tableau : [clé, couleur, libellé, test]
   const ROWS = [
     ['liv',  '#22c55e', "Livrées aujourd'hui", o => o.zr.stage === 'delivered' && o.zr.finalAt && dayKey(o.zr.finalAt) === today()],
+    ['appel', '#1e88e5', 'Appel téléphonique', o => !final(o) && /appel tel/.test(norm(sitOf(o)))],
     ['nrp1', '#fcd34d', 'Ne répond pas 1', o => !final(o) && nrpN(o) === 1],
     ['nrp2', '#fbbf24', 'Ne répond pas 2', o => !final(o) && nrpN(o) === 2],
     ['nrp3', '#f59e0b', 'Ne répond pas 3', o => !final(o) && nrpN(o) >= 3],
     ['ann',  '#ef4444', 'Commande annulée', o => !final(o) && /annul|refus/.test(norm(sitOf(o)))],
     ['rep',  '#10b981', 'Commande reportée', o => !final(o) && /report/.test(norm(sitOf(o)))],
+    ['rdv',  '#0f766e', 'Rendez-vous client', o => !final(o) && /rendez/.test(norm(sitOf(o)))],
+    ['chsd', '#16a34a', 'Changement Stop desk', o => !final(o) && /changement/.test(norm(sitOf(o))) && /stop ?desk|bureau/.test(norm(sitOf(o)))],
+    ['comm', '#d97706', 'Commune erronée', o => !final(o) && /commune/.test(norm(sitOf(o))) && /erron|faux|fausse|incorrect/.test(norm(sitOf(o)))],
   ];
   const FLOW = [
     ['new',  '#94a3b8', 'Créées — pas encore récupérées', o => !final(o) && (o.zr.stage || 'created') === 'created'],
