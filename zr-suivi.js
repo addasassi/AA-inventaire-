@@ -31,6 +31,9 @@
     ['chsd', '#16a34a', 'Changement Stop desk', o => !final(o) && /changement/.test(norm(sitOf(o))) && /stop ?desk|bureau/.test(norm(sitOf(o)))],
     ['comm', '#d97706', 'Commune erronée', o => !final(o) && /commune/.test(norm(sitOf(o))) && /erron|faux|fausse|incorrect/.test(norm(sitOf(o)))],
   ];
+  // Stop desk : sans « Rendez-vous » ni « Commune erronée », avec « En attente du client »
+  const ROWS_SD = ROWS.filter(r => r[0] !== 'rdv' && r[0] !== 'comm');
+  ROWS_SD.splice(ROWS_SD.findIndex(r => r[0] === 'ann'), 0, ['att', '#f59e0b', 'En attente du client', o => !final(o) && /attente/.test(norm(sitOf(o)))]);
   const FLOW = [
     ['new',  '#94a3b8', 'Créées — pas encore récupérées', o => !final(o) && (o.zr.stage || 'created') === 'created'],
     ['way',  '#60a5fa', 'Vers la wilaya', o => !final(o) && (o.zr.stage === 'in_transit')],
@@ -121,7 +124,7 @@
       <div class="zs-top"><div class="zs-sub">${P.filter(o => !final(o)).length} colis en cours${last ? ' · mis à jour ' + new Date(last).toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'}) : ''}</div>
         <button class="zs-refresh" id="zs-refresh" onclick="zsRefresh()">🔄 Actualiser</button></div>
       ${block('d', 'Livraison à domicile', '🚚', dom, ROWS)}
-      ${block('s', 'Stop desk', '🏪', sd, ROWS)}
+      ${block('s', 'Stop desk', '🏪', sd, ROWS_SD)}
       <div class="zs-cap">Colis en route</div>
       ${block('fd', 'Domicile', '🚚', dom, FLOW)}
       ${block('fs', 'Stop desk', '🏪', sd, FLOW)}
