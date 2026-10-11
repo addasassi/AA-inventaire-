@@ -33,7 +33,7 @@
   ];
   // Stop desk : sans « Rendez-vous » ni « Commune erronée », avec « En attente du client »
   const ROWS_SD = ROWS.filter(r => r[0] !== 'rdv' && r[0] !== 'comm');
-  ROWS_SD.splice(ROWS_SD.findIndex(r => r[0] === 'ann'), 0, ['att', '#f59e0b', 'En attente du client', o => !final(o) && /attente/.test(norm(sitOf(o)))]);
+  ROWS_SD.splice(ROWS_SD.findIndex(r => r[0] === 'nrp1'), 0, ['att', '#f59e0b', 'En attente du client', o => !final(o) && /attente/.test(norm(sitOf(o)))]);
   const FLOW = [
     ['new',  '#94a3b8', 'Créées — pas encore récupérées', o => !final(o) && (o.zr.stage || 'created') === 'created'],
     ['way',  '#60a5fa', 'Vers la wilaya', o => !final(o) && (o.zr.stage === 'in_transit')],
