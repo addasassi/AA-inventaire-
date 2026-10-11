@@ -2,6 +2,22 @@
 const FS = 'https://firestore.googleapis.com/v1/projects/aa-inventaire/databases/(default)/documents';
 const KEY = 'AIzaSyAfMIEi1MynF82Jp1j1J1BFQM5w8182JTo';
 const TN = process.env.TN;
+if(TN === 'TOP'){
+  const all = async col => { const docs = []; let tok = ''; do{ const r = await (await fetch(`${FS}/${col}?pageSize=300&key=${KEY}${tok ? '&pageToken=' + tok : ''}`)).json(); (r.documents || []).forEach(d => docs.push(d)); tok = r.nextPageToken; }while(tok); return docs; };
+  const v = x => x == null ? null : ('stringValue' in x ? x.stringValue : 'booleanValue' in x ? x.booleanValue : 'integerValue' in x ? Number(x.integerValue) : 'doubleValue' in x ? x.doubleValue : 'mapValue' in x ? Object.fromEntries(Object.entries(x.mapValue.fields || {}).map(([k, y]) => [k, v(y)])) : 'arrayValue' in x ? (x.arrayValue.values || []).map(v) : null);
+  const orders = (await all('orders')).map(d => Object.fromEntries(Object.entries(d.fields).map(([k, y]) => [k, v(y)])));
+  const prods = (await all('products')).map(d => Object.fromEntries(Object.entries(d.fields).filter(([k]) => !/img/.test(k)).map(([k, y]) => [k, v(y)])));
+  const byP = {}; let n = 0, ca = 0, del = 0, ret = 0, items = 0;
+  orders.forEach(o => { n++; ca += o.total || 0; const st = o.zr && o.zr.stage; if(st === 'delivered') del++; if(st === 'returned') ret++;
+    (o.items || []).forEach(it => { items += it.qty || 1; const k = it.productId || it.name; const x = byP[k] = byP[k] || {q: 0, orders: 0}; x.q += it.qty || 1; x.orders++; }); });
+  console.log('orders', n, 'CA', ca, 'avg', Math.round(ca / n), 'items/order', (items / n).toFixed(2), 'delivered', del, 'returned', ret);
+  const pm = {}; prods.forEach(p => pm[p.id] = p);
+  Object.entries(byP).sort((a, b) => b[1].q - a[1].q).slice(0, 15).forEach(([k, x]) => { const p = pm[k] || {}; const stock = (p.qty || 0) + (p.colors || []).reduce((t, c) => t + ((c && c.qty) || 0), 0);
+    console.log('TOP', x.q, 'pcs', x.orders, 'cmd |', p.name || k, '|', p.cat, '| prix', p.price, 'achat', p.cost, '| stock', stock, '| couleurs', (p.colors || []).length); });
+  const cats = {}; prods.forEach(p => { const stock = (p.qty || 0) + (p.colors || []).reduce((t, c) => t + ((c && c.qty) || 0), 0); const c = cats[p.cat] = cats[p.cat] || {models: 0, stock: 0, prices: new Set()}; c.models++; c.stock += stock; c.prices.add(p.price); });
+  Object.entries(cats).forEach(([c, x]) => console.log('CAT', c, x.models, 'modèles', x.stock, 'pièces', [...x.prices].join('/')));
+  process.exit(0);
+}
 if(TN.startsWith('SEND:')){
   const meta = await (await fetch(`${FS}/meta/zr?key=${KEY}`)).json();
   const relay = meta.fields.url.stringValue.replace(/\/+$/, '');
