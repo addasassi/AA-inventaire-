@@ -504,7 +504,8 @@ async function botCatalog(req){
       const ps = m.pieces, prices = ps.map(x => Number(x.price) || 0), min = Math.min(...prices), max = Math.max(...prices);
       return {title: cut(m.name + ' — ' + (min === max ? '' : 'من ') + min + ' دج', 80),
         subtitle: cut('🎨 ' + (ps.length > 1 ? ps.length + ' ألوان: ' + ps.map(x => x.color).join('، ') : ps[0].color) + (m.bundle ? ' · 🎁 ' + m.bundle.n + ' بـ ' + m.bundle.p + ' دج' : ''), 80),
-        image_url: SITE + (ps[0].m || ps[0].t),
+        image_url: SITE + (ps[0].q || ps[0].m || ps[0].t),
+        action_url: SITE + (ps[0].f || ps[0].t),
         buttons: [{type: 'url', caption: 'شوفي الألوان', url: SITE + '?m=' + encodeURIComponent(m.id)}]};
     };
     const messages = [];
@@ -520,11 +521,12 @@ async function botCatalog(req){
     } else {
       for(let i = 0; i < all.length; i += 10) messages.push({type: 'cards', image_aspect_ratio: 'square', elements: all.slice(i, i + 10).map(card)});
     }
-    if(all.length && lastPage) messages.push({type: 'text', text: 'عجبك موديل؟ ابعثيلنا اسمو ولا الصورة 💕'});
+    if(all.length && lastPage && u.searchParams.get('v') !== '1') messages.push({type: 'text', text: 'عجبك موديل؟ ابعثيلنا اسمو ولا الصورة 💕'});
     // même contenu au format Messenger « natif » (style Chatfuel) : chaque plateforme lit la clé qu'elle connaît
     const fb = messages.map(m => m.type === 'cards'
       ? {attachment: {type: 'template', payload: {template_type: 'generic', image_aspect_ratio: 'square',
           elements: m.elements.map(e => ({title: e.title, subtitle: e.subtitle, image_url: e.image_url,
+            default_action: {type: 'web_url', url: e.action_url},
             buttons: e.buttons.map(b => ({type: 'web_url', url: b.url, title: b.caption}))}))}}}
       : m.type === 'image' ? {attachment: {type: 'image', payload: {url: m.url}}}
       : {text: m.text});
@@ -541,7 +543,7 @@ async function botCatalog(req){
     const offer = m.bundle ? ' · 🎁 ' + m.bundle.n + ' بـ ' + m.bundle.p + ' دج' : '';
     return {
       id: m.id,
-      image: SITE + (ps[0].m || ps[0].t),
+      image: SITE + (ps[0].q || ps[0].m || ps[0].t),
       title: cut(m.name + ' — ' + price, 80),
       description: cut('🎨 ' + colors + offer, 80),
       url: SITE + '?m=' + encodeURIComponent(m.id),
