@@ -517,7 +517,9 @@ async function botCatalog(req){
       const sub = (Number(x.price) || 0) + ' دج' + (n > 1 ? '  (' + (k + 1) + '/' + n + ')' : '') + (m.bundle ? ' · 🎁 ' + m.bundle.n + ' بـ ' + m.bundle.p + ' دج' : '');
       return {title: cut(m.name, 80), subtitle: cut(sub, 80),
         image_url: SITE + (x.q || x.m || x.t),
-        action_url: SITE + (x.f || x.t)};
+        action_url: SITE + (x.f || x.t),
+        // petit bouton 🔍 : sans bouton, Botcake n'active pas le toucher sur la photo
+        buttons: [{type: 'url', caption: '🔍', title: '🔍', url: SITE + (x.f || x.t)}]};
     };
     const messages = [];
     if(!all.length) messages.push({type: 'text', text: 'ما بقاش ' + cat + ' متوفر دروك 😔'});
