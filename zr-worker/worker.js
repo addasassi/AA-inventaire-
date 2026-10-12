@@ -510,6 +510,15 @@ async function botCatalog(req){
         buttons: [{type: 'url', caption: '🔍 كبّري الصورة', url: SITE + (ps[0].f || ps[0].t)}]
           .concat(ps.length > 1 ? [{type: 'url', caption: '🎨 شوفي ' + ps.length + ' ألوان', url: SITE + '?m=' + encodeURIComponent(m.id)}] : [])};
     };
+    // carte d'UNE couleur d'un modèle
+    const colorCard = (m, x, k) => {
+      const n = m.pieces.length;
+      return {title: cut(m.name + ' — ' + (Number(x.price) || 0) + ' دج', 80),
+        subtitle: cut('🎨 ' + x.color + (n > 1 ? ' (' + (k + 1) + '/' + n + ')' + (k === 0 ? ' 👈 سلكي تشوفي الألوان' : '') : '') + (m.bundle ? ' · 🎁 ' + m.bundle.n + ' بـ ' + m.bundle.p + ' دج' : ''), 80),
+        image_url: SITE + (x.q || x.m || x.t),
+        action_url: SITE + (x.f || x.t),
+        buttons: [{type: 'url', caption: '🔍 كبّري الصورة', url: SITE + (x.f || x.t)}]};
+    };
     const messages = [];
     if(!all.length) messages.push({type: 'text', text: 'ما بقاش ' + cat + ' متوفر دروك 😔'});
     let lastPage = true;
@@ -519,7 +528,9 @@ async function botCatalog(req){
       const pp = Math.max(1, Number(u.searchParams.get('p')) || 1), pages = Math.max(1, Math.ceil(all.length / 9));
       // page vide : réponse valide sans message (un 404 arrêtait la suite du flow dans Botcake)
       if(pp > pages) return json({version: 'v2', content: {messages: []}, messages: []});
-      all.slice((pp - 1) * 9, pp * 9).forEach(m => messages.push({type: 'cards', image_aspect_ratio: 'square', elements: [card(m)]}));
+      // une ligne par modèle : ses couleurs côte à côte (on glisse pour voir les couleurs, on descend pour les modèles)
+      all.slice((pp - 1) * 9, pp * 9).forEach(m => messages.push({type: 'cards', image_aspect_ratio: 'square',
+        elements: m.pieces.slice(0, 10).map((x, k) => colorCard(m, x, k))}));
       lastPage = pp === pages;
     } else {
       for(let i = 0; i < all.length; i += 10) messages.push({type: 'cards', image_aspect_ratio: 'square', elements: all.slice(i, i + 10).map(card)});
