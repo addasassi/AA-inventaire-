@@ -512,14 +512,12 @@ async function botCatalog(req){
     };
     // carte d'UNE couleur d'un modèle
     const colorCard = (m, x, k) => {
-      // pas de bouton ni de nom de couleur : on touche la photo → elle s'ouvre en grand
+      // titre = modèle, sous-titre TOUJOURS présent (prix) : une carte sans sous-titre faisait sauter le message
       const n = m.pieces.length;
-      const sub = (n > 1 ? '(' + (k + 1) + '/' + n + ')' : '') + (m.bundle ? (n > 1 ? ' · ' : '') + '🎁 ' + m.bundle.n + ' بـ ' + m.bundle.p + ' دج' : '');
-      const c = {title: cut(m.name + ' — ' + (Number(x.price) || 0) + ' دج', 80),
+      const sub = (Number(x.price) || 0) + ' دج' + (n > 1 ? '  (' + (k + 1) + '/' + n + ')' : '') + (m.bundle ? ' · 🎁 ' + m.bundle.n + ' بـ ' + m.bundle.p + ' دج' : '');
+      return {title: cut(m.name, 80), subtitle: cut(sub, 80),
         image_url: SITE + (x.q || x.m || x.t),
         action_url: SITE + (x.f || x.t)};
-      if(sub) c.subtitle = cut(sub, 80);
-      return c;
     };
     const messages = [];
     if(!all.length) messages.push({type: 'text', text: 'ما بقاش ' + cat + ' متوفر دروك 😔'});
