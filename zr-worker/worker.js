@@ -514,7 +514,7 @@ async function botCatalog(req){
     const colorCard = (m, x, k) => {
       // pas de bouton ni de nom de couleur : on touche la photo → elle s'ouvre en grand
       const n = m.pieces.length;
-      const sub = (n > 1 ? '(' + (k + 1) + '/' + n + ')' + (k === 0 ? ' 👈 سلكي تشوفي الألوان' : '') : '') + (m.bundle ? (n > 1 ? ' · ' : '') + '🎁 ' + m.bundle.n + ' بـ ' + m.bundle.p + ' دج' : '');
+      const sub = (n > 1 ? '(' + (k + 1) + '/' + n + ')' : '') + (m.bundle ? (n > 1 ? ' · ' : '') + '🎁 ' + m.bundle.n + ' بـ ' + m.bundle.p + ' دج' : '');
       const c = {title: cut(m.name + ' — ' + (Number(x.price) || 0) + ' دج', 80),
         image_url: SITE + (x.q || x.m || x.t),
         action_url: SITE + (x.f || x.t)};
