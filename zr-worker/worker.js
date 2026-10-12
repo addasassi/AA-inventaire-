@@ -511,7 +511,13 @@ async function botCatalog(req){
     if(!all.length) messages.push({type: 'text', text: 'ما بقاش ' + cat + ' متوفر دروك 😔'});
     for(let i = 0; i < all.length; i += 10) messages.push({type: 'cards', image_aspect_ratio: 'square', elements: all.slice(i, i + 10).map(card)});
     if(all.length) messages.push({type: 'text', text: 'عجبك موديل؟ ابعثيلنا اسمو ولا الصورة 💕'});
-    return json({version: 'v2', content: {messages}});
+    // même contenu au format Messenger « natif » (style Chatfuel) : chaque plateforme lit la clé qu'elle connaît
+    const fb = messages.map(m => m.type === 'cards'
+      ? {attachment: {type: 'template', payload: {template_type: 'generic', image_aspect_ratio: 'square',
+          elements: m.elements.map(e => ({title: e.title, subtitle: e.subtitle, image_url: e.image_url,
+            buttons: e.buttons.map(b => ({type: 'web_url', url: b.url, title: b.caption}))}))}}}
+      : {text: m.text});
+    return json({version: 'v2', content: {messages}, messages: fb});
   }
   const pages = Math.max(1, Math.ceil(all.length / per));
   // page vide → 404 : dans SendPulse la chaîne p=1 → p=2 → p=3… s'arrête d'elle-même (branche « Erreur »)
