@@ -515,7 +515,8 @@ async function botCatalog(req){
       // affichage vertical : une carte seule par message, modèle après modèle (pas de défilement horizontal).
       // Les plateformes acceptent ~10 messages par réponse → 9 cartes par page (?p=1, 2, 3…), 404 après la dernière.
       const pp = Math.max(1, Number(u.searchParams.get('p')) || 1), pages = Math.max(1, Math.ceil(all.length / 9));
-      if(pp > pages) return json({ok: false, page: pp, pages}, 404);
+      // page vide : réponse valide sans message (un 404 arrêtait la suite du flow dans Botcake)
+      if(pp > pages) return json({version: 'v2', content: {messages: []}, messages: []});
       all.slice((pp - 1) * 9, pp * 9).forEach(m => messages.push({type: 'cards', image_aspect_ratio: 'square', elements: [card(m)]}));
       lastPage = pp === pages;
     } else {
