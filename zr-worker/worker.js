@@ -484,10 +484,46 @@ const CORS = {'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods'
   'Access-Control-Allow-Headers': 'Content-Type'};
 const json = (b, s = 200) => new Response(JSON.stringify(b), {status: s, headers: {...CORS, 'Content-Type': 'application/json'}});
 
+/* ---------- Chatbot Messenger (SendPulse) : modèles en stock depuis le catalogue ---------- */
+const SITE = 'https://aa-vetements.github.io/';
+const BOT_CATS = {pyjama: 'بيجامات', fond: 'فوندغوب', robe: 'روبات', nuisette: 'نويزات', bra: 'براسيار جيب', short: 'بيستي شورت', hijab: 'حجابات'};
+const cut = (s, n) => { s = String(s || ''); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
+async function botCatalog(req){
+  const u = new URL(req.url);
+  const key = u.searchParams.get('c') || '';
+  const cat = BOT_CATS[key] || key;
+  const per = Math.min(10, Math.max(1, Number(u.searchParams.get('n')) || 10));
+  const page = Math.max(1, Number(u.searchParams.get('p')) || 1);
+  const r = await fetch(SITE + 'catalog.json', {cf: {cacheTtl: 60, cacheEverything: true}});
+  const d = await r.json();
+  const all = (d.models || []).filter(m => (!cat || m.cat === cat) && m.pieces && m.pieces.length)
+    .sort((a, b) => (b.order || 0) - (a.order || 0));   // nouveaux modèles d'abord
+  const pages = Math.max(1, Math.ceil(all.length / per));
+  const items = all.slice((page - 1) * per, page * per).map(m => {
+    const ps = m.pieces, prices = ps.map(x => Number(x.price) || 0);
+    const min = Math.min(...prices), max = Math.max(...prices);
+    const price = (min === max ? '' : 'من ') + min + ' دج';
+    const colors = ps.length > 1 ? ps.length + ' ألوان: ' + ps.map(x => x.color).join('، ') : ps[0].color;
+    const offer = m.bundle ? ' · 🎁 ' + m.bundle.n + ' بـ ' + m.bundle.p + ' دج' : '';
+    return {
+      id: m.id,
+      image: SITE + (ps[0].m || ps[0].t),
+      title: cut(m.name + ' — ' + price, 80),
+      description: cut('🎨 ' + colors + offer, 80),
+      url: SITE + '?m=' + encodeURIComponent(m.id),
+      price: min, colors: ps.length
+    };
+  });
+  return json({ok: true, cat, total: all.length, page, pages, more: page < pages ? 1 : 0, next: page < pages ? page + 1 : page,
+    text: all.length ? ('عندنا ' + all.length + ' موديل ' + cat + ' متوفر' + (pages > 1 ? ' (صفحة ' + page + ' من ' + pages + ')' : '')) : 'ما بقاش ' + cat + ' متوفر دروك 😔',
+    catalog: SITE + (key ? '?c=' + encodeURIComponent(key) : ''), items});
+}
+
 export default {
   async fetch(req, env){
     if(req.method === 'OPTIONS') return new Response(null, {headers: CORS});
     const path = new URL(req.url).pathname.replace(/\/+$/, '') || '/';
+    if(path === '/bot') return botCatalog(req);
     if(path === '/' ){
       const t = await tenantOf(env);
       // liste complète des wilayas / communes livrées par ZR (pour compléter les listes de l'app)
