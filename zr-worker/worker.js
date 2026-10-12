@@ -512,12 +512,14 @@ async function botCatalog(req){
     };
     // carte d'UNE couleur d'un modèle
     const colorCard = (m, x, k) => {
+      // pas de bouton ni de nom de couleur : on touche la photo → elle s'ouvre en grand
       const n = m.pieces.length;
-      return {title: cut(m.name + ' — ' + (Number(x.price) || 0) + ' دج', 80),
-        subtitle: cut('🎨 ' + x.color + (n > 1 ? ' (' + (k + 1) + '/' + n + ')' + (k === 0 ? ' 👈 سلكي تشوفي الألوان' : '') : '') + (m.bundle ? ' · 🎁 ' + m.bundle.n + ' بـ ' + m.bundle.p + ' دج' : ''), 80),
+      const sub = (n > 1 ? '(' + (k + 1) + '/' + n + ')' + (k === 0 ? ' 👈 سلكي تشوفي الألوان' : '') : '') + (m.bundle ? (n > 1 ? ' · ' : '') + '🎁 ' + m.bundle.n + ' بـ ' + m.bundle.p + ' دج' : '');
+      const c = {title: cut(m.name + ' — ' + (Number(x.price) || 0) + ' دج', 80),
         image_url: SITE + (x.q || x.m || x.t),
-        action_url: SITE + (x.f || x.t),
-        buttons: [{type: 'url', caption: '🔍 كبّري الصورة', title: '🔍 كبّري الصورة', url: SITE + (x.f || x.t)}]};
+        action_url: SITE + (x.f || x.t)};
+      if(sub) c.subtitle = cut(sub, 80);
+      return c;
     };
     const messages = [];
     if(!all.length) messages.push({type: 'text', text: 'ما بقاش ' + cat + ' متوفر دروك 😔'});
@@ -547,7 +549,7 @@ async function botCatalog(req){
       ? {attachment: {type: 'template', payload: {template_type: 'generic', image_aspect_ratio: 'square',
           elements: m.elements.map(e => ({title: e.title, subtitle: e.subtitle, image_url: e.image_url,
             default_action: {type: 'web_url', url: e.action_url},
-            buttons: e.buttons.map(b => ({type: 'web_url', url: b.url, title: b.caption}))}))}}}
+            ...(e.buttons ? {buttons: e.buttons.map(b => ({type: 'web_url', url: b.url, title: b.caption}))} : {})}))}}}
       : m.type === 'image' ? {attachment: {type: 'image', payload: {url: m.url}}}
       : {text: m.text});
     return json({version: 'v2', content: {messages}, messages: fb});
