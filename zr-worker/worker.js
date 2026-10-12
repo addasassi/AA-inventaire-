@@ -511,7 +511,8 @@ async function botCatalog(req){
     if(!all.length) messages.push({type: 'text', text: 'ما بقاش ' + cat + ' متوفر دروك 😔'});
     if(u.searchParams.get('v') === '1'){
       // affichage vertical : une photo puis son nom/prix, modèle après modèle
-      all.forEach(m => { const c = card(m); messages.push({type: 'image', url: c.image_url}); messages.push({type: 'text', text: c.title + '\n' + c.subtitle}); });
+      // une carte seule par message : pas de défilement horizontal, on descend modèle après modèle
+      all.forEach(m => messages.push({type: 'cards', image_aspect_ratio: 'square', elements: [card(m)]}));
     } else {
       for(let i = 0; i < all.length; i += 10) messages.push({type: 'cards', image_aspect_ratio: 'square', elements: all.slice(i, i + 10).map(card)});
     }
