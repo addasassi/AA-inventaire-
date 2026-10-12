@@ -506,7 +506,9 @@ async function botCatalog(req){
         subtitle: cut('🎨 ' + (ps.length > 1 ? ps.length + ' ألوان: ' + ps.map(x => x.color).join('، ') : ps[0].color) + (m.bundle ? ' · 🎁 ' + m.bundle.n + ' بـ ' + m.bundle.p + ' دج' : ''), 80),
         image_url: SITE + (ps[0].q || ps[0].m || ps[0].t),
         action_url: SITE + (ps[0].f || ps[0].t),
-        buttons: [{type: 'url', caption: 'شوفي الألوان', url: SITE + '?m=' + encodeURIComponent(m.id)}]};
+        // Messenger n'agrandit pas l'image d'une carte : bouton qui ouvre la photo HD (zoom avec les doigts)
+        buttons: [{type: 'url', caption: '🔍 كبّري الصورة', url: SITE + (ps[0].f || ps[0].t)}]
+          .concat(ps.length > 1 ? [{type: 'url', caption: '🎨 شوفي ' + ps.length + ' ألوان', url: SITE + '?m=' + encodeURIComponent(m.id)}] : [])};
     };
     const messages = [];
     if(!all.length) messages.push({type: 'text', text: 'ما بقاش ' + cat + ' متوفر دروك 😔'});
