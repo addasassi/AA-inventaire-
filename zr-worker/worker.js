@@ -507,8 +507,8 @@ async function botCatalog(req){
         image_url: SITE + (ps[0].q || ps[0].m || ps[0].t),
         action_url: SITE + (ps[0].f || ps[0].t),
         // Messenger n'agrandit pas l'image d'une carte : bouton qui ouvre la photo HD (zoom avec les doigts)
-        buttons: [{type: 'url', caption: '🔍 كبّري الصورة', url: SITE + (ps[0].f || ps[0].t)}]
-          .concat(ps.length > 1 ? [{type: 'url', caption: '🎨 شوفي ' + ps.length + ' ألوان', url: SITE + '?m=' + encodeURIComponent(m.id)}] : [])};
+        buttons: [{type: 'url', caption: '🔍 كبّري الصورة', title: '🔍 كبّري الصورة', url: SITE + (ps[0].f || ps[0].t)}]
+          .concat(ps.length > 1 ? [{type: 'url', caption: '🎨 شوفي ' + ps.length + ' ألوان', title: '🎨 شوفي ' + ps.length + ' ألوان', url: SITE + '?m=' + encodeURIComponent(m.id)}] : [])};
     };
     // carte d'UNE couleur d'un modèle
     const colorCard = (m, x, k) => {
@@ -517,7 +517,7 @@ async function botCatalog(req){
         subtitle: cut('🎨 ' + x.color + (n > 1 ? ' (' + (k + 1) + '/' + n + ')' + (k === 0 ? ' 👈 سلكي تشوفي الألوان' : '') : '') + (m.bundle ? ' · 🎁 ' + m.bundle.n + ' بـ ' + m.bundle.p + ' دج' : ''), 80),
         image_url: SITE + (x.q || x.m || x.t),
         action_url: SITE + (x.f || x.t),
-        buttons: [{type: 'url', caption: '🔍 كبّري الصورة', url: SITE + (x.f || x.t)}]};
+        buttons: [{type: 'url', caption: '🔍 كبّري الصورة', title: '🔍 كبّري الصورة', url: SITE + (x.f || x.t)}]};
     };
     const messages = [];
     if(!all.length) messages.push({type: 'text', text: 'ما بقاش ' + cat + ' متوفر دروك 😔'});
