@@ -509,13 +509,19 @@ async function botCatalog(req){
     };
     const messages = [];
     if(!all.length) messages.push({type: 'text', text: 'ما بقاش ' + cat + ' متوفر دروك 😔'});
-    for(let i = 0; i < all.length; i += 10) messages.push({type: 'cards', image_aspect_ratio: 'square', elements: all.slice(i, i + 10).map(card)});
+    if(u.searchParams.get('v') === '1'){
+      // affichage vertical : une photo puis son nom/prix, modèle après modèle
+      all.forEach(m => { const c = card(m); messages.push({type: 'image', url: c.image_url}); messages.push({type: 'text', text: c.title + '\n' + c.subtitle}); });
+    } else {
+      for(let i = 0; i < all.length; i += 10) messages.push({type: 'cards', image_aspect_ratio: 'square', elements: all.slice(i, i + 10).map(card)});
+    }
     if(all.length) messages.push({type: 'text', text: 'عجبك موديل؟ ابعثيلنا اسمو ولا الصورة 💕'});
     // même contenu au format Messenger « natif » (style Chatfuel) : chaque plateforme lit la clé qu'elle connaît
     const fb = messages.map(m => m.type === 'cards'
       ? {attachment: {type: 'template', payload: {template_type: 'generic', image_aspect_ratio: 'square',
           elements: m.elements.map(e => ({title: e.title, subtitle: e.subtitle, image_url: e.image_url,
             buttons: e.buttons.map(b => ({type: 'web_url', url: b.url, title: b.caption}))}))}}}
+      : m.type === 'image' ? {attachment: {type: 'image', payload: {url: m.url}}}
       : {text: m.text});
     return json({version: 'v2', content: {messages}, messages: fb});
   }
