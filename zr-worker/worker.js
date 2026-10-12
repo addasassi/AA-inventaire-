@@ -498,6 +498,21 @@ async function botCatalog(req){
   const d = await r.json();
   const all = (d.models || []).filter(m => (!cat || m.cat === cat) && m.pieces && m.pieces.length)
     .sort((a, b) => (b.order || 0) - (a.order || 0));   // nouveaux modèles d'abord
+  // format « bloc dynamique » (Botcake / ManyChat) : TOUS les modèles en une réponse, 10 cartes par message
+  if(u.searchParams.get('f') === 'v2'){
+    const card = m => {
+      const ps = m.pieces, prices = ps.map(x => Number(x.price) || 0), min = Math.min(...prices), max = Math.max(...prices);
+      return {title: cut(m.name + ' — ' + (min === max ? '' : 'من ') + min + ' دج', 80),
+        subtitle: cut('🎨 ' + (ps.length > 1 ? ps.length + ' ألوان: ' + ps.map(x => x.color).join('، ') : ps[0].color) + (m.bundle ? ' · 🎁 ' + m.bundle.n + ' بـ ' + m.bundle.p + ' دج' : ''), 80),
+        image_url: SITE + (ps[0].m || ps[0].t),
+        buttons: [{type: 'url', caption: 'شوفي الألوان', url: SITE + '?m=' + encodeURIComponent(m.id)}]};
+    };
+    const messages = [];
+    if(!all.length) messages.push({type: 'text', text: 'ما بقاش ' + cat + ' متوفر دروك 😔'});
+    for(let i = 0; i < all.length; i += 10) messages.push({type: 'cards', image_aspect_ratio: 'square', elements: all.slice(i, i + 10).map(card)});
+    if(all.length) messages.push({type: 'text', text: 'عجبك موديل؟ ابعثيلنا اسمو ولا الصورة 💕'});
+    return json({version: 'v2', content: {messages}});
+  }
   const pages = Math.max(1, Math.ceil(all.length / per));
   // page vide → 404 : dans SendPulse la chaîne p=1 → p=2 → p=3… s'arrête d'elle-même (branche « Erreur »)
   if(page > 1 && page > pages) return json({ok: false, cat, total: all.length, page, pages, more: 0, items: []}, 404);
