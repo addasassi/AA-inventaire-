@@ -499,6 +499,8 @@ async function botCatalog(req){
   const all = (d.models || []).filter(m => (!cat || m.cat === cat) && m.pieces && m.pieces.length)
     .sort((a, b) => (b.order || 0) - (a.order || 0));   // nouveaux modèles d'abord
   const pages = Math.max(1, Math.ceil(all.length / per));
+  // page vide → 404 : dans SendPulse la chaîne p=1 → p=2 → p=3… s'arrête d'elle-même (branche « Erreur »)
+  if(page > 1 && page > pages) return json({ok: false, cat, total: all.length, page, pages, more: 0, items: []}, 404);
   const items = all.slice((page - 1) * per, page * per).map(m => {
     const ps = m.pieces, prices = ps.map(x => Number(x.price) || 0);
     const min = Math.min(...prices), max = Math.max(...prices);
