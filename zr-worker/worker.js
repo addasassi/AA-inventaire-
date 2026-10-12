@@ -509,14 +509,18 @@ async function botCatalog(req){
     };
     const messages = [];
     if(!all.length) messages.push({type: 'text', text: 'ما بقاش ' + cat + ' متوفر دروك 😔'});
+    let lastPage = true;
     if(u.searchParams.get('v') === '1'){
-      // affichage vertical : une photo puis son nom/prix, modèle après modèle
-      // une carte seule par message : pas de défilement horizontal, on descend modèle après modèle
-      all.forEach(m => messages.push({type: 'cards', image_aspect_ratio: 'square', elements: [card(m)]}));
+      // affichage vertical : une carte seule par message, modèle après modèle (pas de défilement horizontal).
+      // Les plateformes acceptent ~10 messages par réponse → 9 cartes par page (?p=1, 2, 3…), 404 après la dernière.
+      const pp = Math.max(1, Number(u.searchParams.get('p')) || 1), pages = Math.max(1, Math.ceil(all.length / 9));
+      if(pp > pages) return json({ok: false, page: pp, pages}, 404);
+      all.slice((pp - 1) * 9, pp * 9).forEach(m => messages.push({type: 'cards', image_aspect_ratio: 'square', elements: [card(m)]}));
+      lastPage = pp === pages;
     } else {
       for(let i = 0; i < all.length; i += 10) messages.push({type: 'cards', image_aspect_ratio: 'square', elements: all.slice(i, i + 10).map(card)});
     }
-    if(all.length) messages.push({type: 'text', text: 'عجبك موديل؟ ابعثيلنا اسمو ولا الصورة 💕'});
+    if(all.length && lastPage) messages.push({type: 'text', text: 'عجبك موديل؟ ابعثيلنا اسمو ولا الصورة 💕'});
     // même contenu au format Messenger « natif » (style Chatfuel) : chaque plateforme lit la clé qu'elle connaît
     const fb = messages.map(m => m.type === 'cards'
       ? {attachment: {type: 'template', payload: {template_type: 'generic', image_aspect_ratio: 'square',
