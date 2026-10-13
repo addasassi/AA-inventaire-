@@ -150,32 +150,39 @@
   };
   window.renderZsPage = render;
 
-  /* ---------- 📵 Alerte « Ne répond pas 2 / 3 » : appeler la cliente avant le retour ---------- */
+  /* ---------- 📵 Alerte « Ne répond pas 2 / 3 » et « Commande annulée » : appeler la cliente avant le retour ---------- */
   const seenKey = 'nrpSeen';
   const getSeen = () => { try{ return JSON.parse(localStorage.getItem(seenKey) || '{}'); }catch(e){ return {}; } };
   const setSeen = v => { try{ localStorage.setItem(seenKey, JSON.stringify(v)); }catch(e){} };
+  // niveau d'alerte : 2 / 3 = Ne répond pas, 10 = Commande annulée (la plus urgente)
+  const isAnn = o => /annul|refus/.test(norm(sitOf(o)));
+  const alertLvl = o => final(o) ? 0 : (isAnn(o) ? 10 : (nrpN(o) >= 2 ? nrpN(o) : 0));
+  const alertTxt = o => isAnn(o) ? 'Commande annulée' : 'Ne répond pas ' + nrpN(o);
   function nrpCheck(){
     if(typeof currentUser === 'undefined' || !currentUser || document.getElementById('nrpModal')) return;
     const seen = getSeen();
-    const list = parcels().filter(o => !final(o) && nrpN(o) >= 2);
-    // nettoyage : oublie les colis qui ne sont plus en « Ne répond pas »
+    const list = parcels().filter(o => alertLvl(o) > 0);
+    // nettoyage : oublie les colis qui ne sont plus en alerte
     const keep = {}; list.forEach(o => { if(seen[o.id]) keep[o.id] = seen[o.id]; });
-    const fresh = list.filter(o => (keep[o.id] || 0) < nrpN(o));
+    const fresh = list.filter(o => (keep[o.id] || 0) < alertLvl(o));
     if(Object.keys(keep).length !== Object.keys(seen).length) setSeen(keep);
     if(!fresh.length) return;
-    fresh.sort((a, b) => nrpN(b) - nrpN(a));
+    fresh.sort((a, b) => alertLvl(b) - alertLvl(a));
+    const nAnn = fresh.filter(isAnn).length, nNrp = fresh.length - nAnn;
+    const title = nAnn && !nNrp ? '❌ Commande annulée — appelez la cliente' : nAnn ? '⚠️ Annulées / Ne répond pas — appelez' : '📵 Ne répond pas — appelez la cliente';
     const m = document.createElement('div'); m.id = 'nrpModal';
-    m.innerHTML = `<div class="nrp-card"><h3>📵 Ne répond pas — appelez la cliente</h3>
+    m.innerHTML = `<div class="nrp-card"><h3>${title}</h3>
       <p>${fresh.length > 1 ? fresh.length + ' colis risquent' : 'Ce colis risque'} de revenir en retour. Appelez la cliente pour qu'elle prenne son colis.</p>
-      ${fresh.map(o => { const c = o.customer || {}, n = nrpN(o); return `<div class="nrp-o lv${Math.min(3, n)}">
-        <div class="nrp-m" onclick="zsOpen('${esc(o.id)}')"><b>${esc(c.name || 'Cliente')}</b> · ${esc(c.wilaya || '')}<br><span class="nrp-p">Ne répond pas ${n}</span>${o.zr && o.zr.situationNote ? ' <small class="nrp-why">' + esc(String(o.zr.situationNote).replace(/\.$/, '')) + '</small>' : ''} <span class="nrp-t">${esc((o.zr && o.zr.tracking) || '')}</span><br><small>${money(o.total)}${c.phone ? ' · ' + esc(c.phone) : ''}</small></div>
+      ${fresh.map(o => { const c = o.customer || {}, lv = alertLvl(o); return `<div class="nrp-o lv${lv >= 10 ? 'x' : Math.min(3, lv)}">
+        <div class="nrp-m" onclick="zsOpen('${esc(o.id)}')"><b>${esc(c.name || 'Cliente')}</b> · ${esc(c.wilaya || '')}<br><span class="nrp-p">${esc(alertTxt(o))}</span>${o.zr && o.zr.situationNote ? ' <small class="nrp-why">' + esc(String(o.zr.situationNote).replace(/\.$/, '')) + '</small>' : ''} <span class="nrp-t">${esc((o.zr && o.zr.tracking) || '')}</span><br><small>${money(o.total)}${c.phone ? ' · ' + esc(c.phone) : ''}</small></div>
         ${c.phone ? `<a href="tel:${esc(c.phone)}" class="nrp-call">📞</a>` : ''}</div>`; }).join('')}
       <button class="nrp-ok" id="nrp-ok">OK, compris</button></div>`;
     document.body.appendChild(m);
-    m.querySelector('#nrp-ok').onclick = () => { const v = getSeen(); fresh.forEach(o => { v[o.id] = nrpN(o); }); setSeen(v); m.remove(); };
-    m.querySelectorAll('.nrp-m').forEach(x => x.addEventListener('click', () => { const v = getSeen(); fresh.forEach(o => { v[o.id] = nrpN(o); }); setSeen(v); m.remove(); }));
+    const ack = () => { const v = getSeen(); fresh.forEach(o => { v[o.id] = alertLvl(o); }); setSeen(v); m.remove(); };
+    m.querySelector('#nrp-ok').onclick = ack;
+    m.querySelectorAll('.nrp-m').forEach(x => x.addEventListener('click', ack));
     if(document.hidden && 'Notification' in window && Notification.permission === 'granted' && navigator.serviceWorker){
-      navigator.serviceWorker.ready.then(reg => reg.showNotification('📵 Ne répond pas', {body: fresh.map(o => ((o.customer || {}).name || 'Cliente') + ' — NRP ' + nrpN(o)).join(', '), icon: 'icon-192.png', tag: 'nrp'})).catch(() => {});
+      navigator.serviceWorker.ready.then(reg => reg.showNotification(nAnn ? '❌ Commande annulée' : '📵 Ne répond pas', {body: fresh.map(o => ((o.customer || {}).name || 'Cliente') + ' — ' + alertTxt(o)).join(', '), icon: 'icon-192.png', tag: 'nrp'})).catch(() => {});
     }
   }
   setInterval(nrpCheck, 60 * 1000); setTimeout(nrpCheck, 8000);
@@ -258,6 +265,7 @@
       #nrpModal h3{margin:0 0 6px;} #nrpModal p{margin:0 0 12px;font-size:14px;line-height:1.45;}
       .nrp-o{display:flex;align-items:center;gap:10px;border:1px solid var(--line,#ddd);border-left:6px solid #fbbf24;border-radius:12px;padding:10px;margin-bottom:8px;}
       .nrp-o.lv3{border-left-color:#ef4444;}
+      .nrp-o.lvx{border-left-color:#b91c1c;} .nrp-o.lvx .nrp-p{background:#b91c1c;color:#fff;}
       .nrp-m{flex:1;min-width:0;font-size:14px;cursor:pointer;} .nrp-m small{opacity:.8;}
       .nrp-p{display:inline-block;background:#FFCC00;color:#111;font-weight:800;font-size:12px;border-radius:999px;padding:2px 9px;margin-top:4px;}
       .nrp-o.lv3 .nrp-p{background:#ef4444;color:#fff;}
