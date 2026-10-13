@@ -4686,6 +4686,7 @@ function renderOrdersHistory(){
     })() : '';
     return `<div class="order-card ${o.deferred ? 'deferred' : ''}" onclick="showOrderDetail('${o.id}')">
       ${deferredBadge}
+      ${window.swapBanner ? window.swapBanner(o) : ''}
       <div class="oc-head">${window.zrSelectBox ? window.zrSelectBox(o) : ''}${window.zrBadge ? window.zrBadge(o) : ''}</div>
       <div class="oc-top">
         <div class="oc-name">${escapeHtml(o.customer.name || 'Client')}</div>
@@ -4752,6 +4753,7 @@ function showOrderDetail(id){
   } else {
     odBadgeEl.innerHTML = '';
   }
+  if(window.swapBanner) odBadgeEl.innerHTML += window.swapBanner(o);
   document.getElementById('od-name').textContent = o.customer.name || 'Client';
   const odSubTxt = [o.customer.phone, dtLabel, o.customer.wilaya, o.customer.commune].filter(Boolean).join(' • ');
   document.getElementById('od-sub').innerHTML = escapeHtml(odSubTxt) + (o.customer.phone ? phoneActionButtons(o.customer.phone) : '');
@@ -5014,7 +5016,7 @@ async function saveEditedOrder(){
   o.profit = total - o.costTotal;
   o.deferred = eoIsDeferred;
   o.deferredDate = eoIsDeferred ? eoDeferredDate : '';
-  if(window.zrPrepareOrder) window.zrPrepareOrder(o);
+  if(window.zrPrepareOrder && !(o.swapHold && !(o.zr && o.zr.parcelId))) window.zrPrepareOrder(o);   // 🔁 retenue pour un swap : pas d'envoi auto
   const orderSaved = await saveOrderDoc(o);
   if(!orderSaved){
     toast('Échec — la commande n\'a pas été enregistrée (le stock, lui, est à jour), réessayez', true);
@@ -5428,7 +5430,10 @@ async function saveNewOrder(){
     deferredDate: isDeferred ? deferredDate : ''
   };
   if(isHandOrder && !isDeferred) newOrder.handDone = newOrder.createdAt;   // remise immédiate → livrée
-  if(window.zrPrepareOrder) window.zrPrepareOrder(newOrder);
+  let swapHold = false;
+  if(!isHandOrder && window.swapConfirm && window.swapMatches && window.swapMatches(newOrder).length) swapHold = !(await window.swapConfirm(newOrder));
+  if(swapHold) newOrder.swapHold = true;
+  else if(window.zrPrepareOrder) window.zrPrepareOrder(newOrder);
   const orderSaved = await saveOrderDoc(newOrder);
   if(!orderSaved){
     toast('Échec — la commande n\'a pas été enregistrée (le stock, lui, est à jour), réessayez', true);
@@ -6114,5 +6119,6 @@ boot();
 <script src="hand.js"></script>
 <script src="zr-suivi.js"></script>
 <script src="order-parse.js"></script>
+<script src="swap.js"></script>
 </body>
 </html>

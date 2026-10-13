@@ -174,7 +174,7 @@
     m.innerHTML = `<div class="nrp-card"><h3>${title}</h3>
       <p>${fresh.length > 1 ? fresh.length + ' colis risquent' : 'Ce colis risque'} de revenir en retour. Appelez la cliente pour qu'elle prenne son colis.</p>
       ${fresh.map(o => { const c = o.customer || {}, lv = alertLvl(o); return `<div class="nrp-o lv${lv >= 10 ? 'x' : Math.min(3, lv)}">
-        <div class="nrp-m" onclick="zsOpen('${esc(o.id)}')"><b>${esc(c.name || 'Cliente')}</b> · ${esc(c.wilaya || '')}<br><span class="nrp-p">${esc(alertTxt(o))}</span>${o.zr && o.zr.situationNote ? ' <small class="nrp-why">' + esc(String(o.zr.situationNote).replace(/\.$/, '')) + '</small>' : ''} <span class="nrp-t">${esc((o.zr && o.zr.tracking) || '')}</span><br><small>${money(o.total)}${c.phone ? ' · ' + esc(c.phone) : ''}</small></div>
+        <div class="nrp-m" onclick="zsOpen('${esc(o.id)}')"><b>${esc(c.name || 'Cliente')}</b> · ${esc(c.wilaya || '')}<br><span class="nrp-p">${esc(alertTxt(o))}</span>${o.zr && o.zr.situationNote ? ' <small class="nrp-why">' + esc(String(o.zr.situationNote).replace(/\.$/, '')) + '</small>' : ''} <span class="nrp-t">${esc((o.zr && o.zr.tracking) || '')}</span><br><small>${money(o.total)}${c.phone ? ' · ' + esc(c.phone) : ''}</small>${window.swapPendingLine ? window.swapPendingLine(o) : ''}</div>
         ${c.phone ? `<a href="tel:${esc(c.phone)}" class="nrp-call">📞</a>` : ''}</div>`; }).join('')}
       <button class="nrp-ok" id="nrp-ok">OK, compris</button></div>`;
     document.body.appendChild(m);
