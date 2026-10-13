@@ -2108,6 +2108,29 @@ function getAudioCtx(){
     return sharedAudioCtx;
   }catch(e){ return null; }
 }
+/* bip de scan (comme une caisse de supermarché) : toujours joué, même en mode silencieux, + petite vibration.
+   ok=false : double bip grave (code inconnu, échec…) */
+function scanBeep(ok = true){
+  try{ if(navigator.vibrate) navigator.vibrate(ok ? 60 : [90, 60, 90]); }catch(e){}
+  const ctx = getAudioCtx();
+  if(!ctx) return;
+  try{
+    const tones = ok ? [[0, 2300, 0.12]] : [[0, 330, 0.16], [0.22, 330, 0.16]];
+    tones.forEach(([d, f, len]) => {
+      const osc = ctx.createOscillator(), gain = ctx.createGain(), t = ctx.currentTime + d;
+      osc.type = 'square'; osc.frequency.value = f;
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.22, t + 0.005);
+      gain.gain.setValueAtTime(0.22, t + len - 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + len);
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start(t); osc.stop(t + len + 0.02);
+    });
+  }catch(e){}
+}
+window.scanBeep = scanBeep;
+// débloque le son au premier toucher (sinon le bip de la caméra peut rester muet sur Android/iPhone)
+document.addEventListener('pointerdown', ()=>{ getAudioCtx(); }, {capture:true, passive:true});
 function playNotifTone(){
   const ctx = getAudioCtx();
   if(!ctx) return;
@@ -4177,12 +4200,13 @@ function normalizeScannedCode(raw){
   return (raw||'').split('').map(ch => AZERTY_TO_DIGIT[ch] !== undefined ? AZERTY_TO_DIGIT[ch] : ch).join('');
 }
 async function handleScannedCode(rawCode){
+  scanBeep(true);   // bip « caisse » : le code a été lu
   const code = normalizeScannedCode(rawCode);
   await loadProducts();
   const p = products.find(x=>x.code===code);
   if(p){
     if(p.qty <= 0){
-      toast(p.name+' — stock déjà à 0', true);
+      scanBeep(false); toast(p.name+' — stock déjà à 0', true);
       scanHistoryData.unshift({name:p.name, ok:false, msg:'Stock déjà à 0'});
       renderScanHistory(); return;
     }
@@ -4193,7 +4217,7 @@ async function handleScannedCode(rawCode){
     if(!ok){
       p.qty = prevQty;
       refreshCurrentInventoryView();
-      toast('Échec — scan NON enregistré, réessayez', true);
+      scanBeep(false); toast('Échec — scan NON enregistré, réessayez', true);
       return;
     }
     toast(p.name+' — 1 unité retirée ('+p.qty+' restant)');
@@ -4210,7 +4234,7 @@ async function handleScannedCode(rawCode){
       const c = prod.colors[ci];
       const label = colorLabel(prod.name, ci);
       if((c.qty||0) <= 0){
-        toast(label+' — stock déjà à 0', true);
+        scanBeep(false); toast(label+' — stock déjà à 0', true);
         scanHistoryData.unshift({name:label, ok:false, msg:'Stock déjà à 0'});
         renderScanHistory(); return;
       }
@@ -4221,7 +4245,7 @@ async function handleScannedCode(rawCode){
       if(!ok){
         c.qty = prevCQty;
         refreshCurrentInventoryView();
-        toast('Échec — scan NON enregistré, réessayez', true);
+        scanBeep(false); toast('Échec — scan NON enregistré, réessayez', true);
         return;
       }
       toast(label+' — 1 unité retirée ('+c.qty+' restant)');
@@ -4231,7 +4255,7 @@ async function handleScannedCode(rawCode){
     }
   }
 
-  toast('Code inconnu : '+code, true);
+  scanBeep(false); toast('Code inconnu : '+code, true);
   scanHistoryData.unshift({name:code, ok:false, msg:'Code non reconnu'});
   renderScanHistory();
 }
@@ -4247,6 +4271,7 @@ function renderScanAddHistory(){
     </div>`).join('');
 }
 async function handleScannedCodeAdd(rawCode){
+  scanBeep(true);
   const code = normalizeScannedCode(rawCode);
   await loadProducts();
   const p = products.find(x=>x.code===code);
@@ -4258,7 +4283,7 @@ async function handleScannedCodeAdd(rawCode){
     if(!ok){
       p.qty = prevQty;
       refreshCurrentInventoryView();
-      toast('Échec — scan NON enregistré, réessayez', true);
+      scanBeep(false); toast('Échec — scan NON enregistré, réessayez', true);
       return;
     }
     toast(p.name+' — 1 unité ajoutée ('+p.qty+' en stock)');
@@ -4280,7 +4305,7 @@ async function handleScannedCodeAdd(rawCode){
       if(!ok){
         c.qty = prevCQty;
         refreshCurrentInventoryView();
-        toast('Échec — scan NON enregistré, réessayez', true);
+        scanBeep(false); toast('Échec — scan NON enregistré, réessayez', true);
         return;
       }
       toast(label+' — 1 unité ajoutée ('+c.qty+' en stock)');
@@ -4290,7 +4315,7 @@ async function handleScannedCodeAdd(rawCode){
     }
   }
 
-  toast('Code inconnu : '+code, true);
+  scanBeep(false); toast('Code inconnu : '+code, true);
   scanAddHistoryData.unshift({name:code, ok:false, msg:'Code non reconnu'});
   renderScanAddHistory();
 }

@@ -87,6 +87,7 @@
   async function handle(raw){
     raw = String(raw || '').trim();
     if(!raw) return;
+    if(window.scanBeep) window.scanBeep(true);   // bip dès que le code est lu
     if(typeof loadOrders === 'function'){ try{ await loadOrders(); }catch(e){} }
     const o = findOrder(raw);
     if(!o){ beep(false); renderResult({error: 'Aucune commande trouvée pour « ' + raw + ' »'}); return; }
@@ -104,15 +105,8 @@
     }catch(e){ beep(false); renderResult({error: 'Échec : ' + (e.message || e) + ' — réessayez'}); }
   }
 
-  function beep(ok){
-    try{
-      const a = new (window.AudioContext || window.webkitAudioContext)();
-      const o = a.createOscillator(), g = a.createGain();
-      o.frequency.value = ok ? 880 : 220; g.gain.value = 0.08;
-      o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime + (ok ? 0.12 : 0.35));
-    }catch(e){}
-    try{ if(navigator.vibrate) navigator.vibrate(ok ? 60 : [80, 60, 80]); }catch(e){}
-  }
+  // bip « caisse » partagé avec l'app (index.html) ; succès déjà bipé à la lecture
+  function beep(ok){ if(!ok && window.scanBeep) window.scanBeep(false); }
 
   function renderResult(r){
     const el = document.getElementById('rt-result'); if(!el) return;
