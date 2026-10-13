@@ -488,33 +488,28 @@ const json = (b, s = 200) => new Response(JSON.stringify(b), {status: s, headers
 const SITE = 'https://aa-vetements.github.io/';
 const BOT_CATS = {pyjama: 'بيجامات', fond: 'فوندغوب', robe: 'روبات', nuisette: 'نويزات', bra: 'براسيار جيب', short: 'بيستي شورت', hijab: 'حجابات'};
 const cut = (s, n) => { s = String(s || ''); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
-/* stock en direct depuis Atelier Stock : une pièce vendue (qty 0) ne doit plus être proposée par le bot */
+/* stock en direct : même petit document que le catalogue du site (meta/stockLight, écrit par l'app à chaque changement).
+   Une pièce vendue (qty 0) n'est plus proposée par le bot, même si catalog.json a des heures de retard. */
 let stockCache = null, stockAt = 0;
 async function liveStock(d){
   try{
-    if(!stockCache || Date.now() - stockAt > 20000){
-      const map = new Map(); let tok = '';
-      const mask = ['id', 'qty', 'code', 'colors'].map(f => 'mask.fieldPaths=' + f).join('&');
-      do{
-        const r = await fetch(`${FS}/products?pageSize=100&${mask}&key=${FS_KEY}` + (tok ? '&pageToken=' + encodeURIComponent(tok) : ''));
-        if(!r.ok) throw new Error('Firestore ' + r.status);
-        const j = await r.json();
-        (j.documents || []).forEach(doc => {
-          const f = doc.fields || {}, p = {id: fromFs(f.id), qty: fromFs(f.qty), code: fromFs(f.code), colors: fromFs(f.colors) || []};
-          const q = new Map();
-          if(p.code) q.set(String(p.code), Number(p.qty) || 0);
-          p.colors.forEach((c, i) => { if(c) q.set(String(c.code || `${p.id}-${i + 1}`), Number(c.qty) || 0); });
-          if(p.id) map.set(String(p.id), q);
-        });
-        tok = j.nextPageToken || '';
-      } while(tok);
-      if(!map.size) return;
+    if(!stockCache || Date.now() - stockAt > 15000){
+      const r = await fetch(`${FS}/meta/stockLight?key=${FS_KEY}`);
+      if(!r.ok) throw new Error('Firestore ' + r.status);
+      const doc = fromFs({mapValue: {fields: (await r.json()).fields || {}}});
+      const light = JSON.parse((doc && doc.data) || '{}');
+      if(!light.items || !Object.keys(light.items).length) return;
+      const map = new Map();
+      for(const [id, it] of Object.entries(light.items)){
+        const q = new Map(); (it.pieces || []).forEach(x => q.set(String(x.k), Number(x.q) || 0));
+        map.set(String(id), q);
+      }
       stockCache = map; stockAt = Date.now();
     }
     (d.models || []).forEach(m => {
       const q = stockCache.get(String(m.id));
       if(!q){ m.pieces = []; return; }                       // produit supprimé
-      m.pieces = (m.pieces || []).filter(x => !q.has(String(x.code)) || q.get(String(x.code)) > 0);
+      m.pieces = (m.pieces || []).filter(x => { const k = String(x.code || (m.id + '-0')); return !q.has(k) || q.get(k) > 0; });
     });
   }catch(e){ /* Firestore injoignable : on garde le catalogue tel quel */ }
 }
