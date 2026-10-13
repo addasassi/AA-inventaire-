@@ -217,7 +217,7 @@
   /* ---------- Calculs ---------- */
   function compute(){
     const R = range();
-    const ALL = allOrders(), P = allProducts();
+    const ALL = allOrders().filter(o => !o.swap), P = allProducts();
     const cur = ALL.filter(o => inRange(o, R.from, R.to));
     const prev = ALL.filter(o => inRange(o, R.prevFrom, R.prevTo));
     const sum = (l, f) => l.reduce((t, o) => t + (Number(f(o)) || 0), 0);

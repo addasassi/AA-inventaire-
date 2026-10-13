@@ -133,6 +133,7 @@
       return;
     }
     if(!relay){ el.innerHTML = ''; return; }
+    if(!z && o.swap){ el.innerHTML = ''; return; }   // 🔁 swap fait : part avec un autre colis, rien à envoyer
     if(!z){
       el.innerHTML = `<div class="zr-box"><div class="zr-h">🚚 ZR Express</div><div class="zr-sub">${o.source === 'shopify' ? '🛍️ Commande du site ' + esc((o.shopify && o.shopify.name) || '') + ' — appelez la cliente pour confirmer (vérifiez la wilaya, la commune' + (o.customer && o.customer.deliveryType === 'stopdesk' ? ' et le bureau Stop desk' : '') + '), puis envoyez.' + (o.shopify && o.shopify.shipping ? '<br>Livraison payée sur le site : ' + Math.round(o.shopify.shipping) + ' DA · total site : ' + Math.round(o.shopify.total) + ' DA' : '') : 'Commande pas envoyée à ZR.'}</div>
         <button class="zr-btn" data-zr="send">Envoyer à ZR Express</button></div>`;
