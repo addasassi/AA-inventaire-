@@ -486,12 +486,13 @@ const json = (b, s = 200) => new Response(JSON.stringify(b), {status: s, headers
 
 /* ---------- Chatbot Messenger (SendPulse) : modèles en stock depuis le catalogue ---------- */
 const SITE = 'https://aa-vetements.github.io/';
+const U = s => /^https?:/.test(String(s || '')) ? s : SITE + s;   // photo du site, ou photo servie en direct par /img
 const BOT_CATS = {pyjama: 'بيجامات', fond: 'فوندغوب', robe: 'روبات', nuisette: 'نويزات', bra: 'براسيار جيب', short: 'بيستي شورت', hijab: 'حجابات'};
 const cut = (s, n) => { s = String(s || ''); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
 /* stock en direct : même petit document que le catalogue du site (meta/stockLight, écrit par l'app à chaque changement).
    Une pièce vendue (qty 0) n'est plus proposée par le bot, même si catalog.json a des heures de retard. */
-let stockCache = null, stockAt = 0;
-async function liveStock(d){
+let stockCache = null, stockItems = null, stockAt = 0; const priceMap = new Map();
+async function liveStock(d, origin){
   try{
     if(!stockCache || Date.now() - stockAt > 15000){
       const r = await fetch(`${FS}/meta/stockLight?key=${FS_KEY}`);
@@ -499,19 +500,61 @@ async function liveStock(d){
       const doc = fromFs({mapValue: {fields: (await r.json()).fields || {}}});
       const light = JSON.parse((doc && doc.data) || '{}');
       if(!light.items || !Object.keys(light.items).length) return;
-      const map = new Map();
+      const map = new Map(); priceMap.clear();
       for(const [id, it] of Object.entries(light.items)){
         const q = new Map(); (it.pieces || []).forEach(x => q.set(String(x.k), Number(x.q) || 0));
+        (it.pieces || []).forEach(x => { if(Number(x.p) > 0) priceMap.set(String(id) + '|' + String(x.k), Number(x.p)); });
         map.set(String(id), q);
       }
-      stockCache = map; stockAt = Date.now();
+      stockCache = map; stockItems = light.items; stockAt = Date.now();
     }
     (d.models || []).forEach(m => {
       const q = stockCache.get(String(m.id));
       if(!q){ m.pieces = []; return; }                       // produit supprimé
       m.pieces = (m.pieces || []).filter(x => { const k = String(x.code || (m.id + '-0')); return !q.has(k) || q.get(k) > 0; });
+      m.pieces.forEach(x => { const pr = priceMap.get(String(m.id) + '|' + String(x.code || (m.id + '-0'))); if(pr) x.price = pr; });   // prix à jour
     });
+    // nouveaux modèles / nouvelles couleurs pas encore dans catalog.json : photo servie en direct par /img
+    if(origin && stockItems){
+      const byId = new Map((d.models || []).map(m => [String(m.id), m]));
+      for(const [id, it] of Object.entries(stockItems)){
+        const inStock = (it.pieces || []).filter(x => Number(x.q) > 0);
+        if(!inStock.length) continue;
+        let m = byId.get(String(id));
+        const known = new Set(m ? m.pieces.map(x => String(x.code || (m.id + '-0'))) : []);
+        const add = inStock.filter(x => !known.has(String(x.k))).map((x, i) => {
+          const src = origin + '/img?id=' + encodeURIComponent(id) + '&k=' + encodeURIComponent(x.k);
+          return {q: src, t: src, f: src, code: String(x.k), qty: Number(x.q), price: Number(x.p) || 0, color: x.c || ''};
+        });
+        if(!add.length) continue;
+        if(!m){ m = {id, cat: it.cat || '', order: it.o || 0, name: it.n || '', pieces: [], bundle: it.b ? {n: it.b.n, p: it.b.p} : null}; (d.models = d.models || []).push(m); byId.set(String(id), m); }
+        m.pieces = m.pieces.concat(add);
+      }
+    }
   }catch(e){ /* Firestore injoignable : on garde le catalogue tel quel */ }
+}
+/* photo d'une pièce lue directement dans Atelier Stock (pour un modèle pas encore dans catalog.json) */
+async function liveImage(req, ctx){
+  const cache = caches.default, hit = await cache.match(req);
+  if(hit) return hit;
+  const u = new URL(req.url), id = u.searchParams.get('id') || '', k = u.searchParams.get('k') || '';
+  const r = await fetch(`${FS}/products/${encodeURIComponent(id)}?key=${FS_KEY}`);
+  if(!r.ok) return new Response('not found', {status: 404});
+  const f = (await r.json()).fields || {}, p = {}; for(const x in f) p[x] = fromFs(f[x]);
+  let src = String(p.code || (id + '-0')) === k ? p : null;
+  (p.colors || []).forEach((c, i) => { if(!src && c && String(c.code || (id + '-' + (i + 1))) === k) src = c; });
+  if(!src) return new Response('not found', {status: 404});
+  let data = src.img || '';
+  if(src.imgId){   // la vraie photo (grande) est dans photos/{imgId}, le produit ne garde qu'une miniature
+    try{ const pr = await fetch(`${FS}/photos/${encodeURIComponent(src.imgId)}?key=${FS_KEY}`); if(pr.ok){ const pf = (await pr.json()).fields || {}; const dd = fromFs(pf.d); if(dd) data = dd; } }catch(e){}
+  }
+  const m = String(data).match(/^data:(image\/[a-z+]+);base64,(.*)$/s);
+  if(!m) return new Response('no image', {status: 404});
+  const bin = atob(m[2]), buf = new Uint8Array(bin.length);
+  for(let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+  const res = new Response(buf, {headers: {'content-type': m[1], 'cache-control': 'public, max-age=86400', 'access-control-allow-origin': '*'}});
+  if(ctx && ctx.waitUntil) ctx.waitUntil(cache.put(req, res.clone()));
+  return res;
 }
 async function botCatalog(req){
   const u = new URL(req.url);
@@ -521,7 +564,7 @@ async function botCatalog(req){
   const page = Math.max(1, Number(u.searchParams.get('p')) || 1);
   const r = await fetch(SITE + 'catalog.json', {cf: {cacheTtl: 60, cacheEverything: true}});
   const d = await r.json();
-  await liveStock(d);   // le catalogue du site peut avoir des heures de retard : on retire ce qui est en rupture MAINTENANT
+  await liveStock(d, u.origin);   // le catalogue du site peut avoir des heures de retard : on retire ce qui est en rupture MAINTENANT
   const all = (d.models || []).filter(m => (!cat || m.cat === cat) && m.pieces && m.pieces.length)
     .sort((a, b) => (b.order || 0) - (a.order || 0));   // nouveaux modèles d'abord
   // format « bloc dynamique » (Botcake / ManyChat) : TOUS les modèles en une réponse, 10 cartes par message
@@ -530,10 +573,10 @@ async function botCatalog(req){
       const ps = m.pieces, prices = ps.map(x => Number(x.price) || 0), min = Math.min(...prices), max = Math.max(...prices);
       return {title: cut(m.name + ' — ' + (min === max ? '' : 'من ') + min + ' دج', 80),
         subtitle: cut('🎨 ' + (ps.length > 1 ? ps.length + ' ألوان: ' + ps.map(x => x.color).join('، ') : ps[0].color) + (m.bundle ? ' · 🎁 ' + m.bundle.n + ' بـ ' + m.bundle.p + ' دج' : ''), 80),
-        image_url: SITE + (ps[0].q || ps[0].m || ps[0].t),
-        action_url: SITE + (ps[0].f || ps[0].t),
+        image_url: U(ps[0].q || ps[0].m || ps[0].t),
+        action_url: U(ps[0].f || ps[0].t),
         // Messenger n'agrandit pas l'image d'une carte : bouton qui ouvre la photo HD (zoom avec les doigts)
-        buttons: [{type: 'url', caption: '🔍 كبّري الصورة', title: '🔍 كبّري الصورة', url: SITE + (ps[0].f || ps[0].t)}]
+        buttons: [{type: 'url', caption: '🔍 كبّري الصورة', title: '🔍 كبّري الصورة', url: U(ps[0].f || ps[0].t)}]
           .concat(ps.length > 1 ? [{type: 'url', caption: '🎨 شوفي ' + ps.length + ' ألوان', title: '🎨 شوفي ' + ps.length + ' ألوان', url: SITE + '?m=' + encodeURIComponent(m.id)}] : [])};
     };
     // carte d'UNE couleur d'un modèle
@@ -542,10 +585,10 @@ async function botCatalog(req){
       const n = m.pieces.length;
       const sub = (Number(x.price) || 0) + ' دج' + (n > 1 ? '  (' + (k + 1) + '/' + n + ')' : '') + (m.bundle ? ' · 🎁 ' + m.bundle.n + ' بـ ' + m.bundle.p + ' دج' : '');
       return {title: cut(m.name, 80), subtitle: cut(sub, 80),
-        image_url: SITE + (x.q || x.m || x.t),
-        action_url: SITE + (x.f || x.t),
+        image_url: U(x.q || x.m || x.t),
+        action_url: U(x.f || x.t),
         // petit bouton 🔍 : sans bouton, Botcake n'active pas le toucher sur la photo
-        buttons: [{type: 'url', caption: '🔍', title: '🔍', url: SITE + (x.f || x.t)}]};
+        buttons: [{type: 'url', caption: '🔍', title: '🔍', url: U(x.f || x.t)}]};
     };
     const messages = [];
     if(!all.length) messages.push({type: 'text', text: 'ما بقاش ' + cat + ' متوفر دروك 😔'});
@@ -554,7 +597,7 @@ async function botCatalog(req){
       // TEST : vraies photos Messenger (on touche → plein écran + zoom), 9 modèles par page
       const pp = Math.max(1, Number(u.searchParams.get('p')) || 1), pages = Math.max(1, Math.ceil(all.length / 9));
       if(pp > pages) return json({version: 'v2', content: {messages: []}, messages: []});
-      all.slice((pp - 1) * 9, pp * 9).forEach(m => messages.push({type: 'image', url: SITE + (m.pieces[0].q || m.pieces[0].t)}));
+      all.slice((pp - 1) * 9, pp * 9).forEach(m => messages.push({type: 'image', url: U(m.pieces[0].q || m.pieces[0].t)}));
       lastPage = false;
     } else if(u.searchParams.get('v') === '1'){
       // affichage vertical : une carte seule par message, modèle après modèle (pas de défilement horizontal).
@@ -591,7 +634,7 @@ async function botCatalog(req){
     const offer = m.bundle ? ' · 🎁 ' + m.bundle.n + ' بـ ' + m.bundle.p + ' دج' : '';
     return {
       id: m.id,
-      image: SITE + (ps[0].q || ps[0].m || ps[0].t),
+      image: U(ps[0].q || ps[0].m || ps[0].t),
       title: cut(m.name + ' — ' + price, 80),
       description: cut('🎨 ' + colors + offer, 80),
       url: SITE + '?m=' + encodeURIComponent(m.id),
@@ -604,10 +647,11 @@ async function botCatalog(req){
 }
 
 export default {
-  async fetch(req, env){
+  async fetch(req, env, ctx){
     if(req.method === 'OPTIONS') return new Response(null, {headers: CORS});
     const path = new URL(req.url).pathname.replace(/\/+$/, '') || '/';
     if(path === '/bot') return botCatalog(req);
+    if(path === '/img') return liveImage(req, ctx);
     if(path === '/' ){
       const t = await tenantOf(env);
       // liste complète des wilayas / communes livrées par ZR (pour compléter les listes de l'app)
