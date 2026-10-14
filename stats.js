@@ -101,6 +101,64 @@
     catch(err){ toast('Échec : ' + (err && err.message || err), true); }
   };
 
+  /* ---------- 🧾 Dépenses extra (emballage, sachets, impression…) — meta/expenses ----------
+     items: {id: {date:'AAAA-MM-JJ', cat, label, amount(DA), at, by}} → retirées du bénéfice réel */
+  const EXCAT = [['emballage', '📦', 'Emballage / sachets'], ['impression', '🏷️', 'Étiquettes / impression'], ['internet', '📱', 'Internet / téléphone'],
+    ['transport', '🚗', 'Transport'], ['materiel', '🧰', 'Matériel'], ['autre', '💸', 'Autre']];
+  const exCat = k => EXCAT.find(c => c[0] === k) || EXCAT[EXCAT.length - 1];
+  let EX = {}, exSub = null, exEditId = '';
+  function subExpenses(){
+    if(exSub || typeof db === 'undefined') return;
+    try{
+      exSub = db.collection('meta').doc('expenses').onSnapshot(d => {
+        EX = ((d.exists && d.data()) || {}).items || {};
+        maybeRender();
+      }, () => { exSub = null; });
+    }catch(e){ exSub = null; }
+  }
+  const exVal = id => { const el = document.getElementById(id); return el ? el.value : ''; };
+  window.zrExSave = async () => {
+    const date = exVal('ex-date'), cat = exVal('ex-cat') || 'autre', label = exVal('ex-label').trim();
+    const amount = Number(String(exVal('ex-amt')).replace(',', '.').replace(/\s/g, ''));
+    if(!date){ toast('Choisissez le jour', true); return; }
+    if(!(amount > 0)){ toast('Écrivez le montant en DA', true); return; }
+    const id = exEditId || ('x' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
+    const b = document.getElementById('ex-save'); if(b){ b.disabled = true; b.textContent = '…'; }
+    try{
+      await db.collection('meta').doc('expenses').set({items: {[id]: {date, cat, label, amount, at: new Date().toISOString(), by: (typeof currentUser !== 'undefined' && currentUser && currentUser.name) || ''}}}, {merge: true});
+      toast(`🧾 ${exCat(cat)[2]} : ${money(amount)} ${exEditId ? 'modifié' : 'enregistré'}`);
+      exEditId = '';
+      ['ex-label', 'ex-amt', 'ex-date', 'ex-cat'].forEach(i => { const el = document.getElementById(i); if(el) delete el.dataset.touched; });
+      const a = document.getElementById('ex-amt'), l = document.getElementById('ex-label'); if(a) a.value = ''; if(l) l.value = '';
+      render();
+    }catch(err){ toast('Échec de l\'enregistrement : ' + (err && err.message || err), true); }
+    if(b){ b.disabled = false; b.textContent = 'Ajouter'; }
+  };
+  window.zrExEdit = id => {
+    const x = EX[id]; if(!x) return;
+    exEditId = id;
+    const set = (i, v) => { const el = document.getElementById(i); if(el){ el.value = v; el.dataset.touched = '1'; } };
+    set('ex-date', x.date); set('ex-cat', x.cat || 'autre'); set('ex-label', x.label || ''); set('ex-amt', x.amount);
+    const b = document.getElementById('ex-save'); if(b) b.textContent = 'Modifier';
+    const c = document.getElementById('ex-cancel'); if(c) c.style.display = '';
+    const a = document.getElementById('ex-amt'); if(a) a.focus();
+  };
+  window.zrExCancel = () => {
+    exEditId = '';
+    ['ex-label', 'ex-amt'].forEach(i => { const el = document.getElementById(i); if(el){ el.value = ''; delete el.dataset.touched; } });
+    const b = document.getElementById('ex-save'); if(b) b.textContent = 'Ajouter';
+    const c = document.getElementById('ex-cancel'); if(c) c.style.display = 'none';
+  };
+  window.zrExDel = async id => {
+    const x = EX[id]; if(!x) return;
+    if(!confirm(`Supprimer cette dépense ?\n${exCat(x.cat)[2]}${x.label ? ' — ' + x.label : ''} : ${money(x.amount)}`)) return;
+    try{
+      await db.collection('meta').doc('expenses').update({['items.' + id]: firebase.firestore.FieldValue.delete()});
+      if(exEditId === id) exEditId = '';
+      toast('🗑️ Dépense supprimée');
+    }catch(err){ toast('Échec : ' + (err && err.message || err), true); }
+  };
+
   /* ---------- Période ---------- */
   let period = 'month', customFrom = '', customTo = '';
   function range(){
@@ -250,7 +308,9 @@
     pf.spDays = Object.entries(SP.days || {}).filter(([d, e]) => e && Number(e.eur) > 0 && d >= fromK && d <= toK).sort((a, b) => b[0].localeCompare(a[0]));
     pf.spEur = pf.spDays.reduce((t, [, e]) => t + Number(e.eur), 0);
     pf.spDa = pf.spDays.reduce((t, [, e]) => t + spDa(e), 0);
-    pf.net = pf.sales - pf.cost - pf.deliv - pf.ret - pf.spDa;
+    pf.exList = Object.entries(EX || {}).filter(([, e]) => e && Number(e.amount) > 0 && e.date >= fromK && e.date <= toK).sort((a, b) => b[1].date.localeCompare(a[1].date) || String(b[1].at || '').localeCompare(String(a[1].at || '')));
+    pf.ex = pf.exList.reduce((t, [, e]) => t + Number(e.amount), 0);
+    pf.net = pf.sales - pf.cost - pf.deliv - pf.ret - pf.spDa - pf.ex;
     const pend = cur.filter(o => !isDelivered(o) && !isReturned(o));
     pf.pendN = pend.length; pf.pendProfit = sum(pend, o => (Number(o.total) || 0) - costOf(o) - deliveryFee(o));
 
@@ -393,7 +453,7 @@
     const WD = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
     const bestH = S.hours.indexOf(Math.max(...S.hours)), bestD = S.wdays.indexOf(Math.max(...S.wdays));
 
-    const keepIds = ['pf-date', 'pf-eur', 'pf-usdt', 'pf-ret'].concat([...document.querySelectorAll('#statsPage input[id^="nc-"]')].map(e => e.id));
+    const keepIds = ['pf-date', 'pf-eur', 'pf-usdt', 'pf-ret', 'ex-date', 'ex-cat', 'ex-label', 'ex-amt'].concat([...document.querySelectorAll('#statsPage input[id^="nc-"]')].map(e => e.id));
     const keep = {}; keepIds.forEach(id => { const el = document.getElementById(id); if(el && el.dataset.touched) keep[id] = el.value; });
     const focusId = document.activeElement && document.activeElement.id;
     const setOpen = !!document.querySelector('.pf-set[open]');
@@ -485,12 +545,12 @@
     if(t) t.onchange = () => { customTo = t.value; render(); };
     bindChart();
     Object.entries(keep).forEach(([id, v]) => { const el = document.getElementById(id); if(el){ el.value = v; el.dataset.touched = '1'; } });
-    ['pf-date', 'pf-eur', 'pf-usdt', 'pf-ret'].concat([...document.querySelectorAll('#statsPage input[id^="nc-"]')].map(e => e.id)).forEach(id => { const el = document.getElementById(id); if(el) el.addEventListener('input', () => el.dataset.touched = '1'); });
+    ['pf-date', 'pf-eur', 'pf-usdt', 'pf-ret', 'ex-date', 'ex-cat', 'ex-label', 'ex-amt'].concat([...document.querySelectorAll('#statsPage input[id^="nc-"]')].map(e => e.id)).forEach(id => { const el = document.getElementById(id); if(el) el.addEventListener('input', () => el.dataset.touched = '1'); });
     if(setOpen){ const d = document.querySelector('.pf-set'); if(d) d.open = true; }
-    if(focusId && /^(pf|nc)-/.test(focusId)){ const el = document.getElementById(focusId); if(el) el.focus(); }
+    if(focusId && /^(pf|nc|ex)-/.test(focusId)){ const el = document.getElementById(focusId); if(el) el.focus(); }
   }
   function profitSection(S){
-    subSponsor();
+    subSponsor(); subExpenses();
     const p = S.pf, today = dayKey(Date.now());
     const line = (ic, l, v, sub, sign) => `<div class="pf-l"><span>${ic} ${l}${sub ? `<small>${sub}</small>` : ''}</span><b class="${sign < 0 ? 'neg' : 'pos'}">${sign < 0 ? '− ' : '+ '}${money(v)}</b></div>`;
     const rate = SP.lastRate || 1.17;
@@ -504,6 +564,7 @@
         ${line('🚚', 'Livraison ZR', p.deliv, '', -1)}
         ${line('↩️', 'Retours ZR', p.ret, S.returned.length + ' retour' + (S.returned.length > 1 ? 's' : '') + (p.retEst ? ` · ${p.retEst} estimé${p.retEst > 1 ? 's' : ''}` : ''), -1)}
         ${line('📣', 'Sponsor', p.spDa, p.spEur ? (Math.round(p.spEur * 100) / 100) + ' €' : 'rien saisi', -1)}
+        ${line('🧾', 'Dépenses extra', p.ex, p.exList.length ? p.exList.length + ' dépense' + (p.exList.length > 1 ? 's' : '') + ' (emballage, sachets…)' : 'rien saisi', -1)}
         <div class="pf-l pf-tot"><span>= Bénéfice</span><b class="${p.net < 0 ? 'neg' : 'pos'}">${money(p.net)}</b></div>
       </div>
       ${p.pendN ? `<div class="pf-pend">⏳ <b>${p.pendN}</b> commande${p.pendN > 1 ? 's' : ''} pas encore livrée${p.pendN > 1 ? 's' : ''} : jusqu'à <b>${money(p.pendProfit)}</b> de plus si elles sont livrées.</div>` : ''}
@@ -520,6 +581,18 @@
       </div>
       <div class="st-hint" style="margin:6px 0 0">1 € ≈ ${rate.toFixed(3).replace('.', ',')} $ · 1 USDT = ${SP.usdt} DA → <b>1 € ≈ ${Math.round(rate * SP.usdt)} DA</b>. Le taux € → $ du jour est pris automatiquement.</div>
       ${p.spDays.length ? `<div class="pf-days">${p.spDays.map(([d, e]) => `<div class="pf-day" onclick="zrSpEdit('${d}')"><span>${fmtDay(d)}</span><span>${e.eur} €</span><b>${money(spDa(e))}</b><i>✏️</i></div>`).join('')}</div>` : ''}
+
+      <h4>🧾 Dépenses extra</h4>
+      <div class="pf-sp ex-f">
+        <input type="date" id="ex-date" value="${today}" max="${today}">
+        <select id="ex-cat">${EXCAT.map(c => `<option value="${c[0]}">${c[1]} ${c[2]}</option>`).join('')}</select>
+        <input type="text" id="ex-label" placeholder="Détail (ex : 100 sachets)">
+        <input type="text" id="ex-amt" inputmode="decimal" placeholder="Montant DA">
+        <button id="ex-save" onclick="zrExSave()">${exEditId ? 'Modifier' : 'Ajouter'}</button>
+        <button id="ex-cancel" class="ex-cancel" onclick="zrExCancel()" style="${exEditId ? '' : 'display:none'}">Annuler</button>
+      </div>
+      <div class="st-hint" style="margin:6px 0 0">Tout ce que tu achètes pour le e-commerce (sachets, emballage, étiquettes, flexy…) : c'est retiré de « Ce qui reste dans ta poche ».</div>
+      ${p.exList.length ? `<div class="pf-days">${p.exList.map(([id, e]) => `<div class="pf-day ex-d"><span onclick="zrExEdit('${id}')">${fmtDay(e.date)}</span><span onclick="zrExEdit('${id}')">${exCat(e.cat)[1]} ${esc(e.label || exCat(e.cat)[2])}</span><b onclick="zrExEdit('${id}')">${money(e.amount)}</b><i onclick="zrExDel('${id}')" title="Supprimer">🗑️</i></div>`).join('')}</div>` : ''}
 
       <details class="pf-set"><summary>⚙️ Réglages (prix USDT, retour)</summary>
         <label>Prix d'achat de 1 USDT (DA)<input type="text" inputmode="decimal" id="pf-usdt" value="${SP.usdt}"></label>
@@ -550,8 +623,9 @@
     rows.push([]);
     rows.push(['Chiffre d\'affaires', Math.round(S.ca)], ['Commandes', S.cur.length], ['Bénéfice (articles)', Math.round(S.profit)],
       [], ['Ventes livrées', Math.round(S.pf.sales)], ['Prix d\'achat', -Math.round(S.pf.cost)], ['Livraison ZR', -Math.round(S.pf.deliv)], ['Retours ZR', -Math.round(S.pf.ret)],
-      ['Sponsor (€)', Math.round(S.pf.spEur * 100) / 100], ['Sponsor (DA)', -Math.round(S.pf.spDa)], ['BÉNÉFICE RÉEL', Math.round(S.pf.net)], [], ['Livrées', S.delivered.length], ['Retours', S.returned.length],
+      ['Sponsor (€)', Math.round(S.pf.spEur * 100) / 100], ['Sponsor (DA)', -Math.round(S.pf.spDa)], ['Dépenses extra', -Math.round(S.pf.ex)], ['BÉNÉFICE RÉEL', Math.round(S.pf.net)], [], ['Livrées', S.delivered.length], ['Retours', S.returned.length],
       ['Argent chez ZR', Math.round(S.atZrMoney)]);
+    if(S.pf.exList.length){ rows.push([], ['Dépense', 'Date', 'Détail', 'Montant (DA)']); S.pf.exList.forEach(([, e]) => rows.push([exCat(e.cat)[2], e.date, e.label || '', -Math.round(e.amount)])); }
     rows.push([], ['Wilaya', 'Commandes', 'CA', 'Livrées', 'Retours']);
     Object.entries(S.wil).sort((a, b) => b[1].ca - a[1].ca).forEach(([w, x]) => rows.push([w, x.n, Math.round(x.ca), x.d, x.r]));
     rows.push([], ['Article', 'Pièces vendues', 'CA']);
@@ -792,6 +866,10 @@
       .pf-sp input[type=date]{flex:1 1 140px;} .pf-sp #pf-eur{flex:1 1 100px;}
       .pf-sp button,.pf-set button{border:none;border-radius:10px;padding:10px 14px;background:var(--plum);color:#fff;font:inherit;font-weight:700;cursor:pointer;}
       .pf-days{margin-top:10px;display:flex;flex-direction:column;gap:4px;}
+      .ex-f select{flex:1 1 160px;min-width:0;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:inherit;font:inherit;font-size:14px;}
+      .ex-f #ex-date{flex:1 1 130px;} .ex-f #ex-label{flex:2 1 160px;} .ex-f #ex-amt{flex:1 1 100px;}
+      .ex-f .ex-cancel{background:var(--line);color:inherit;}
+      .ex-d span:nth-child(2){overflow:hidden;text-overflow:ellipsis;white-space:nowrap;} .ex-d i{cursor:pointer;opacity:.75;}
       .pf-day{display:grid;grid-template-columns:1fr auto auto 20px;gap:10px;align-items:center;font-size:13px;padding:7px 10px;border-radius:10px;background:color-mix(in srgb,var(--line) 35%,transparent);cursor:pointer;}
       .pf-day i{font-style:normal;font-size:12px;opacity:.6;}
       .pf-set{margin-top:12px;font-size:13px;} .pf-set summary{cursor:pointer;color:var(--mauve-dark);font-weight:700;padding:4px 0;}
