@@ -368,18 +368,25 @@ async function createParcel(env, o){
     cityId = city.id;
     districtId = (await resolveDistrict(env, c.commune, city, false)).id;
   }
-  const cust = await zr(env, '/customers/individual', {method: 'POST', body: JSON.stringify({name: c.name, phone: {number1: phone}})});
+  // 2e numéro (facultatif) → number2 ; si ZR le refuse, on renvoie sans lui
+  const phone2 = c.phone2 && String(c.phone2).replace(/\D/g, '') !== String(c.phone).replace(/\D/g, '') ? phoneIntl(c.phone2) : '';
+  let phones = phone2 ? {number1: phone, number2: phone2} : {number1: phone};
+  let cust = await zr(env, '/customers/individual', {method: 'POST', body: JSON.stringify({name: c.name, phone: phones})}).catch(e => { if(!phone2) throw e; return null; });
+  if(!cust && phone2){ phones = {number1: phone}; cust = await zr(env, '/customers/individual', {method: 'POST', body: JSON.stringify({name: c.name, phone: phones})}); }
   if(!cust || !cust.id) throw new ZrError('Création du client ZR impossible', false);
   const amount = Math.round(Number(o.total) || 0);
   const desc = 'ملابس نسائية';   // toujours ce texte sur le bordereau
-  const created = await zr(env, '/parcels', {method: 'POST', body: JSON.stringify({
-    customer: {customerId: cust.id, name: c.name, phone: {number1: phone}},
+  const parcelBody = ph => JSON.stringify({
+    customer: {customerId: cust.id, name: c.name, phone: ph},
     deliveryAddress: {cityTerritoryId: cityId, districtTerritoryId: districtId, street: pickup ? null : (c.address || null)},
     deliveryType: pickup ? 'pickup-point' : 'home',
     amount, description: desc, externalId: o.id,
     orderedProducts: [{productName: desc, unitPrice: amount, quantity: 1, stockType: 'none'}],
     ...(hubId ? {hubId} : {})
-  })});
+  });
+  let created;
+  try{ created = await zr(env, '/parcels', {method: 'POST', body: parcelBody(phones)}); }
+  catch(e){ if(!phones.number2) throw e; created = await zr(env, '/parcels', {method: 'POST', body: parcelBody({number1: phone})}); }
   if(!created || !created.id) throw new ZrError('ZR n\'a pas renvoyé de colis', false);
   let parcel = null;
   for(let i = 0; i < 3 && !(parcel && parcel.trackingNumber); i++){

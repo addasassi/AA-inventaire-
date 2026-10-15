@@ -122,9 +122,14 @@
     const r = {name: '', phone: '', wilaya: '', commune: '', address: '', deliveryType: 'domicile', officeOption: null, total: null, sure: {}};
 
     // téléphone (avec +213 / espaces / points)
-    const digitsAll = raw.replace(/\+?213/g, '0').replace(/[^\d\n]/g, '');
-    const pm = digitsAll.match(/0[5-7]\d{8}/);
-    if(pm) r.phone = pm[0];
+    // chiffres arabes → normaux ; jusqu'à 2 numéros différents (2e = phone2)
+    const rawD = raw.replace(/[٠-٩]/g, c => String(c.charCodeAt(0) - 0x660)).replace(/[۰-۹]/g, c => String(c.charCodeAt(0) - 0x6F0));
+    const cands = (rawD.match(/(?:\+?213|00213|0)?[\s.\-]*[5-7](?:[\s.\-]*\d){7,9}/g) || [])
+      .map(x => window.phoneClean ? window.phoneClean(x) : x.replace(/\D/g, '')).filter(Boolean);
+    const good = [...new Set(cands.filter(x => /^0[5-7]\d{8}$/.test(x)))];
+    if(good[0]) r.phone = good[0];
+    if(good[1]) r.phone2 = good[1];
+    if(!r.phone && cands[0]) r.phoneBad = cands[0];   // numéro incomplet/faux : on le montre quand même pour le corriger
 
     // stop desk ?
     if(STOP_RE.test(N(raw)) || STOP_RE.test(raw)) r.deliveryType = 'stopdesk';
@@ -282,12 +287,15 @@
         btn.disabled = false; btn.textContent = label;
       }
       if(typeof applyImportedOrder === 'function') applyImportedOrder(r);
+      { const p1 = document.getElementById('o-phone'), p2 = document.getElementById('o-phone2');
+        if(p1 && !r.phone && r.phoneBad && !p1.value) p1.value = r.phoneBad;
+        if(p2) p2.value = r.phone2 || ''; }
       const filled = [];
       if(r.name) filled.push('o-name'); if(r.phone) filled.push('o-phone'); if(r.wilaya) filled.push('o-wilaya');
       if(r.commune || r.officeOption) filled.push('o-commune'); if(r.address) filled.push('o-address');
       mark(filled);
       const miss = [];
-      if(!r.phone) miss.push('téléphone'); if(!r.wilaya) miss.push('wilaya');
+      if(!r.phone) miss.push(r.phoneBad ? 'téléphone (faux/incomplet)' : 'téléphone'); if(!r.wilaya) miss.push('wilaya');
       if(r.wilaya && r.deliveryType !== 'stopdesk' && !r.commune) miss.push('commune');
       if(r.wilaya && r.deliveryType === 'stopdesk' && !r.officeOption) miss.push('bureau');
       statusEl.style.display = 'block';

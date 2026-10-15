@@ -976,6 +976,10 @@
         <input type="text" id="o-phone" placeholder="0555 00 00 00" inputmode="tel">
       </div>
       <div class="field">
+        <label>2e numéro <span class="ph-opt">(facultatif)</span></label>
+        <input type="text" id="o-phone2" placeholder="Si la cliente donne un autre numéro" inputmode="tel">
+      </div>
+      <div class="field">
         <label>Type de livraison</label>
         <div class="auth-switch">
           <button type="button" id="dt-domicile" class="active">Livraison à domicile</button>
@@ -1293,6 +1297,10 @@
     <div class="field">
       <label>Numéro de téléphone</label>
       <input type="text" id="eo-phone" inputmode="tel">
+    </div>
+    <div class="field">
+      <label>2e numéro <span class="ph-opt">(facultatif)</span></label>
+      <input type="text" id="eo-phone2" inputmode="tel">
     </div>
     <div class="field">
       <label>Type de livraison</label>
@@ -4780,7 +4788,7 @@ function showOrderDetail(id){
   }
   if(window.swapBanner) odBadgeEl.innerHTML += window.swapBanner(o);
   document.getElementById('od-name').textContent = o.customer.name || 'Client';
-  const odSubTxt = [o.customer.phone, dtLabel, o.customer.wilaya, o.customer.commune].filter(Boolean).join(' • ');
+  const odSubTxt = [o.customer.phone, o.customer.phone2 ? '2e : ' + o.customer.phone2 : '', dtLabel, o.customer.wilaya, o.customer.commune].filter(Boolean).join(' • ');
   document.getElementById('od-sub').innerHTML = escapeHtml(odSubTxt) + (o.customer.phone ? phoneActionButtons(o.customer.phone) : '');
   document.getElementById('od-address').textContent = o.customer.address || '';
   document.getElementById('od-items').innerHTML = o.items.map(it=>{
@@ -4896,6 +4904,7 @@ function openEditOrderModal(id){
   editingOrderItems = JSON.parse(JSON.stringify(o.items));
   document.getElementById('eo-name').value = o.customer.name || '';
   document.getElementById('eo-phone').value = o.customer.phone || '';
+  document.getElementById('eo-phone2').value = o.customer.phone2 || '';
   document.getElementById('eo-address').value = o.customer.address || '';
   document.getElementById('eo-total').value = Number(o.total).toFixed(2);
   document.getElementById('eo-deferred-toggle').checked = !!o.deferred;
@@ -4989,12 +4998,15 @@ async function saveEditedOrder(){
   const o = orders.find(x=>x.id===editingOrderId);
   if(!o) return;
   const name = document.getElementById('eo-name').value.trim();
-  const phone = document.getElementById('eo-phone').value.trim();
+  let phone = document.getElementById('eo-phone').value.trim();
   const wilaya = document.getElementById('eo-wilaya').value;
   const commune = document.getElementById('eo-commune').value;
   const address = document.getElementById('eo-address').value.trim();
   const total = parseFloat(document.getElementById('eo-total').value) || 0;
-  if(eoDeliveryType !== 'main' && (!name || !phone)){ toast('Le nom et le téléphone sont requis', true); return; }
+  if(eoDeliveryType !== 'main' && !name){ toast('Le nom est requis', true); return; }
+  const ph = window.phoneGuard ? window.phoneGuard('eo', eoDeliveryType !== 'main') : {ok: !!phone || eoDeliveryType === 'main', phone, phone2: ''};
+  if(!ph.ok){ if(!window.phoneGuard) toast('Le téléphone est requis', true); return; }
+  phone = ph.phone; const phone2 = ph.phone2;
   const eoIsDeferred = document.getElementById('eo-deferred-toggle').checked;
   const eoDeferredDate = document.getElementById('eo-deferred-date').value;
   if(eoIsDeferred && !eoDeferredDate){ toast('Choisissez la date d\'envoi prévue', true); return; }
@@ -5030,11 +5042,11 @@ async function saveEditedOrder(){
     return;
   }
 
-  const zrKey = x => JSON.stringify([x.customer && x.customer.name, x.customer && x.customer.phone, x.customer && x.customer.wilaya, x.customer && x.customer.commune, x.customer && x.customer.address, x.customer && x.customer.deliveryType, Math.round(Number(x.total)||0)]);
+  const zrKey = x => JSON.stringify([x.customer && x.customer.name, x.customer && x.customer.phone, x.customer && (x.customer.phone2 || ''), x.customer && x.customer.wilaya, x.customer && x.customer.commune, x.customer && x.customer.address, x.customer && x.customer.deliveryType, Math.round(Number(x.total)||0)]);
   const zrBefore = zrKey(o);
   o.customer = eoDeliveryType === 'main'
-    ? Object.assign({}, o.customer, {name: name || 'Cliente (main propre)', phone, wilaya:'', commune:'', address, deliveryType:'main'})
-    : Object.assign({}, o.customer, {name, phone, wilaya, commune, address, deliveryType: eoDeliveryType});
+    ? Object.assign({}, o.customer, {name: name || 'Cliente (main propre)', phone, phone2, wilaya:'', commune:'', address, deliveryType:'main'})
+    : Object.assign({}, o.customer, {name, phone, phone2, wilaya, commune, address, deliveryType: eoDeliveryType});
   o.items = editingOrderItems;
   o.total = total;
   o.costTotal = editingOrderItems.reduce((s,it)=> s + (it.cost||0) * it.qty, 0);
@@ -5098,6 +5110,7 @@ document.getElementById('btn-new-order').addEventListener('click', async ()=>{
   document.getElementById('text-import').value = '';
   document.getElementById('o-name').value = '';
   document.getElementById('o-phone').value = '';
+  document.getElementById('o-phone2').value = '';
   document.getElementById('o-wilaya').value = '';
   setDeliveryType('domicile');
   document.getElementById('o-address').value = '';
@@ -5126,7 +5139,7 @@ document.getElementById('btn-cancel-order').addEventListener('click', ()=>{
   }
   // Commande en cours (articles choisis ou client déjà saisi) : on demande confirmation avant de tout perdre
   const nItems = Object.values(cart || {}).reduce((t, q)=> t + (Number(q)||0), 0);
-  const typed = ['o-name','o-phone','o-address','text-import'].some(id=>{ const el = document.getElementById(id); return el && el.value.trim(); });
+  const typed = ['o-name','o-phone','o-phone2','o-address','text-import'].some(id=>{ const el = document.getElementById(id); return el && el.value.trim(); });
   if(nItems > 0 || typed){
     confirmDialog({
       title: 'Annuler cette commande ?',
@@ -5137,7 +5150,7 @@ document.getElementById('btn-cancel-order').addEventListener('click', ()=>{
     }).then(yes=>{
       if(!yes) return;
       cart = {};
-      ['o-name','o-phone','o-address','text-import'].forEach(id=>{ const el = document.getElementById(id); if(el) el.value = ''; });
+      ['o-name','o-phone','o-phone2','o-address','text-import'].forEach(id=>{ const el = document.getElementById(id); if(el) el.value = ''; });
       if(typeof renderCart === 'function') renderCart();
       showOrdersHome();
       toast('Commande annulée');
@@ -5395,7 +5408,7 @@ document.getElementById('btn-save-order').addEventListener('click', async ()=>{
 });
 async function saveNewOrder(){
   const name = document.getElementById('o-name').value.trim();
-  const phone = document.getElementById('o-phone').value.trim();
+  let phone = document.getElementById('o-phone').value.trim();
   const wilaya = document.getElementById('o-wilaya').value.trim();
   const commune = document.getElementById('o-commune').value.trim();
   const address = document.getElementById('o-address').value.trim();
@@ -5403,7 +5416,10 @@ async function saveNewOrder(){
   const keys = Object.keys(cart);
   if(keys.length === 0){ toast('Ajoutez au moins un article à la commande', true); return; }
   const isHandOrder = deliveryType === 'main';
-  if(!isHandOrder && (!name || !phone)){ toast('Le nom et le téléphone du client sont requis', true); return; }
+  if(!isHandOrder && !name){ toast('Le nom du client est requis', true); return; }
+  const ph = window.phoneGuard ? window.phoneGuard('o', !isHandOrder) : {ok: !!phone || isHandOrder, phone, phone2: ''};
+  if(!ph.ok){ if(!window.phoneGuard) toast('Le téléphone du client est requis', true); return; }
+  phone = ph.phone; const phone2 = ph.phone2;
   const isDeferred = document.getElementById('o-deferred-toggle').checked;
   const deferredDate = document.getElementById('o-deferred-date').value;
   if(isDeferred && !deferredDate){ toast('Choisissez la date d\'envoi prévue', true); return; }
@@ -5447,7 +5463,7 @@ async function saveNewOrder(){
 
   const newOrder = {
     id: 'o'+Date.now()+Math.floor(Math.random()*1000),
-    customer: isHandOrder ? {name: name || 'Cliente (main propre)', phone, wilaya:'', commune:'', address, deliveryType:'main'} : {name, phone, wilaya, commune, address, deliveryType},
+    customer: isHandOrder ? {name: name || 'Cliente (main propre)', phone, phone2, wilaya:'', commune:'', address, deliveryType:'main'} : {name, phone, phone2, wilaya, commune, address, deliveryType},
     items, total, costTotal, profit: total - costTotal,
     createdAt: new Date().toISOString(),
     createdBy: currentUser ? currentUser.name : '',
@@ -6139,6 +6155,7 @@ boot();
 <script src="app-update.js"></script>
 <script src="app-back.js"></script>
 <script src="select-search.js"></script>
+<script src="phone-check.js"></script>
 <script src="stats.js"></script>
 <script src="returns.js"></script>
 <script src="hand.js"></script>
