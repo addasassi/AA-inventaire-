@@ -2293,7 +2293,7 @@ async function notifyRupture(names, imgs){
   showRuptureBanner(shown, pic);
   if(soundMode === 'sound') playRuptureTone();
   if(soundMode !== 'mute'){ try{ if(navigator.vibrate) navigator.vibrate([300,150,300,150,500]); }catch(e){} }
-  if(!notifPrefEnabled()) return;
+  if(!notifPrefEnabled() || window.pushOn) return;   // 🔔 push actif : la notification vient du relais (pas de doublon)
   const body = shown + (names.length>1 ? ' — plus de stock' : ' — plus de stock disponible');
   try{
     if('serviceWorker' in navigator && navigator.serviceWorker.ready){
@@ -2319,6 +2319,7 @@ async function notifyNewOrder(o){
   const body = who + ' a ajouté une commande — ' + (o.customer && o.customer.name ? o.customer.name + ' — ' : '') + Number(o.total||0).toFixed(0) + ' DA';
   try{
     if(!('Notification' in window) || Notification.permission !== 'granted') return;   // son seulement
+    if(window.pushOn) return;   // 🔔 push actif : notification envoyée par le relais
     if('serviceWorker' in navigator && navigator.serviceWorker.ready){
       const reg = await navigator.serviceWorker.ready;
       reg.showNotification(title, {
@@ -6185,5 +6186,6 @@ boot();
 <script src="order-parse.js"></script>
 <script src="swap.js"></script>
 <script src="verify.js"></script>
+<script src="push.js"></script>
 </body>
 </html>

@@ -465,6 +465,13 @@ async function trackOrder(env, o){
     situationAt: (p.lastSituationUpdateAt ? new Date(String(p.lastSituationUpdateAt).replace(/(\.\d{3})\d+/, '$1') + (/Z|[+-]\d\d:?\d\d$/.test(p.lastSituationUpdateAt) ? '' : 'Z')).toISOString() : '') || ((isNoSituation(sit) ? '' : sit) !== (z.situation || '') ? nowIso : (z.situationAt || nowIso)),
     status: final ? stage : 'sent', active: !final || keep, lastCheck: Date.now(), updatedAt: nowIso};
   await saveZr(o.id, nz);
+  // 🔔 push : passe à « Ne répond pas 2/3 » ou Annulée
+  const lvNew = final ? 0 : nrpLevel(nz.situation), lvOld = nrpLevel(z.situation);
+  if(lvNew >= 2 && lvNew !== lvOld){
+    const c = o.customer || {};
+    pushNrp.push({title: lvNew >= 10 ? '❌ Commande annulée' : '📵 Ne répond pas ' + lvNew,
+      body: (c.name || 'Cliente') + (c.wilaya ? ' (' + c.wilaya + ')' : '') + (nz.tracking ? ' · ' + nz.tracking : ''), kind: 'nrp'});
+  }
   return nz;
 }
 
@@ -484,6 +491,120 @@ async function cron(env){
       }
     }catch(e){ /* on réessaiera au prochain passage */ }
   }
+}
+
+
+/* ======================================================================
+   🔔 Notifications PUSH (même quand l'app est fermée / en arrière-plan)
+   Le relais regarde chaque minute : ruptures de stock, nouvelles commandes, « Ne répond pas 2/3 » / Annulée.
+   Il garde les messages dans meta/pushQueue puis « réveille » les téléphones (push sans contenu, clés VAPID) ;
+   le service worker de l'app lit /push/recent et affiche la notification.
+   ====================================================================== */
+const b64u = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const b64uStr = str => btoa(unescape(encodeURIComponent(str))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+async function fsGetDoc(path){
+  const r = await fetch(`${FS}/${path}?key=${FS_KEY}`);
+  if(r.status === 404) return null;
+  if(!r.ok) throw new Error('Firestore ' + r.status);
+  return fromFs({mapValue: {fields: (await r.json()).fields || {}}});
+}
+async function fsSetDoc(path, obj){
+  const r = await fetch(`${FS}/${path}?key=${FS_KEY}`, {method: 'PATCH', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({fields: toFs(obj).mapValue.fields})});
+  if(!r.ok) throw new Error('Firestore ' + r.status);
+}
+let pushKeys = null;
+async function getPushKeys(){
+  if(pushKeys) return pushKeys;
+  let k = await fsGetDoc('meta/pushKeys');
+  if(!k || !k.jwk || !k.pub){   // première fois : le relais crée ses propres clés (rien de secret dans le code)
+    const pair = await crypto.subtle.generateKey({name: 'ECDSA', namedCurve: 'P-256'}, true, ['sign', 'verify']);
+    k = {jwk: JSON.stringify(await crypto.subtle.exportKey('jwk', pair.privateKey)), pub: b64u(await crypto.subtle.exportKey('raw', pair.publicKey)), at: new Date().toISOString()};
+    await fsSetDoc('meta/pushKeys', k);
+  }
+  const key = await crypto.subtle.importKey('jwk', JSON.parse(k.jwk), {name: 'ECDSA', namedCurve: 'P-256'}, false, ['sign']);
+  return (pushKeys = {key, pub: k.pub});
+}
+async function vapidHeader(endpoint){
+  const {key, pub} = await getPushKeys();
+  const aud = new URL(endpoint).origin;
+  const unsigned = b64uStr(JSON.stringify({typ: 'JWT', alg: 'ES256'})) + '.' + b64uStr(JSON.stringify({aud, exp: Math.floor(Date.now() / 1000) + 12 * 3600, sub: 'https://addasassi.github.io/aa-inventaire-/'}));
+  const sig = await crypto.subtle.sign({name: 'ECDSA', hash: 'SHA-256'}, key, new TextEncoder().encode(unsigned));
+  return `vapid t=${unsigned}.${b64u(sig)}, k=${pub}`;
+}
+async function pushSubs(){
+  const out = []; let tok = '';
+  do{
+    const r = await fetch(`${FS}/pushSubs?pageSize=300&key=${FS_KEY}` + (tok ? '&pageToken=' + encodeURIComponent(tok) : ''));
+    if(!r.ok) break;
+    const j = await r.json();
+    (j.documents || []).forEach(d => { const f = fromFs({mapValue: {fields: d.fields || {}}}); if(f.endpoint) out.push({id: d.name.split('/').pop(), endpoint: f.endpoint}); });
+    tok = j.nextPageToken || '';
+  } while(tok);
+  return out;
+}
+async function wake(subs){
+  await Promise.all(subs.map(async s => {
+    try{
+      const r = await fetch(s.endpoint, {method: 'POST', headers: {TTL: '3600', Urgency: 'high', Authorization: await vapidHeader(s.endpoint)}});
+      if(r.status === 404 || r.status === 410) await fetch(`${FS}/pushSubs/${s.id}?key=${FS_KEY}`, {method: 'DELETE'});   // téléphone désabonné
+    }catch(e){}
+  }));
+}
+async function pushQueue(items){
+  if(!items.length) return;
+  const q = (await fsGetDoc('meta/pushQueue')) || {};
+  let list = []; try{ list = JSON.parse(q.items || '[]'); }catch(e){}
+  const now = Date.now();
+  list = list.filter(x => now - Date.parse(x.at) < 30 * 60 * 1000).concat(items).slice(-40);
+  await fsSetDoc('meta/pushQueue', {items: JSON.stringify(list), updated: new Date().toISOString()});
+}
+async function pushNotify(items, subs){
+  if(!items.length) return;
+  const at = new Date().toISOString();
+  items = items.map((x, i) => ({id: x.id || ('n' + Date.now().toString(36) + i), at, ...x}));
+  await pushQueue(items);
+  await wake(subs || await pushSubs());
+}
+const nrpLevel = sit => { const s = String(sit || ''); if(/annul|refus/i.test(s)) return 10; const m = s.match(/r[eé]pond\w*\s+pas\D*(\d)/i); return m ? Number(m[1]) : 0; };
+let pushNrp = [];   // rempli par trackOrder pendant le passage ZR, envoyé à la fin
+async function pushTick(){
+  const [light, state] = await Promise.all([fsGetDoc('meta/stockLight'), fsGetDoc('meta/pushState')]);
+  const st = state || {};
+  const items = [];
+  // 1) ruptures : une pièce qui passe de >0 à 0
+  let data = {}; try{ data = JSON.parse((light && light.data) || '{}'); }catch(e){}
+  const now = {};
+  Object.entries(data.items || {}).forEach(([id, it]) => (it.pieces || []).forEach(x => { now[id + '|' + x.k] = {q: Number(x.q) || 0, n: (it.n || '') + (x.c ? ' — ' + x.c : '')}; }));
+  let prev = null; try{ prev = st.stock ? JSON.parse(st.stock) : null; }catch(e){}
+  if(prev && Object.keys(now).length){
+    const out = Object.entries(now).filter(([k, v]) => v.q <= 0 && Number(prev[k]) > 0).map(([, v]) => v.n);
+    if(out.length) items.push({title: out.length > 1 ? '⚠️ ' + out.length + ' ruptures de stock' : '⚠️ Rupture de stock',
+      body: out.slice(0, 4).join(' • ') + (out.length > 4 ? ' +' + (out.length - 4) : '') + ' — plus de stock', kind: 'rupture'});
+  }
+  const stock = {}; Object.entries(now).forEach(([k, v]) => stock[k] = v.q);
+  // 2) nouvelles commandes depuis le dernier passage
+  let lastOrderAt = st.lastOrderAt || new Date().toISOString();
+  if(st.lastOrderAt){
+    const r = await fetch(`${FS}:runQuery?key=${FS_KEY}`, {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({structuredQuery: {from: [{collectionId: 'orders'}],
+        where: {fieldFilter: {field: {fieldPath: 'createdAt'}, op: 'GREATER_THAN', value: {stringValue: st.lastOrderAt}}},
+        orderBy: [{field: {fieldPath: 'createdAt'}, direction: 'ASCENDING'}],
+        select: {fields: ['customer', 'total', 'createdBy', 'createdAt', 'source'].map(f => ({fieldPath: f}))}, limit: 20}})});
+    if(r.ok){
+      const rows = (await r.json()).filter(x => x.document).map(x => fromFs({mapValue: {fields: x.document.fields || {}}}));
+      rows.forEach(o => {
+        const c = o.customer || {};
+        items.push({title: o.source === 'shopify' ? '🛍️ Nouvelle commande du site' : '🛍️ Nouvelle commande',
+          body: (c.name || 'Cliente') + (c.wilaya ? ' (' + c.wilaya + ')' : '') + ' — ' + Math.round(Number(o.total) || 0) + ' DA' + (o.createdBy ? ' · par ' + o.createdBy : ''), kind: 'order'});
+        if(o.createdAt > lastOrderAt) lastOrderAt = o.createdAt;
+      });
+    }
+  }
+  // 3) « Ne répond pas 2/3 » / Annulée (vus pendant le suivi ZR)
+  items.push(...pushNrp); pushNrp = [];
+  await fsSetDoc('meta/pushState', {stock: JSON.stringify(stock), lastOrderAt, at: new Date().toISOString()});
+  if(items.length) await pushNotify(items);
 }
 
 /* ---------- HTTP ---------- */
@@ -659,6 +780,20 @@ export default {
     const path = new URL(req.url).pathname.replace(/\/+$/, '') || '/';
     if(path === '/bot') return botCatalog(req);
     if(path === '/img') return liveImage(req, ctx);
+    if(path === '/push/key'){ const k = await getPushKeys(); return json({key: k.pub}); }
+    if(path === '/push/recent'){
+      const q = (await fsGetDoc('meta/pushQueue')) || {};
+      let list = []; try{ list = JSON.parse(q.items || '[]'); }catch(e){}
+      return new Response(JSON.stringify({items: list.filter(x => Date.now() - Date.parse(x.at) < 30 * 60 * 1000)}), {headers: {...CORS, 'Content-Type': 'application/json', 'Cache-Control': 'no-store'}});
+    }
+    if(path === '/push/sub' && req.method === 'POST'){
+      const b = await req.json().catch(() => ({}));
+      if(!b.endpoint || !/^https:\/\//.test(b.endpoint)) return json({ok: false}, 400);
+      const id = b64u(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(b.endpoint))).slice(0, 32);
+      await fsSetDoc('pushSubs/' + id, {endpoint: b.endpoint, user: String(b.user || ''), at: new Date().toISOString()});
+      if(b.test) ctx.waitUntil(pushNotify([{title: '✅ Notifications activées', body: 'Vous recevrez les ruptures, nouvelles commandes et « Ne répond pas » même app fermée.', kind: 'test'}], [{id, endpoint: b.endpoint}]));
+      return json({ok: true});
+    }
     if(path === '/' ){
       const t = await tenantOf(env);
       // liste complète des wilayas / communes livrées par ZR (pour compléter les listes de l'app)
@@ -857,7 +992,12 @@ Règles : n'invente rien ; une ville/commune citée (ex. "فالعلمة" = El E
     }
   },
   async scheduled(event, env, ctx){
-    if(env.ZR_API_KEY) ctx.waitUntil(tenantOf(env).then(t => t && cron(env)));
+    // chaque minute : notifications push ; toutes les 10 minutes : suivi ZR (comme avant)
+    const zrTurn = new Date(event.scheduledTime || Date.now()).getUTCMinutes() % 10 === 0;
+    ctx.waitUntil((async () => {
+      if(zrTurn && env.ZR_API_KEY){ try{ const t = await tenantOf(env); if(t) await cron(env); }catch(e){} }
+      try{ await pushTick(); }catch(e){}
+    })());
   }
 };
 

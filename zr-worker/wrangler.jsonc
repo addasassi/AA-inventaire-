@@ -6,6 +6,6 @@
   "compatibility_date": "2026-09-01",
   "workers_dev": true,
   "keep_vars": true,
-  "triggers": { "crons": ["*/10 * * * *"] },
+  "triggers": { "crons": ["* * * * *"] },
   "ai": { "binding": "AI" }
 }

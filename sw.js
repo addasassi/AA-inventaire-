@@ -6,7 +6,7 @@
 // Les données (Firebase) ne passent PAS par ici : seulement les fichiers de l'app.
 
 const CACHE = 'atelier-app-v1';
-const SHELL = ['./', 'shopify-sync.js', 'zr-bureaux.js', 'zr-sync.js', 'app-update.js', 'app-back.js', 'select-search.js', 'stats.js', 'phone-check.js', 'returns.js', 'hand.js', 'zr-suivi.js', 'order-parse.js', 'swap.js', 'verify.js', 'kolech-logo.png',
+const SHELL = ['./', 'shopify-sync.js', 'zr-bureaux.js', 'zr-sync.js', 'app-update.js', 'app-back.js', 'select-search.js', 'stats.js', 'phone-check.js', 'returns.js', 'hand.js', 'zr-suivi.js', 'order-parse.js', 'swap.js', 'verify.js', 'push.js', 'kolech-logo.png',
   'manifest.json', 'icon-192.png'];
 
 self.addEventListener('install', (event) => {
@@ -60,6 +60,32 @@ async function staleWhileRevalidate(req, key){
     .catch(() => null);
   if(hit) return hit;
   return (await net) || new Response('Hors connexion', {status: 503, headers: {'Content-Type': 'text/plain; charset=utf-8'}});
+}
+
+/* 🔔 push du relais (app fermée / en arrière-plan) : le message est lu sur /push/recent */
+const PUSH_API = 'https://atelier-zr.mohammedsassiadda.workers.dev';
+self.addEventListener('push', (event) => { event.waitUntil(onPush()); });
+async function onPush(){
+  let items = [];
+  try{ const r = await fetch(PUSH_API + '/push/recent', {cache: 'no-store'}); items = (await r.json()).items || []; }catch(e){}
+  const c = await caches.open('atelier-push');
+  let seen = [];
+  try{ const h = await c.match('/seen'); if(h) seen = await h.json(); }catch(e){}
+  const fresh = items.filter(x => x && x.id && !seen.includes(x.id));
+  const wins = await self.clients.matchAll({type: 'window', includeUncontrolled: true});
+  const visible = wins.some(w => w.visibilityState === 'visible');   // app ouverte devant les yeux : notification discrète
+  if(!fresh.length && !items.length){
+    await self.registration.showNotification('Atelier Stock', {body: 'Nouvelle activité', icon: 'icon-192.png', badge: 'icon-192.png', tag: 'atelier-activity', silent: true});
+    return;
+  }
+  for(const x of fresh){
+    await self.registration.showNotification(x.title || 'Atelier Stock', {
+      body: x.body || '', icon: 'icon-192.png', badge: 'icon-192.png', tag: x.id, silent: visible,
+      vibrate: x.kind === 'rupture' ? [300, 150, 300, 150, 500] : [200, 100, 200], requireInteraction: x.kind === 'rupture' || x.kind === 'nrp'
+    });
+  }
+  seen = seen.concat(fresh.map(x => x.id)).slice(-200);
+  await c.put('/seen', new Response(JSON.stringify(seen), {headers: {'Content-Type': 'application/json'}}));
 }
 
 self.addEventListener('notificationclick', (event) => {
