@@ -68,9 +68,11 @@
         <div class="mo-tile rate"><span>🎯</span><b>${rate}</b><small>Taux de livraison</small></div>
       </div>
       <div class="mo-money">💰 Livré : <b>${Math.round(money).toLocaleString('fr-FR')} DA</b></div>
+      ${window.teamMyOrdersExtra ? window.teamMyOrdersExtra({list, by, who: who == null ? (me() && me().name) : who, stateOf}) : ''}
       ${shown.length ? shown.map(card).join('') : `<div class="empty"><h3>Aucune commande</h3><p>${filter === 'todo' ? 'Rien à traiter 👏' : 'Aucune commande pour cette période.'}</p></div>`}`;
     el.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { period = b.dataset.p; render(); });
     el.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { filter = b.dataset.f; render(); });
+    if(window.teamBindMyOrdersExtra) window.teamBindMyOrdersExtra();
     const sel = document.getElementById('mo-who'); if(sel){ sel.value = who; sel.onchange = () => { who = sel.value; render(); }; }
   }
   function card(o){
@@ -80,6 +82,7 @@
       ${window.zrBadge ? window.zrBadge(o) : ''}
       <div class="mo-top"><b>${esc(c.name || 'Cliente')}</b><span>${Math.round(Number(o.total) || 0)} DA</span></div>
       <div class="mo-line">${esc(c.phone || '')}${c.wilaya ? ' • ' + esc(c.wilaya) : ''}${c.commune ? ' / ' + esc(c.commune) : ''} ${c.phone && typeof phoneActionButtons === 'function' ? phoneActionButtons(c.phone) : ''}</div>
+      ${window.orderNoteLine ? window.orderNoteLine(o) : ''}
       <div class="mo-line small">${(o.items || []).map(i => (i.qty || 1) + '× ' + esc(i.name)).join(', ')}</div>
       <div class="mo-line small">${d.toLocaleDateString('fr-FR')} ${d.toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'})}${who === '*' && o.createdBy ? ' • par ' + esc(o.createdBy) : ''}</div>
     </div>`;
