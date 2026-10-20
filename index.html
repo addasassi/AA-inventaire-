@@ -4842,9 +4842,10 @@ function swallowClicks(ms){
   const m = document.getElementById(id);
   if(m) m.addEventListener('click', e=>{
     if(e.target !== m) return;
-    e.preventDefault(); e.stopPropagation(); swallowClicks();
+    e.preventDefault(); e.stopPropagation();
     const btn = [...m.querySelectorAll('button')].find(b => /(^|[-_])(close|cancel|back|fermer)([-_]|$)/i.test(b.id || '') || /^\s*(✕|×|fermer|close)/i.test(b.textContent || ''));
     if(btn) btn.click(); else m.classList.remove('show');
+    swallowClicks();   // APRÈS la fermeture : sinon il bloquait aussi le clic sur « Fermer » et la fenêtre restait ouverte
   });
 });
 document.getElementById('od-close').addEventListener('click', ()=>{
