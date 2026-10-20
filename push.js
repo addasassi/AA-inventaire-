@@ -36,10 +36,12 @@
     running = false;
   }
   window.pushSubscribe = subscribe;
+  /* 🔔 demande au relais d'envoyer TOUT DE SUITE (sans attendre son passage de chaque minute) */
+  let nowT = null;
+  window.pushNow = () => { clearTimeout(nowT); nowT = setTimeout(() => { fetch(API + '/push/now', {method: 'POST', keepalive: true}).catch(() => {}); }, 400); };
   /* l'app (ouverte) vient d'afficher elle-même une notification avec son son → le push du relais
      pour le même type (rupture / commande / nrp), qui arrive jusqu'à 1 minute après, n'est pas répété ici */
   window.pushMute = async (kind) => {
-    if(kind !== 'nrp') fetch(API + '/push/now', {method: 'POST'}).catch(() => {});   // les autres téléphones reçoivent tout de suite
     try{
       const c = await caches.open('atelier-push');
       let m = {}; const h = await c.match('/mute'); if(h) m = await h.json();

@@ -381,6 +381,7 @@
       };
       await db.collection('orders').doc(id).set(o);
       orders.push(o);
+      if(window.pushNow) window.pushNow();   // 🔔 notification tout de suite sur les téléphones
       try{ if(typeof upsertCustomer === 'function') await upsertCustomer(o); }catch(e){}
       toast('🛍️ Nouvelle commande du site ' + so.name + ' — ' + name + ' (à confirmer)');
       try{ if(typeof renderOrdersHistory === 'function') renderOrdersHistory(); if(typeof renderDashboard === 'function') renderDashboard(); }catch(e){}

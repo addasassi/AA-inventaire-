@@ -785,7 +785,8 @@ export default {
     if(path === '/bot') return botCatalog(req);
     if(path === '/img') return liveImage(req, ctx);
     if(path === '/push/now'){   // l'app ouverte a vu une rupture / commande : on prévient les autres téléphones tout de suite
-      if(Date.now() - pushNowAt > 3000){ pushNowAt = Date.now(); ctx.waitUntil(pushTick().catch(() => {})); }
+      // jamais ignoré : deux passages en même temps ne doublent pas (id fixe + le téléphone ne montre qu'une fois)
+      pushNowAt = Date.now(); ctx.waitUntil(pushTick().catch(() => {}));
       return json({ok: true});
     }
     if(path === '/push/key'){ const k = await getPushKeys(); return json({key: k.pub}); }

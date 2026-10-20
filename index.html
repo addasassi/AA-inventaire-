@@ -1561,7 +1561,7 @@ const waitSync = (isOk, waiters, ms)=> isOk() ? Promise.resolve() :
 let stockLightTimer = null, stockLightLast = '';
 function scheduleStockLight(){
   clearTimeout(stockLightTimer);
-  stockLightTimer = setTimeout(publishStockLight, 2500);
+  stockLightTimer = setTimeout(publishStockLight, 700);   // vite : le push « rupture » des autres téléphones part juste après
 }
 async function publishStockLight(){
   if(!FIREBASE_OK) return;
@@ -1582,6 +1582,7 @@ async function publishStockLight(){
   try{
     await withTimeout(db.collection('meta').doc('stockLight').set({data: json, updated: Date.now()}), 15000);
     stockLightLast = json;
+    if(window.pushNow) window.pushNow();   // 🔔 les autres téléphones reçoivent la rupture tout de suite
   }catch(e){ /* réessai au prochain changement */ }
 }
 /* ---------- Alerte rupture de stock (produit ou couleur qui passe à 0) ---------- */
@@ -5519,6 +5520,7 @@ async function saveNewOrder(){
   }
   orders.push(newOrder);
   if(window.zrAfterSave) window.zrAfterSave(newOrder);
+  if(window.pushNow) window.pushNow();   // 🔔 notification « nouvelle commande » tout de suite sur les autres téléphones
   await upsertCustomer(newOrder);
   updateDeferredBadge();
 
