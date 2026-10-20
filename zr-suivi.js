@@ -22,9 +22,9 @@
   const ROWS = [
     ['liv',  '#22c55e', "Livrées aujourd'hui", o => o.zr.stage === 'delivered' && o.zr.finalAt && dayKey(o.zr.finalAt) === today()],
     ['appel', '#1e88e5', 'Appel téléphonique', o => !final(o) && /appel tel/.test(norm(sitOf(o)))],
-    ['nrp1', '#fcd34d', 'Ne répond pas 1', o => !final(o) && nrpN(o) === 1],
-    ['nrp2', '#fbbf24', 'Ne répond pas 2', o => !final(o) && nrpN(o) === 2],
-    ['nrp3', '#f59e0b', 'Ne répond pas 3', o => !final(o) && nrpN(o) >= 3],
+    ['nrp1', '#eab308', 'Ne répond pas 1', o => !final(o) && nrpN(o) === 1],
+    ['nrp2', '#f97316', 'Ne répond pas 2', o => !final(o) && nrpN(o) === 2],
+    ['nrp3', '#c2410c', 'Ne répond pas 3', o => !final(o) && nrpN(o) >= 3],
     ['ann',  '#ef4444', 'Commande annulée', o => !final(o) && /annul|refus/.test(norm(sitOf(o)))],
     ['rep',  '#10b981', 'Commande reportée', o => !final(o) && /report/.test(norm(sitOf(o)))],
     ['rdv',  '#0f766e', 'Rendez-vous client', o => !final(o) && /rendez/.test(norm(sitOf(o)))],
@@ -33,7 +33,7 @@
   ];
   // Stop desk : sans « Rendez-vous » ni « Commune erronée », avec « En attente du client »
   const ROWS_SD = ROWS.filter(r => r[0] !== 'rdv' && r[0] !== 'comm');
-  ROWS_SD.splice(ROWS_SD.findIndex(r => r[0] === 'nrp1'), 0, ['att', '#f59e0b', 'En attente du client', o => !final(o) && /attente/.test(norm(sitOf(o)))]);
+  ROWS_SD.splice(ROWS_SD.findIndex(r => r[0] === 'nrp1'), 0, ['att', '#8b5cf6', 'En attente du client', o => !final(o) && /attente/.test(norm(sitOf(o)))]);
   const FLOW = [
     ['new',  '#94a3b8', 'Créées — pas encore récupérées', o => !final(o) && (o.zr.stage || 'created') === 'created'],
     ['way',  '#60a5fa', 'Vers la wilaya', o => !final(o) && (o.zr.stage === 'in_transit')],
