@@ -182,7 +182,8 @@
     m.querySelector('#nrp-ok').onclick = ack;
     m.querySelectorAll('.nrp-m').forEach(x => x.addEventListener('click', ack));
     if(document.hidden && 'Notification' in window && Notification.permission === 'granted' && navigator.serviceWorker){
-      if(!window.pushOn) navigator.serviceWorker.ready.then(reg => reg.showNotification(nAnn ? '❌ Commande annulée' : '📵 Ne répond pas', {body: fresh.map(o => ((o.customer || {}).name || 'Cliente') + ' — ' + alertTxt(o)).join(', '), icon: 'icon-192.png', tag: 'nrp'})).catch(() => {});
+      if(window.pushMute) window.pushMute('nrp');
+      navigator.serviceWorker.ready.then(reg => reg.showNotification(nAnn ? '❌ Commande annulée' : '📵 Ne répond pas', {body: fresh.map(o => ((o.customer || {}).name || 'Cliente') + ' — ' + alertTxt(o)).join(', '), icon: 'icon-192.png', tag: 'nrp'})).catch(() => {});
     }
   }
   setInterval(nrpCheck, 60 * 1000); setTimeout(nrpCheck, 8000);

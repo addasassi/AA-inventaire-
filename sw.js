@@ -72,15 +72,17 @@ async function onPush(){
   let seen = [];
   try{ const h = await c.match('/seen'); if(h) seen = await h.json(); }catch(e){}
   const fresh = items.filter(x => x && x.id && !seen.includes(x.id));
-  const wins = await self.clients.matchAll({type: 'window', includeUncontrolled: true});
-  const visible = wins.some(w => w.visibilityState === 'visible');   // app ouverte devant les yeux : notification discrète
+  let mute = {};   // types déjà notifiés par l'app ouverte (avec le son) dans les 90 dernières secondes
+  try{ const h = await c.match('/mute'); if(h) mute = await h.json(); }catch(e){}
+  const now = Date.now();
   if(!fresh.length && !items.length){
     await self.registration.showNotification('Atelier Stock', {body: 'Nouvelle activité', icon: 'icon-192.png', badge: 'icon-192.png', tag: 'atelier-activity', silent: true});
     return;
   }
   for(const x of fresh){
+    if(mute[x.kind] && mute[x.kind] > now) continue;
     await self.registration.showNotification(x.title || 'Atelier Stock', {
-      body: x.body || '', icon: 'icon-192.png', badge: 'icon-192.png', tag: x.id, silent: visible,
+      body: x.body || '', icon: 'icon-192.png', badge: 'icon-192.png', tag: x.id,
       vibrate: x.kind === 'rupture' ? [300, 150, 300, 150, 500] : [200, 100, 200], requireInteraction: x.kind === 'rupture' || x.kind === 'nrp'
     });
   }

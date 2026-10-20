@@ -469,7 +469,7 @@ async function trackOrder(env, o){
   const lvNew = final ? 0 : nrpLevel(nz.situation), lvOld = nrpLevel(z.situation);
   if(lvNew >= 2 && lvNew !== lvOld){
     const c = o.customer || {};
-    pushNrp.push({title: lvNew >= 10 ? '❌ Commande annulée' : '📵 Ne répond pas ' + lvNew,
+    pushNrp.push({id: 'z-' + o.id + '-' + lvNew, title: lvNew >= 10 ? '❌ Commande annulée' : '📵 Ne répond pas ' + lvNew,
       body: (c.name || 'Cliente') + (c.wilaya ? ' (' + c.wilaya + ')' : '') + (nz.tracking ? ' · ' + nz.tracking : ''), kind: 'nrp'});
   }
   return nz;
@@ -556,7 +556,8 @@ async function pushQueue(items){
   const q = (await fsGetDoc('meta/pushQueue')) || {};
   let list = []; try{ list = JSON.parse(q.items || '[]'); }catch(e){}
   const now = Date.now();
-  list = list.filter(x => now - Date.parse(x.at) < 30 * 60 * 1000).concat(items).slice(-40);
+  const have = new Set(list.map(x => x.id));
+  list = list.filter(x => now - Date.parse(x.at) < 30 * 60 * 1000).concat(items.filter(x => !have.has(x.id))).slice(-40);
   await fsSetDoc('meta/pushQueue', {items: JSON.stringify(list), updated: new Date().toISOString()});
 }
 async function pushNotify(items, subs){
@@ -566,8 +567,9 @@ async function pushNotify(items, subs){
   await pushQueue(items);
   await wake(subs || await pushSubs());
 }
+const fnvHash = str => { let h = 2166136261; for(let i = 0; i < str.length; i++){ h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); };
 const nrpLevel = sit => { const s = String(sit || ''); if(/annul|refus/i.test(s)) return 10; const m = s.match(/r[eé]pond\w*\s+pas\D*(\d)/i); return m ? Number(m[1]) : 0; };
-let pushNrp = [];   // rempli par trackOrder pendant le passage ZR, envoyé à la fin
+let pushNrp = [], pushNowAt = 0;   // rempli par trackOrder pendant le passage ZR, envoyé à la fin
 async function pushTick(){
   const [light, state] = await Promise.all([fsGetDoc('meta/stockLight'), fsGetDoc('meta/pushState')]);
   const st = state || {};
@@ -578,8 +580,10 @@ async function pushTick(){
   Object.entries(data.items || {}).forEach(([id, it]) => (it.pieces || []).forEach(x => { now[id + '|' + x.k] = {q: Number(x.q) || 0, n: (it.n || '') + (x.c ? ' — ' + x.c : '')}; }));
   let prev = null; try{ prev = st.stock ? JSON.parse(st.stock) : null; }catch(e){}
   if(prev && Object.keys(now).length){
-    const out = Object.entries(now).filter(([k, v]) => v.q <= 0 && Number(prev[k]) > 0).map(([, v]) => v.n);
-    if(out.length) items.push({title: out.length > 1 ? '⚠️ ' + out.length + ' ruptures de stock' : '⚠️ Rupture de stock',
+    const outK = Object.entries(now).filter(([k, v]) => v.q <= 0 && Number(prev[k]) > 0);
+    const out = outK.map(([, v]) => v.n);
+    // id fixe (mêmes pièces + même état de départ) : deux passages en même temps ne font qu'une notification
+    if(out.length) items.push({id: 'r-' + fnvHash(outK.map(([k]) => k).sort().join(',') + '|' + (st.at || '')),title: out.length > 1 ? '⚠️ ' + out.length + ' ruptures de stock' : '⚠️ Rupture de stock',
       body: out.slice(0, 4).join(' • ') + (out.length > 4 ? ' +' + (out.length - 4) : '') + ' — plus de stock', kind: 'rupture'});
   }
   const stock = {}; Object.entries(now).forEach(([k, v]) => stock[k] = v.q);
@@ -592,10 +596,10 @@ async function pushTick(){
         orderBy: [{field: {fieldPath: 'createdAt'}, direction: 'ASCENDING'}],
         select: {fields: ['customer', 'total', 'createdBy', 'createdAt', 'source'].map(f => ({fieldPath: f}))}, limit: 20}})});
     if(r.ok){
-      const rows = (await r.json()).filter(x => x.document).map(x => fromFs({mapValue: {fields: x.document.fields || {}}}));
+      const rows = (await r.json()).filter(x => x.document).map(x => ({...fromFs({mapValue: {fields: x.document.fields || {}}}), _id: x.document.name.split('/').pop()}));
       rows.forEach(o => {
         const c = o.customer || {};
-        items.push({title: o.source === 'shopify' ? '🛍️ Nouvelle commande du site' : '🛍️ Nouvelle commande',
+        items.push({id: 'o-' + o._id, title: o.source === 'shopify' ? '🛍️ Nouvelle commande du site' : '🛍️ Nouvelle commande',
           body: (c.name || 'Cliente') + (c.wilaya ? ' (' + c.wilaya + ')' : '') + ' — ' + Math.round(Number(o.total) || 0) + ' DA' + (o.createdBy ? ' · par ' + o.createdBy : ''), kind: 'order'});
         if(o.createdAt > lastOrderAt) lastOrderAt = o.createdAt;
       });
@@ -780,6 +784,10 @@ export default {
     const path = new URL(req.url).pathname.replace(/\/+$/, '') || '/';
     if(path === '/bot') return botCatalog(req);
     if(path === '/img') return liveImage(req, ctx);
+    if(path === '/push/now'){   // l'app ouverte a vu une rupture / commande : on prévient les autres téléphones tout de suite
+      if(Date.now() - pushNowAt > 3000){ pushNowAt = Date.now(); ctx.waitUntil(pushTick().catch(() => {})); }
+      return json({ok: true});
+    }
     if(path === '/push/key'){ const k = await getPushKeys(); return json({key: k.pub}); }
     if(path === '/push/recent'){
       const q = (await fsGetDoc('meta/pushQueue')) || {};
