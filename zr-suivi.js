@@ -69,7 +69,7 @@
     const full = data.filter(d => d.items.length), empty = data.filter(d => !d.items.length);
     const cur = full.find(d => open === type + '|' + d.k);
     return `<div class="zs-box"><div class="zs-h"><span class="zs-ic">${icon}</span>${title}</div>
-      ${full.length ? `<div class="zs-grid">${full.map(d => `<button type="button" class="zs-t${cur === d ? ' on' : ''}" style="--c:${d.col}" onclick="zsRow('${type}|${d.k}')"><b>${d.items.length}</b><small>${esc(SHORT[d.label] || d.label)}</small></button>`).join('')}</div>` : '<div class="zs-empty">Aucun colis</div>'}
+      ${full.length ? `<div class="zs-grid">${full.map(d => `<button type="button" class="zs-t${cur === d ? ' on' : ''}${d.k === 'liv' ? ' solid' : ''}${d.k === 'ann' ? ' solid' : ''}" style="--c:${d.k === 'ann' ? '#b91c1c' : d.k === 'liv' ? '#16a34a' : d.col}" onclick="zsRow('${type}|${d.k}')"><b>${d.items.length}</b><small>${esc(SHORT[d.label] || d.label)}</small></button>`).join('')}</div>` : '<div class="zs-empty">Aucun colis</div>'}
       ${cur ? `<div class="zs-list zs-open"><div class="zs-open-h" style="--c:${cur.col}">${esc(cur.label)} · ${cur.items.length}<span onclick="zsRow('${type}|${cur.k}')">✕</span></div>${cur.items.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).map(o => card(o, cur.col)).join('')}</div>` : ''}
       ${empty.length ? `<div class="zs-zero">À 0 : ${empty.map(d => esc(SHORT[d.label] || d.label)).join(' · ')}</div>` : ''}</div>`;
   }
@@ -229,10 +229,12 @@
     const st = document.createElement('style');
     st.textContent = `
       .zs-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
-      .zs-t{position:relative;overflow:hidden;border:1px solid var(--line);background:var(--cream,#faf6f3);color:inherit;border-radius:12px;padding:11px 4px 8px;font:inherit;text-align:center;cursor:pointer;}
-      .zs-t:before{content:"";position:absolute;left:0;right:0;top:0;height:4px;background:var(--c);}
-      .zs-t b{display:block;font-size:22px;line-height:1.1;} .zs-t small{display:block;font-size:11px;line-height:1.2;opacity:.85;margin-top:2px;}
-      .zs-t.on{border-color:var(--c);box-shadow:0 0 0 2px var(--c) inset;}
+      /* cases : fond clair de la couleur de l'état ; « Livrées » et « Annulée » en plein (bien visibles) */
+      .zs-t{position:relative;overflow:hidden;border:1.5px solid color-mix(in srgb,var(--c) 45%,#fff);background:color-mix(in srgb,var(--c) 14%,#fff);color:color-mix(in srgb,var(--c) 80%,#000);border-radius:12px;padding:10px 4px 8px;font:inherit;text-align:center;cursor:pointer;}
+      .zs-t b{display:block;font-size:23px;line-height:1.1;color:color-mix(in srgb,var(--c) 85%,#000);} .zs-t small{display:block;font-size:11px;line-height:1.2;font-weight:700;margin-top:2px;color:color-mix(in srgb,var(--c) 60%,#2a1a22);}
+      .zs-t.solid{background:var(--c);border-color:var(--c);box-shadow:0 3px 8px color-mix(in srgb,var(--c) 35%,transparent);}
+      .zs-t.solid b,.zs-t.solid small{color:#fff;}
+      .zs-t.on{box-shadow:0 0 0 3px var(--plum,#3a2632);}
       .zs-open{margin-top:10px;} .zs-open-h{display:flex;justify-content:space-between;align-items:center;font-weight:800;font-size:13.5px;border-left:5px solid var(--c);padding:4px 8px;margin-bottom:6px;}
       .zs-open-h span{cursor:pointer;padding:2px 8px;opacity:.7;}
       .zs-zero{font-size:11.5px;opacity:.55;text-align:center;margin-top:8px;line-height:1.4;}
