@@ -428,15 +428,31 @@
   async function saveCuts(list){
     await db.collection('meta').doc('orderCuts').set({list: list.slice(0, 80), updatedAt: Date.now()});
   }
-  async function addCut(){
+  // ✂️ Ligne : « Maintenant » (au-dessus de tout) ou « Choisir l'endroit » (entre deux commandes, si on a oublié)
+  function addCut(){
     const all = (typeof orders !== 'undefined' ? orders : []);
     const last = cuts[0] ? cuts[0].at : '';
     const n = all.filter(o => (o.createdAt || '') > last).length;
-    const ok = typeof confirmDialog === 'function' ? await confirmDialog({
-      title: '✂️ Tracer une ligne maintenant ?',
-      text: (n ? n + ' commande' + (n > 1 ? 's' : '') + ' passe' + (n > 1 ? 'nt' : '') + ' sous la ligne (lot terminé). ' : '') + 'Les prochaines commandes s\'afficheront au-dessus.',
-      ok: 'Oui, tracer la ligne', cancel: 'Annuler'}) : confirm('Tracer une ligne ?');
-    if(!ok) return;
+    let m = document.getElementById('ocCutModal');
+    if(!m){ m = document.createElement('div'); m.id = 'ocCutModal'; document.body.appendChild(m);
+      m.addEventListener('click', e => { if(e.target === m) m.classList.remove('show'); }); }
+    m.innerHTML = `<div class="oa-card">
+        <h3>✂️ Tracer une ligne</h3>
+        <button class="oa-btn" id="cut-now">✂️ Maintenant <small>${n ? n + ' commande' + (n > 1 ? 's' : '') + ' passe' + (n > 1 ? 'nt' : '') + ' sous la ligne · ' : ''}les prochaines s'afficheront au-dessus</small></button>
+        <button class="oa-btn" id="cut-pick">📍 Choisir l'endroit <small>vous avez oublié ? placez la ligne entre deux commandes</small></button>
+        <button class="oa-cancel" id="cut-cancel">Annuler</button>
+      </div>`;
+    m.classList.add('show');
+    m.querySelector('#cut-cancel').onclick = () => m.classList.remove('show');
+    m.querySelector('#cut-now').onclick = () => { m.classList.remove('show'); cutNow(n); };
+    m.querySelector('#cut-pick').onclick = () => {
+      m.classList.remove('show');
+      window.ocPickMode = true; window.ocNewOnly = false; selected.clear();
+      if(typeof renderOrdersHistory === 'function') renderOrdersHistory();
+      toast('📍 Touchez « ✂️ Ligne ici » entre deux commandes');
+    };
+  }
+  async function cutNow(n){
     const me = (typeof currentUser !== 'undefined' && currentUser) ? currentUser.name : '';
     try{
       await saveCuts([{at: new Date().toISOString(), by: me, n}].concat(cuts));
@@ -452,11 +468,42 @@
     if(!ok) return;
     try{ await saveCuts(cuts.filter(x => x.at !== at)); toast('Ligne retirée'); }catch(e){ toast('Échec', true); }
   };
+  window.ocPickMode = false;
+  window.ocPickCancel = () => { window.ocPickMode = false; if(typeof renderOrdersHistory === 'function') renderOrdersHistory(); };
+  // place une ligne entre deux commandes : « older » et tout ce qui est plus ancien passe dessous
+  window.ocPickAt = async (olderAt) => {
+    const at = new Date(Date.parse(olderAt) + 1).toISOString();
+    const all = (typeof orders !== 'undefined' ? orders : []);
+    const lower = cuts.find(c => c.at < at);
+    const n = all.filter(o => (o.createdAt || '') < at && (!lower || (o.createdAt || '') > lower.at)).length;
+    const me = (typeof currentUser !== 'undefined' && currentUser) ? currentUser.name : '';
+    window.ocPickMode = false;
+    try{
+      if(cuts.some(c => c.at === at)){ toast('Il y a déjà une ligne ici'); }
+      else{ await saveCuts([{at, by: me, n}].concat(cuts).sort((a, b) => b.at.localeCompare(a.at))); toast('✂️ Ligne ajoutée à cet endroit'); }
+    }catch(e){ toast('Échec — ligne non enregistrée', true); }
+    if(typeof renderOrdersHistory === 'function') renderOrdersHistory();
+  };
   // insère les lignes entre les cartes (liste triée de la plus récente à la plus ancienne)
   window.ocInsertCuts = (wrap, sorted) => {
-    if(!wrap || !sorted || !sorted.length || !cuts.length) return;
+    if(!wrap || !sorted || !sorted.length) return;
     const cards = [...wrap.children];
     if(cards.length !== sorted.length) return;
+    if(window.ocPickMode){   // 📍 mode « choisir l'endroit » : un bouton entre chaque paire de commandes
+      const top = document.createElement('div');
+      top.className = 'oc-pick-top';
+      top.innerHTML = '📍 Touchez <b>✂️ Ligne ici</b> entre la dernière commande déjà traitée et la première nouvelle. <button type="button" onclick="ocPickCancel()">Annuler</button>';
+      wrap.insertBefore(top, cards[0]);
+      for(let i = 0; i < sorted.length - 1; i++){
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'oc-pick';
+        b.textContent = '✂️ Ligne ici';
+        const olderAt = sorted[i + 1].createdAt;
+        b.onclick = e => { e.stopPropagation(); window.ocPickAt(olderAt); };
+        wrap.insertBefore(b, cards[i + 1]);
+      }
+    }
+    if(!cuts.length) return;
     const fmt = iso => new Date(iso).toLocaleString('fr-FR', {weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'});
     const oldest = sorted[sorted.length - 1].createdAt;
     cuts.forEach((c, k) => {
@@ -715,6 +762,17 @@
     #ocActionsModal .print2{border:1.5px solid #1a1a1a;background:transparent;color:inherit;}
     #ocActionsModal .del{border:none;background:#fde8e6;color:#c0392b;}
     #ocActionsModal .oa-cancel{border:1px solid var(--line,#ddd);background:var(--card,#fff);color:inherit;align-items:center;}
+    #ocCutModal{position:fixed;inset:0;z-index:10040;background:rgba(0,0,0,.45);display:none;align-items:flex-end;justify-content:center;}
+    #ocCutModal.show{display:flex;}
+    #ocCutModal .oa-card{background:var(--card,#fff);color:var(--plum,#222);width:100%;max-width:520px;border-radius:20px 20px 0 0;padding:20px 16px 24px;box-sizing:border-box;}
+    #ocCutModal h3{margin:0 0 10px;font-size:18px;}
+    #ocCutModal button{width:100%;border-radius:14px;padding:14px;font:inherit;font-size:15.5px;font-weight:800;cursor:pointer;margin-top:9px;text-align:left;display:flex;flex-direction:column;gap:2px;border:1.5px solid var(--plum,#3a2632);background:var(--card,#fff);color:inherit;}
+    #ocCutModal button small{font-size:12px;font-weight:600;opacity:.8;}
+    #ocCutModal #cut-now{background:var(--plum,#3a2632);color:var(--cream,#fff);}
+    #ocCutModal .oa-cancel{border:1px solid var(--line,#ddd);align-items:center;}
+    .oc-pick-top{position:sticky;top:60px;z-index:5;background:#fff4e0;border:1.5px solid #f59e0b;color:#5a3a00;border-radius:12px;padding:10px 12px;margin-bottom:10px;font-size:13.5px;line-height:1.45;box-shadow:0 4px 12px rgba(0,0,0,.12);}
+    .oc-pick-top button{margin-left:6px;border:1px solid #f59e0b;background:#fff;color:#5a3a00;border-radius:8px;padding:4px 10px;font:inherit;font-weight:700;}
+    .oc-pick{display:block;width:100%;margin:-4px 0 6px;border:2px dashed #f59e0b;background:#fff7e6;color:#9a5b00;border-radius:12px;padding:10px;font:inherit;font-weight:800;font-size:14px;cursor:pointer;}
     .zr-print-bar{display:flex;align-items:center;gap:8px;margin:10px 0 4px;}
     .zr-print-bar .zr-all{display:flex;align-items:center;gap:6px;font-weight:800;font-size:14px;padding:0 4px;white-space:nowrap;}
     .zr-print-bar input,.zr-check input{width:20px;height:20px;accent-color:#1a1a1a;}
