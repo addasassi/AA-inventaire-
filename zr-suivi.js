@@ -61,15 +61,17 @@
         ${z.tracking ? `<div class="zs-o-t">${esc(z.tracking)}</div>` : ''}</div>
       <div class="zs-o-r"><div class="zs-o-p">${money(o.total)}</div>${c.phone ? `<a href="tel:${esc(c.phone)}" onclick="event.stopPropagation()" aria-label="Appeler">📞</a>` : ''}</div></div>`;
   }
+  // affichage en mosaïque : 3 cases par ligne (seulement les états qui ont des colis), les états à 0 dans une petite ligne
+  const SHORT = {'Commande annulée': 'Annulée', 'Commande reportée': 'Reportée', 'Rendez-vous client': 'Rendez-vous', 'Changement Stop desk': 'Chang. Stop desk',
+    'Commune erronée': 'Commune erronée', 'Créées — pas encore récupérées': 'Pas encore récupérées', 'En attente du client': 'Attente cliente'};
   function block(type, title, icon, list, rows){
+    const data = rows.map(([k, col, label, test]) => ({k, col, label, items: list.filter(o => { try{ return test(o); }catch(e){ return false; } })}));
+    const full = data.filter(d => d.items.length), empty = data.filter(d => !d.items.length);
+    const cur = full.find(d => open === type + '|' + d.k);
     return `<div class="zs-box"><div class="zs-h"><span class="zs-ic">${icon}</span>${title}</div>
-      ${rows.map(([k, col, label, test]) => {
-        const items = list.filter(o => { try{ return test(o); }catch(e){ return false; } });
-        const id = type + '|' + k, isOpen = open === id;
-        return `<div class="zs-r${isOpen ? ' on' : ''}${items.length ? '' : ' zero'}" onclick="zsRow('${id}')">
-            <i style="background:${col}"></i><span>${label}</span><b>${items.length}</b><em>${isOpen ? '▾' : '↗'}</em></div>
-          ${isOpen ? `<div class="zs-list">${items.length ? items.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).map(o => card(o, col)).join('') : '<div class="zs-empty">Aucune commande</div>'}</div>` : ''}`;
-      }).join('')}</div>`;
+      ${full.length ? `<div class="zs-grid">${full.map(d => `<button type="button" class="zs-t${cur === d ? ' on' : ''}" style="--c:${d.col}" onclick="zsRow('${type}|${d.k}')"><b>${d.items.length}</b><small>${esc(SHORT[d.label] || d.label)}</small></button>`).join('')}</div>` : '<div class="zs-empty">Aucun colis</div>'}
+      ${cur ? `<div class="zs-list zs-open"><div class="zs-open-h" style="--c:${cur.col}">${esc(cur.label)} · ${cur.items.length}<span onclick="zsRow('${type}|${cur.k}')">✕</span></div>${cur.items.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).map(o => card(o, cur.col)).join('')}</div>` : ''}
+      ${empty.length ? `<div class="zs-zero">À 0 : ${empty.map(d => esc(SHORT[d.label] || d.label)).join(' · ')}</div>` : ''}</div>`;
   }
 
   /* ---------- Recherche d'un colis (téléphone, nom, n° de suivi) ---------- */
@@ -128,7 +130,7 @@
       <div class="zs-cap">Colis en route</div>
       ${block('fd', 'Domicile', '🚚', dom, FLOW)}
       ${block('fs', 'Stop desk', '🏪', sd, FLOW)}
-      <div class="zs-hint">Les états viennent de ZR Express (mis à jour automatiquement toutes les 10 min). Touchez une ligne pour voir les commandes, puis une commande pour l'ouvrir.</div>`;
+      <div class="zs-hint">Les états viennent de ZR Express (mis à jour automatiquement toutes les 10 min). Touchez une case pour voir les commandes, puis une commande pour l'ouvrir.</div>`;
     window.scrollTo(0, y);
   }
 
@@ -226,6 +228,14 @@
     }, 3000);
     const st = document.createElement('style');
     st.textContent = `
+      .zs-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+      .zs-t{position:relative;overflow:hidden;border:1px solid var(--line);background:var(--cream,#faf6f3);color:inherit;border-radius:12px;padding:11px 4px 8px;font:inherit;text-align:center;cursor:pointer;}
+      .zs-t:before{content:"";position:absolute;left:0;right:0;top:0;height:4px;background:var(--c);}
+      .zs-t b{display:block;font-size:22px;line-height:1.1;} .zs-t small{display:block;font-size:11px;line-height:1.2;opacity:.85;margin-top:2px;}
+      .zs-t.on{border-color:var(--c);box-shadow:0 0 0 2px var(--c) inset;}
+      .zs-open{margin-top:10px;} .zs-open-h{display:flex;justify-content:space-between;align-items:center;font-weight:800;font-size:13.5px;border-left:5px solid var(--c);padding:4px 8px;margin-bottom:6px;}
+      .zs-open-h span{cursor:pointer;padding:2px 8px;opacity:.7;}
+      .zs-zero{font-size:11.5px;opacity:.55;text-align:center;margin-top:8px;line-height:1.4;}
       .zs-search{display:flex;align-items:center;gap:8px;background:var(--card);border:2px solid #FFCC00;border-radius:14px;padding:4px 6px 4px 12px;margin:2px 0 10px;}
       .zs-search input{flex:1;min-width:0;border:none;background:transparent;color:inherit;font:inherit;font-size:16px;padding:10px 0;outline:none;}
       .zs-search button{border:none;background:transparent;color:inherit;font-size:18px;padding:6px 10px;cursor:pointer;}
