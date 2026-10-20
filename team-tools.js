@@ -92,10 +92,10 @@
       ${o.note && o.noteBy ? `<small class="tt-by">par ${esc(o.noteBy)}${o.noteAt ? ' · ' + new Date(o.noteAt).toLocaleString('fr-FR', {dateStyle: 'short', timeStyle: 'short'}) : ''}</small>` : ''}
       <button class="tt-save" id="tt-note-save">Enregistrer la note</button>
     </div>
-    <div class="tt-box">
+    ${isAdmin() ? '' : `<div class="tt-box">
       <div class="tt-h">💬 Messages prêts</div>
       ${TPL.map((t, i) => `<div class="tt-msg"><span>${t[0]}</span><button data-c="${i}">📋</button>${o.customer && o.customer.phone ? `<button data-w="${i}" class="wa">WhatsApp</button>` : ''}</div>`).join('')}
-    </div>`;
+    </div>`}`;   // 💬 messages prêts : seulement pour les employés
     el.querySelector('#tt-note-save').onclick = () => saveNote(o.id, el.querySelector('#tt-note').value);
     el.querySelectorAll('[data-c]').forEach(b => b.onclick = async () => {
       const txt = TPL[b.dataset.c][1](o);
