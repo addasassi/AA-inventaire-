@@ -15,6 +15,7 @@
     [5,'Batna','باتنة','Batna','باتنة','Les allées Jadida Erriad - à côté supérette El Bahja','الرياض - بجانب سوبيرات البهجة','0659.78.12.34','0770.55.52.45','0770.55.80.86 / 0770.59.90.81 / 0770.61.01.55'],
     [6,'Béjaïa','بجاية','Béjaïa','بجاية','Edimco, Cité Somacob','ايدمكو حي سوماكوب','0698.86.12.34','0770.60.34.02','0770.14.38.12'],
     [6,'Béjaïa','بجاية','Akbou','أقبو','Gare ferroviaire, à côté salle des fêtes Hadad','محطة السكة الحديدية، أمام قاعة الحفلات حداد','0770.10.46.84','0770.10.45.78','0770.10.46.92 / 0770.10.48.23'],
+    [6,'Béjaïa','بجاية','Souk El Tenine','سوق الإثنين','Base 7, à côté de la nouvelle école primaire ou à côté des 850 logements','قاعدة 7 بجانب المدرسة الابتدائية الجديدة أو بجانب 850 مسكنا','0551.80.97.00','0778.35.36.91','0551.84.82.65'],
     [7,'Biskra','بسكرة','Biskra','بسكرة','El Koures - en face salle des fêtes Soukara','القرص - مقابل قاعة الحفلات سكرة','0771.53.40.58 / 0658.92.66.62','0671.99.66.54','0770.72.87.34 / 0667.66.28.94'],
     [7,'Biskra','بسكرة','Tolga','طولقة','Cité des Palmiers - en face la mosquée Ettakwa','حي النخيل - مقابل مسجد التقوى','','0550.35.10.75','0550.35.10.64 / 0550.34.93.23'],
     [8,'Béchar','بشار','Béchar','بشار','Cité 220 log - à côté de CNRC','حي 220 مسكن - بجانب مقر السجل التجاري','0770.05.94.98','0673.89.23.26','0770.76.53.73'],
@@ -64,7 +65,9 @@
     [35,'Boumerdès','بومرداس','Boumerdès','بومرداس','Rue Mohamed El Mahdi, sur le chemin de l\'hôtel Les Lilas','شارع محمد المهدي - الطريق المؤدي إلى فندق Les Lilas','0773.74.98.99','0783.39.56.68','0775.43.54.33 / 0791.93.51.00'],
     [35,'Boumerdès','بومرداس','Bordj Menaïel','برج منايل','Coopérative El Ghazali, cité 20 Août, Bordj Menaïel - en face Dr Sadji','التعاونية العقارية الغزالي، حي 20 أوت، برج منايل - مقابل د. ساجي','0775.06.72.89','0553.16.17.89','0553.05.92.69'],
     [36,'El Tarf','الطارف','El Tarf','الطارف','Rue Khemis Tine - en face le premier arrondissement','حي خميس تين - مقابل الأمن الحضري الأول','0697.17.71.93','0770.61.27.04','0770.40.36.47 / 0795.74.24.83'],
+    [38,'Tissemsilt','تيسمسيلت','Tissemsilt','تيسمسيلت','Cité El Merdja, route du lycée Bilal - à côté de la pharmacie Ben Moussa','حي المرجة طريق ثانوية بلال - بجانب صيدلية بن موسى','0770.79.80.60','0770.79.80.60',''],
     [39,'El Oued','الوادي','El Oued','وادي سوف','Cité Sidi Abdellah, derrière la poste','حي سيدي عبد الله - خلف مركز البريد','0791.69.99.02','0660.97.70.78','0698.90.15.50'],
+    [40,'Khenchela','خنشلة','Khenchela','خنشلة','Près de la supérette Merrah et de la clinique El Ihsane, route de Babar 1, cité Boumaaraf Lablali','قرب سوبيرات مراح وعيادة الإحسان - طريق بابار 1 حي بومعراف لبلالي','0560.62.23.25','0560.62.23.25',''],
     [41,'Souk Ahras','سوق أهراس','Souk Ahras','سوق أهراس','Route nationale N°16, Les Sapins','حي تعاونية الياسمين - فوق الصندوق الوطني للتقاعد CNR - سوق أهراس','0792.27.06.61','0795.94.98.08','0770.96.16.15'],
     [42,'Tipaza','تيبازة','Tipaza','تيبازة','La nouvelle AADL 1700 - en face l\'ONPS','حي عدل 1700 - مقابل الديوان الوطني للمطبوعات','0770.42.07.24','0770.20.04.60','0770.92.31.37'],
     [42,'Tipaza','تيبازة','Koléa','القليعة','Route d\'Alger, à côté du café de Verre','طريق الجزائر، بجانب قهوة الزجاج','0551.20.04.59','0551.20.05.46','0551.21.06.91'],
@@ -103,7 +106,8 @@
         if(v < 2) ch = applyAlger2026() || ch;   // affiche ZR Alger (oct. 2026) appliquée une fois
         if(v < 3) ch = applyAlgerAddr2026() || ch;
         if(v < 4) ch = addFromDefault([[7, 'Tolga']]) || ch;   // nouveau bureau : Tolga (Biskra)
-        if(ch || v < 4) save().catch(()=>{});
+        if(v < 5) ch = addFromDefault([[6, 'Souk El Tenine'], [38, 'Tissemsilt'], [40, 'Khenchela']]) || ch;   // nouveaux bureaux (oct. 2026)
+        if(ch || v < 5) save().catch(()=>{});
       }
     }catch(e){}
     loaded = true;
@@ -144,7 +148,7 @@
     return changed;
   }
   async function save(){
-    await db.collection('meta').doc('zrBureaux').set({v: 4, list, updatedAt: new Date().toISOString(), by: (currentUser && (currentUser.name || currentUser.username)) || ''});
+    await db.collection('meta').doc('zrBureaux').set({v: 5, list, updatedAt: new Date().toISOString(), by: (currentUser && (currentUser.name || currentUser.username)) || ''});
   }
 
   function css(){
