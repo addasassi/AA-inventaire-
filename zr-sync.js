@@ -540,7 +540,7 @@
       m.addEventListener('click', e => { if(e.target === m) m.classList.remove('show'); }); }
     m.innerHTML = `<div class="oa-card">
         <h3>${list.length} commande${list.length > 1 ? 's' : ''} sélectionnée${list.length > 1 ? 's' : ''}</h3>
-        <button class="oa-btn print" data-a="a6" ${relay && pr ? '' : 'disabled'}>🏷️ Bordereaux A6 — Thermique <small>${pr} avec n° ZR · dans l'ordre de la liste</small></button>
+        <button class="oa-btn print" data-a="a6" ${relay && pr ? '' : 'disabled'}>🏷️ Bordereaux A6 — Thermique <small>${pr} avec n° ZR · vous choisissez l'ordre</small></button>
         <button class="oa-btn print2" data-a="a4" ${relay && pr ? '' : 'disabled'}>📄 Bordereaux A4 <small>4 par page</small></button>
         <button class="oa-btn del" data-a="del" ${deletable.length ? '' : 'disabled'}>🗑️ Supprimer (${deletable.length}) <small>le stock est remis · les colis ZR sont annulés</small></button>
         <button class="oa-cancel" id="oa-cancel">Fermer</button>
@@ -554,10 +554,45 @@
     m.classList.add('show');
   }
 
+  /* ↕️ ordre des bordereaux : flèches ↑ ↓ ou tri rapide, puis « Imprimer » (l'ordre du PDF = l'ordre de cette liste) */
+  function orderSheet(list, format){
+    return new Promise(res => {
+      let cur = list.slice();
+      let m = document.getElementById('ocOrderModal');
+      if(!m){ m = document.createElement('div'); m.id = 'ocOrderModal'; document.body.appendChild(m); }
+      const itemsOf = o => (o.items || []).map(i => (Number(i.qty) > 1 ? i.qty + '× ' : '') + i.name).join(', ');
+      const done = v => { m.classList.remove('show'); res(v); };
+      const sorts = {
+        old: (a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')),
+        new: (a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')),
+        wil: (a, b) => String((a.customer || {}).wilaya || '').localeCompare(String((b.customer || {}).wilaya || ''), 'fr') || sorts.old(a, b),
+        art: (a, b) => itemsOf(a).localeCompare(itemsOf(b), 'ar') || sorts.old(a, b)
+      };
+      const draw = () => {
+        m.innerHTML = `<div class="oo-card">
+          <h3>↕️ Ordre des bordereaux ${format === 'a4' ? 'A4' : 'A6'}</h3>
+          <div class="oo-sorts"><button data-s="old">🕐 Plus anciennes</button><button data-s="new">🆕 Plus récentes</button><button data-s="wil">📍 Par wilaya</button><button data-s="art">👗 Par article</button></div>
+          <div class="oo-list">${cur.map((o, i) => { const c = o.customer || {}; return `<div class="oo-row"><span class="oo-n">${i + 1}</span>
+            <div class="oo-m"><b>${esc(c.name || 'Cliente')}</b><small>${esc(c.wilaya || '')}${c.commune ? ' / ' + esc(c.commune) : ''} · ${esc(itemsOf(o))}</small></div>
+            <button class="oo-up" data-i="${i}" ${i ? '' : 'disabled'}>▲</button><button class="oo-dn" data-i="${i}" ${i < cur.length - 1 ? '' : 'disabled'}>▼</button></div>`; }).join('')}</div>
+          <button class="oo-go">🖨️ Imprimer dans cet ordre (${cur.length})</button>
+          <button class="oo-x">Annuler</button></div>`;
+        m.querySelectorAll('[data-s]').forEach(b => b.onclick = () => { cur.sort(sorts[b.dataset.s]); draw(); });
+        m.querySelectorAll('.oo-up').forEach(b => b.onclick = () => { const i = +b.dataset.i; [cur[i - 1], cur[i]] = [cur[i], cur[i - 1]]; draw(); });
+        m.querySelectorAll('.oo-dn').forEach(b => b.onclick = () => { const i = +b.dataset.i; [cur[i + 1], cur[i]] = [cur[i], cur[i + 1]]; draw(); });
+        m.querySelector('.oo-go').onclick = () => done(cur);
+        m.querySelector('.oo-x').onclick = () => done(null);
+      };
+      m.onclick = e => { if(e.target === m) done(null); };
+      draw(); m.classList.add('show');
+    });
+  }
+
   async function printLabels(format, btn, list){
     // dans l'ordre où les commandes ont été saisies (la plus ancienne d'abord)
     list = list.slice().sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || ''))).slice(0, 250);
     if(!list.length) return;
+    if(list.length > 1){ list = await orderSheet(list, format); if(!list) return; }   // ↕️ choisir l'ordre des bordereaux
     const old = btn.innerHTML; btn.disabled = true; btn.textContent = '⏳ Préparation du PDF…';
     try{
       const j = await call('/labels', {ids: list.map(o => o.id), format});
@@ -762,6 +797,18 @@
     #ocActionsModal .print2{border:1.5px solid #1a1a1a;background:transparent;color:inherit;}
     #ocActionsModal .del{border:none;background:#fde8e6;color:#c0392b;}
     #ocActionsModal .oa-cancel{border:1px solid var(--line,#ddd);background:var(--card,#fff);color:inherit;align-items:center;}
+    #ocOrderModal{position:fixed;inset:0;z-index:10045;background:rgba(0,0,0,.5);display:none;align-items:flex-end;justify-content:center;}
+    #ocOrderModal.show{display:flex;}
+    #ocOrderModal .oo-card{background:var(--card,#fff);color:var(--plum,#222);width:100%;max-width:520px;max-height:90vh;display:flex;flex-direction:column;border-radius:20px 20px 0 0;padding:16px 14px 20px;box-sizing:border-box;}
+    #ocOrderModal h3{margin:0 0 8px;font-size:17px;}
+    .oo-sorts{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;} .oo-sorts button{border:1px solid var(--line,#ddd);background:var(--cream,#faf6f3);color:inherit;border-radius:999px;padding:6px 10px;font:inherit;font-size:12.5px;font-weight:700;}
+    .oo-list{overflow:auto;flex:1;min-height:80px;border-top:1px solid var(--line,#ddd);}
+    .oo-row{display:flex;align-items:center;gap:8px;padding:8px 2px;border-bottom:1px solid var(--line,#eee);}
+    .oo-n{width:26px;height:26px;border-radius:50%;background:#FFCC00;color:#111;font-weight:900;font-size:13px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+    .oo-m{flex:1;min-width:0;} .oo-m b{display:block;font-size:14px;} .oo-m small{display:block;font-size:11.5px;opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .oo-up,.oo-dn{width:38px;height:38px;border-radius:10px;border:1px solid var(--line,#ddd);background:var(--cream,#faf6f3);color:inherit;font-size:14px;flex-shrink:0;} .oo-up:disabled,.oo-dn:disabled{opacity:.3;}
+    .oo-go{margin-top:10px;width:100%;border:none;border-radius:14px;padding:14px;font:inherit;font-weight:800;font-size:15.5px;background:#1a1a1a;color:#ffd200;}
+    .oo-x{margin-top:8px;width:100%;border:1px solid var(--line,#ddd);background:transparent;color:inherit;border-radius:14px;padding:12px;font:inherit;font-weight:700;}
     #ocCutModal{position:fixed;inset:0;z-index:10040;background:rgba(0,0,0,.45);display:none;align-items:flex-end;justify-content:center;}
     #ocCutModal.show{display:flex;}
     #ocCutModal .oa-card{background:var(--card,#fff);color:var(--plum,#222);width:100%;max-width:520px;border-radius:20px 20px 0 0;padding:20px 16px 24px;box-sizing:border-box;}
