@@ -2448,7 +2448,7 @@ function renderDeferredReminders(){
     return `<div class="dr-row" onclick="showOrderDetail('${o.id}')">
       <div>
         <div class="dr-n">${escapeHtml(o.customer.name || 'Client')} — ${Number(o.total).toFixed(2)} DA</div>
-        <div class="dr-d">${escapeHtml(o.customer.wilaya||'')} • prévue le ${dLabel}</div>
+        <div class="dr-d">${escapeHtml(wilayaLabel(o.customer))} • prévue le ${dLabel}</div>
       </div>
       <div class="dr-badge ${badgeCls}">${badgeTxt}</div>
     </div>`;
@@ -4754,7 +4754,7 @@ function renderOrdersHistory(){
         <div class="oc-total">${Number(o.total).toFixed(2)} DA</div>
       </div>
       <div class="oc-line oc-phone-row">
-        <span class="oc-phone">${escapeHtml(o.customer.phone||'')}</span> • ${escapeHtml(o.customer.wilaya||'')}${o.customer.commune?(' / '+escapeHtml(o.customer.commune)):''}
+        <span class="oc-phone">${escapeHtml(o.customer.phone||'')}</span> • ${escapeHtml(wilayaLabel(o.customer))}${o.customer.commune?(' / '+escapeHtml(o.customer.commune)):''}
         ${o.customer.phone ? phoneActionButtons(o.customer.phone) : ''}
       </div>
       <div class="oc-line">📦 ${dtLabel}</div>
@@ -4819,7 +4819,7 @@ function showOrderDetail(id){
   if(window.swapBanner) odBadgeEl.innerHTML += window.swapBanner(o);
   if(window.verifyBanner) odBadgeEl.innerHTML += window.verifyBanner(o);
   document.getElementById('od-name').textContent = o.customer.name || 'Client';
-  const odSubTxt = [o.customer.phone, o.customer.phone2 ? '2e : ' + o.customer.phone2 : '', dtLabel, o.customer.wilaya, o.customer.commune].filter(Boolean).join(' • ');
+  const odSubTxt = [o.customer.phone, o.customer.phone2 ? '2e : ' + o.customer.phone2 : '', dtLabel, wilayaLabel(o.customer), o.customer.commune].filter(Boolean).join(' • ');
   document.getElementById('od-sub').innerHTML = escapeHtml(odSubTxt) + (o.customer.phone ? phoneActionButtons(o.customer.phone) : '');
   document.getElementById('od-address').textContent = o.customer.address || '';
   document.getElementById('od-items').innerHTML = o.items.map(it=>{
@@ -5534,6 +5534,14 @@ async function saveNewOrder(){
 
 /* ---------- Wilayas & Communes d'Algérie ---------- */
 let wilayasList = [];
+/* « 29 Mascara » : n° de la wilaya devant son nom (comme sur le n° de suivi ZR) → plus facile de retrouver une commande */
+function wilayaLabel(c){
+  c = c || {}; const w = c.wilaya || ''; if(!w) return '';
+  let n = Number(c.wilayaCode) || 0;
+  if(!n){ try{ const k = normalizeWilayaName(w); const f = wilayasList.find(x=> normalizeWilayaName(x.name) === k); if(f) n = f.code; }catch(e){} }
+  return (n ? String(n).padStart(2, '0') + ' ' : '') + w;
+}
+window.wilayaLabel = wilayaLabel;
 let communesByWilaya = {};
 let wilayaArList = []; // [{ar, fr, code}]
 let communeArByCode = {}; // code -> [{ar, fr}]
