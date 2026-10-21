@@ -18,7 +18,7 @@
     [6,'Béjaïa','بجاية','Souk El Tenine','سوق الإثنين','Base 7, à côté de la nouvelle école primaire ou à côté des 850 logements','قاعدة 7 بجانب المدرسة الابتدائية الجديدة أو بجانب 850 مسكنا','0551.80.97.00','0778.35.36.91','0551.84.82.65'],
     [7,'Biskra','بسكرة','Biskra','بسكرة','El Koures - en face salle des fêtes Soukara','القرص - مقابل قاعة الحفلات سكرة','0771.53.40.58 / 0658.92.66.62','0671.99.66.54','0770.72.87.34 / 0667.66.28.94'],
     [7,'Biskra','بسكرة','Tolga','طولقة','Cité des Palmiers - en face la mosquée Ettakwa','حي النخيل - مقابل مسجد التقوى','','0550.35.10.75','0550.35.10.64 / 0550.34.93.23'],
-    [8,'Béchar','بشار','Béchar','بشار','Cité 220 log - à côté de CNRC','حي 220 مسكن - بجانب مقر السجل التجاري','0770.05.94.98','0673.89.23.26','0770.76.53.73'],
+    [8,'Béchar','بشار','Béchar','بشار','Cité 220 logements - à côté de la Direction de l\'hydraulique de la wilaya','جانب مديرية المياه لولاية بشار - بحي 220 مسكن','0671.40.02.42','0673.89.23.26','0770.76.53.73'],
     [9,'Blida','البليدة','Blida - Ville','البليدة - وسط المدينة','Cité Ben Mokadem Mohammed N°276 - Ramoul, en face l\'agence','حي بن مقدم محمد - الرامول، مقابل محطة الحافلات','','0770.77.21.11','0799.71.81.02'],
     [9,'Blida','البليدة','Bougara','بوقرة','Rue Hamidouche Mouloud, Route d\'Alger, Bougara','بوقرة، شارع حميدوش مولود، طريق الجزائر العاصمة','0771.92.80.94','0770.77.21.11','0779.42.62.22'],
     [9,'Blida','البليدة','Mouzaïa','موزاية','Rue Ben Ahmed Ali Aslaoui, N°45, Mouzaïa','موزاية، شارع بن أحمد علي عسلاوي','0774.53.19.22','0770.77.21.11','0773.86.25.07'],
@@ -43,7 +43,7 @@
     [19,'Sétif','سطيف','El Eulma','العلمة','Logements covalente - derrière hôtel Rif, à côté de la mosquée Imam Chafei','حي التساهمي - خلف فندق الريف وبجانب مسجد الإمام الشافعي','0770.78.80.97','0770.33.99.75','0770.80.40.09'],
     [20,'Saïda','سعيدة','Saïda','سعيدة','Cité 5 Juillet - en face la pharmacie 5 Juillet','حي 5 جويلية - أمام صيدلية 5 جويلية','0795.27.12.65','0770.80.87.91','0770.39.16.95 / 0779.21.46.31'],
     [21,'Skikda','سكيكدة','Skikda','سكيكدة','Cité Mohammed Namous N°02, Mag 02 - pas loin de Hammam Derradji','حي محمد ناموس - بالقرب من حمام دراجي','0770.30.88.09','0792.43.57.32','0773.85.06.22 / 0793.54.04.47'],
-    [22,'Sidi Bel Abbès','سيدي بلعباس','Sidi Bel Abbès','سيدي بلعباس','Benhamouda - en face l\'école Feraoune Miloud','بن حمودة - مقابل مدرسة فرعون ميلود','0778.15.20.27','0773.98.12.87','0773.57.93.68'],
+    [22,'Sidi Bel Abbès','سيدي بلعباس','Sidi Bel Abbès','سيدي بلعباس','En face de la station de tramway AADL Benhamouda - à côté des magasins Bébé Luxe','مقابل محطة الطراموي عدل بن حمودة - بجانب محلات BÉBÉ LUXE','0778.15.20.27','0773.98.12.87','0773.57.93.68'],
     [23,'Annaba','عنابة','Annaba 1','عنابة 1','Rue l\'Avant-Port - à côté de la supérette Ben Amara','طريق قبل الميناء - جانب سوبيرات بن عمارة','0770.35.07.90','0796.36.96.89','0657.81.29.59 / 0660.97.79.32 / 0660.90.47.91 / 0770.27.05.40'],
     [23,'Annaba','عنابة','Annaba 2 - El Bouni','عنابة 2 - البوني','El Bouni - en face Algérie Télécom','بلدية البوني، وسط المدينة، مقابل اتصالات الجزائر','0797.40.57.33','0796.36.96.89','0770.29.99.73'],
     [24,'Guelma','قالمة','Guelma','قالمة','À côté de la cafétéria La Fontaine','بجانب مقهى La Fontaine','0791.48.22.66','0791.61.67.69','0770.96.22.21'],
@@ -56,12 +56,12 @@
     [28,'M\'Sila','المسيلة','Bou Saâda','بوسعادة','Cité Hadhaba, Route Mohamed Atik N° 52/11, Bou Saâda - à côté de la branche municipale','بوسعادة - بجانب الفرع البلدي','0770.29.78.55','0770.19.11.46','0770.29.78.57'],
     [29,'Mascara','معسكر','Mascara','معسكر','Rue Mahour Mahie Eddine - en face les pompiers','شارع مهور محي الدين - طريق الرمان، مقابل مركز الإطفاء','0668.05.25.17','0772.03.23.02','0793.57.76.79 / 0773.21.84.45'],
     [30,'Ouargla','ورقلة','Ouargla','ورقلة','Cité Tazegrar - à côté hôtel de police','حي تازقرارت - بالقرب من فندق الشرطة','0770.50.50.30 / 0770.50.50.29','0770.61.21.03','0676.50.68.79'],
-    [30,'Ouargla','ورقلة','Hassi Messaoud','حاسي مسعود','Cité AADL 200 - à côté de la CASNOS','حي عدل 200 - بجانب مقر الضمان الاجتماعي','0770.50.50.30 / 0770.50.50.29','0770.55.88.88','0675.06.52.53'],
+    [30,'Ouargla','ورقلة','Hassi Messaoud','حاسي مسعود','Cité 1850 logements - en face de Maison KIA','حي 1850 مسكن - مقابل وكالة كيا (MAISON KIA)','0770.50.50.30 / 0770.50.50.29','0770.55.88.88','0675.06.52.53'],
     [31,'Oran','وهران','Oran 1 - El Morchid','وهران 1 - المرشد','El Morchid - à côté des magasins d\'électroménagers','المرشد - أمام محل الأجهزة الكهرومنزلية','0770.39.52.00','0770.60.65.24 / 0770.77.10.89','0770.12.84.13 / 0770.79.39.20 / 0770.96.37.28 / 0770.76.50.07'],
     [31,'Oran','وهران','Oran 2 - Millénium','وهران 2 - ميلينيوم','Millénium - en face la supérette Prix Choc','ميلينيوم - مقابل سوبيرات Prix Choc','0770.60.13.17','0770.60.65.24 / 0770.77.10.89','0770.76.80.77 / 0770.67.50.07'],
     [31,'Oran','وهران','Oran 3 - Maraval','وهران 3 - مارافال','Derrière le magasin Look de Maraval','مارافال، خلف محل Look','0770.16.96.59','0770.16.96.51','0770.16.99.93'],
-    [32,'El Bayadh','البيض','El Bayadh','البيض','Cité ancien stade - à côté de l\'huissier de justice Djouadi Malika','حي الملعب القديم - بجانب المحضر القضائي جوادي مليكة','0770.22.96.32','0773.03.81.76','0770.22.96.32'],
-    [34,'Bordj Bou Arreridj','برج بوعريريج','Bordj Bou Arreridj','برج بوعريريج','Cité Boumergued - en face la clinique Akhrouf','حي بومرقد - مقابل عيادة أخروف','0770.70.91.66','0770.27.23.17','0770.42.76.33 / 0770.37.23.20'],
+    [32,'El Bayadh','البيض','El Bayadh','البيض','Route d\'Aflou - en face de la trésorerie de wilaya','طريق آفلو - مقابل خزينة الولاية','0770.22.96.32','0773.03.81.76','0770.22.96.32'],
+    [34,'Bordj Bou Arreridj','برج بوعريريج','Bordj Bou Arreridj','برج بوعريريج','Cité Chelbabi Messaoud - en face du showroom Amir Auto','حي شلبابي مسعود - مقابل شوروم أمير أوتو (AMIR AUTO)','0770.70.91.66','0770.27.23.17','0770.42.76.33 / 0770.37.23.20'],
     [35,'Boumerdès','بومرداس','Boumerdès','بومرداس','Rue Mohamed El Mahdi, sur le chemin de l\'hôtel Les Lilas','شارع محمد المهدي - الطريق المؤدي إلى فندق Les Lilas','0773.74.98.99','0783.39.56.68','0775.43.54.33 / 0791.93.51.00'],
     [35,'Boumerdès','بومرداس','Bordj Menaïel','برج منايل','Coopérative El Ghazali, cité 20 Août, Bordj Menaïel - en face Dr Sadji','التعاونية العقارية الغزالي، حي 20 أوت، برج منايل - مقابل د. ساجي','0775.06.72.89','0553.16.17.89','0553.05.92.69'],
     [36,'El Tarf','الطارف','El Tarf','الطارف','Rue Khemis Tine - en face le premier arrondissement','حي خميس تين - مقابل الأمن الحضري الأول','0697.17.71.93','0770.61.27.04','0770.40.36.47 / 0795.74.24.83'],
@@ -108,7 +108,9 @@
         if(v < 4) ch = addFromDefault([[7, 'Tolga']]) || ch;   // nouveau bureau : Tolga (Biskra)
         if(v < 5) ch = addFromDefault([[6, 'Souk El Tenine'], [38, 'Tissemsilt'], [40, 'Khenchela']]) || ch;   // nouveaux bureaux (oct. 2026)
         if(v < 6) ch = addrFromDefault([[41, 'Souk Ahras'], [12, 'Tébessa'], [45, 'Naâma'], [47, 'Ghardaïa'], [15, 'Tizi Ouzou']]) || ch;   // nouvelles adresses (affiches ZR oct. 2026)
-        if(ch || v < 6) save().catch(()=>{});
+        if(v < 7){ ch = addrFromDefault([[8, 'Béchar'], [22, 'Sidi Bel Abbès'], [30, 'Hassi Messaoud'], [32, 'El Bayadh'], [34, 'Bordj Bou Arreridj']]) || ch;   // nouvelles adresses (affiches ZR oct. 2026)
+          const b = list.find(x => Number(x.n) === 8 && norm(x.name) === norm('Béchar')); if(b && b.com !== '0671.40.02.42'){ b.com = '0671.40.02.42'; ch = true; } }
+        if(ch || v < 7) save().catch(()=>{});
       }
     }catch(e){}
     loaded = true;
@@ -159,7 +161,7 @@
     return changed;
   }
   async function save(){
-    await db.collection('meta').doc('zrBureaux').set({v: 6, list, updatedAt: new Date().toISOString(), by: (currentUser && (currentUser.name || currentUser.username)) || ''});
+    await db.collection('meta').doc('zrBureaux').set({v: 7, list, updatedAt: new Date().toISOString(), by: (currentUser && (currentUser.name || currentUser.username)) || ''});
   }
 
   function css(){
