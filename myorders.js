@@ -81,7 +81,7 @@
       ${w ? `<div class="mo-why">${esc(w)}</div>` : ''}
       ${window.zrBadge ? window.zrBadge(o) : ''}
       <div class="mo-top"><b>${esc(c.name || 'Cliente')}</b><span>${Math.round(Number(o.total) || 0)} DA</span></div>
-      <div class="mo-line">${esc(c.phone || '')}${c.wilaya ? ' • ' + esc(window.wilayaLabel ? window.wilayaLabel(c) : c.wilaya) : ''}${c.commune ? ' / ' + esc(c.commune) : ''} ${c.phone && typeof phoneActionButtons === 'function' ? phoneActionButtons(c.phone) : ''}</div>
+      <div class="mo-line">${esc(c.phone || '')}${c.wilaya ? ' • ' + esc(c.wilaya) : ''}${c.commune ? ' / ' + esc(c.commune) : ''} ${c.phone && typeof phoneActionButtons === 'function' ? phoneActionButtons(c.phone) : ''}</div>
       ${window.orderNoteLine ? window.orderNoteLine(o) : ''}
       <div class="mo-line small">${(o.items || []).map(i => (i.qty || 1) + '× ' + esc(i.name)).join(', ')}</div>
       <div class="mo-line small">${d.toLocaleDateString('fr-FR')} ${d.toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'})}${who === '*' && o.createdBy ? ' • par ' + esc(o.createdBy) : ''}</div>

@@ -54,7 +54,7 @@
       : (since > 0 ? 'depuis ' + since + ' j' : "aujourd'hui");
     return `<div class="zs-o" style="--c:${col}" onclick="zsOpen('${esc(o.id)}')">
       <div class="zs-o-m"><div class="zs-o-n">${esc(c.name || 'Cliente')}</div>
-        <div class="zs-o-w">📍 ${esc(window.wilayaLabel ? window.wilayaLabel(c) : (c.wilaya || ''))}${c.commune ? ' — ' + esc(c.commune) : ''}</div>
+        <div class="zs-o-w">📍 ${esc(c.wilaya || '')}${c.commune ? ' — ' + esc(c.commune) : ''}</div>
         <div class="zs-o-s"><span class="zs-pill">${esc(sit || z.state || '—')}</span>${z.situationNote ? `<span class="zs-why">${esc(String(z.situationNote).replace(/\.$/, ''))}</span>` : ''}<span class="zs-when">${when}</span></div>
         ${/report/.test(norm(sit)) ? `<div class="zs-rep">📅 ${z.reportDate ? 'Reportée au <b>' + fmtDay(z.reportDate) + '</b>' : 'Date du report pas indiquée par ZR'}${(z.reportedAt || z.situationAt) ? ' · reportée le ' + fmtDay(dayKey(z.reportedAt || z.situationAt)) : ''}</div>` : ''}
 
@@ -94,12 +94,10 @@
     const box = document.getElementById('zs-results');
     if(!box) return;
     const q = query.trim(), qd = digits(q), qn = norm(q);
-    if(q.length < 2 && !/^\d$/.test(q)){ box.innerHTML = ''; return; }
+    if(q.length < 2){ box.innerHTML = ''; return; }
     const hits = all().filter(o => {
       if(!o.zr && !(o.customer && o.customer.deliveryType !== 'main')) return false;
       const c = o.customer || {}, z = o.zr || {};
-      // « 29 » ou « 09 » : toutes les commandes de cette wilaya (n° comme sur le suivi ZR)
-      if(/^\d{1,2}$/.test(q)){ const n = Number(String((window.wilayaLabel ? window.wilayaLabel(c) : '')).slice(0, 2)) || Number(c.wilayaCode) || 0; return n === Number(q); }
       if(qd.length >= 3 && digits(c.phone).includes(qd)) return true;
       if(z.tracking && norm(z.tracking).replace(/[^a-z0-9]/g, '').includes(qn.replace(/[^a-z0-9]/g, '')) && qn.replace(/[^a-z0-9]/g, '').length >= 3) return true;
       return qn.length >= 2 && !/^\d+$/.test(q) && norm(c.name).includes(qn);
@@ -115,7 +113,7 @@
     const page = document.getElementById('zsPage');
     if(!page) return;
     if(!document.getElementById('zs-body')){
-      page.innerHTML = `<div class="zs-search"><span>🔍</span><input id="zs-q" type="text" enterkeyhint="search" autocomplete="off" placeholder="Téléphone, nom, n° de suivi ou n° de wilaya" oninput="zsSearch(this.value)"><button id="zs-x" style="display:none" onclick="var i=document.getElementById('zs-q');i.value='';zsSearch('');i.focus()">✕</button></div>
+      page.innerHTML = `<div class="zs-search"><span>🔍</span><input id="zs-q" type="text" enterkeyhint="search" autocomplete="off" placeholder="N° de téléphone, nom ou n° de suivi" oninput="zsSearch(this.value)"><button id="zs-x" style="display:none" onclick="var i=document.getElementById('zs-q');i.value='';zsSearch('');i.focus()">✕</button></div>
         <div id="zs-results"></div><div id="zs-body"></div>`;
     }
     results();
