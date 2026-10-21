@@ -280,6 +280,8 @@
   .cart-total{margin-top:10px;font-weight:800;font-size:16px;color:var(--plum);text-align:right;}
 
   .order-card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px;cursor:pointer;}
+  .order-card{position:relative;}
+  .oc-wnum{position:absolute;right:14px;bottom:12px;min-width:64px;height:64px;padding:0 8px;box-sizing:border-box;border-radius:16px;background:#FFCC00;color:#111;font-family:Arial Black,Arial,sans-serif;font-weight:900;font-size:34px;line-height:64px;text-align:center;letter-spacing:1px;box-shadow:0 3px 10px rgba(0,0,0,.12);pointer-events:none;}
   .order-card.deferred{border-color:var(--warn);}
   .deferred-badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:800;
     padding:4px 9px;border-radius:20px;margin-bottom:8px;}
@@ -4763,6 +4765,7 @@ function renderOrdersHistory(){
       ${window.orderNoteLine ? window.orderNoteLine(o) : ''}
       <div class="oc-line" style="margin-top:6px;">${dateTxt} • par ${escapeHtml(o.createdBy||'')}</div>
       ${(isAdmin || (currentUser && o.createdBy === currentUser.name)) ? `<button class="oc-del" onclick="event.stopPropagation(); deleteOrder('${o.id}')">Supprimer la commande</button>` : ''}
+      ${(()=>{ const n = o.customer && o.customer.deliveryType !== 'main' ? wilayaNum(o.customer) : 0; return n ? `<div class="oc-wnum" title="Wilaya ${n}">${String(n).padStart(2,'0')}</div>` : ''; })()}
     </div>`;
   }).join('');
   if(window.ocInsertCuts) window.ocInsertCuts(wrap, sorted);   // lignes de séparation entre les lots
@@ -5534,6 +5537,15 @@ async function saveNewOrder(){
 
 /* ---------- Wilayas & Communes d'Algérie ---------- */
 let wilayasList = [];
+/* n° de la wilaya (gros chiffre en bas à droite de la carte commande) */
+const WILAYA_NUM = {"Adrar": 1, "Chlef": 2, "Laghouat": 3, "Oum El Bouaghi": 4, "Batna": 5, "Bejaia": 6, "Biskra": 7, "Bechar": 8, "Blida": 9, "Bouira": 10, "Tamanrasset": 11, "Tebessa": 12, "Tlemcen": 13, "Tiaret": 14, "Tizi Ouzou": 15, "Alger": 16, "Djelfa": 17, "Jijel": 18, "Setif": 19, "Saida": 20, "Skikda": 21, "Sidi Bel Abbes": 22, "Annaba": 23, "Guelma": 24, "Constantine": 25, "Medea": 26, "Mostaganem": 27, "MSila": 28, "Mascara": 29, "Ouargla": 30, "Oran": 31, "El Bayadh": 32, "Bordj Bou Arreridj": 34, "Boumerdes": 35, "El Tarf": 36, "Tissemsilt": 38, "El Oued": 39, "Khenchela": 40, "Souk Ahras": 41, "Tipaza": 42, "Mila": 43, "Ain Defla": 44, "Naama": 45, "Ain Temouchent": 46, "Ghardaia": 47, "Relizane": 48, "Timimoun": 49, "Ouled Djellal": 51, "Beni Abbes": 52, "In Salah": 53, "In Guezzam": 54, "Touggourt": 55, "El Meghaier": 57, "El Menia": 58, "Béjaïa": 6, "Tébessa": 12, "Sétif": 19, "Saïda": 20, "Sidi Bel Abbès": 22, "Médéa": 26, "M'Sila": 28, "Boumerdès": 35, "Aïn Defla": 44, "Naâma": 45, "Aïn Témouchent": 46, "Ghardaïa": 47, "Béchar": 8, "Bordj Badji Mokhtar": 50, "Djanet": 56, "Illizi": 33, "Tindouf": 37};
+function wilayaNum(c){
+  c = c || {}; if(Number(c.wilayaCode)) return Number(c.wilayaCode);
+  const w = c.wilaya; if(!w) return 0;
+  try{ const k = normalizeWilayaName(w);
+    const f = wilayasList.find(x=> normalizeWilayaName(x.name) === k) || Object.entries(WILAYA_NUM).map(([name, code])=> ({name, code})).find(x=> normalizeWilayaName(x.name) === k);
+    return f ? Number(f.code) : 0; }catch(e){ return 0; }
+}
 let communesByWilaya = {};
 let wilayaArList = []; // [{ar, fr, code}]
 let communeArByCode = {}; // code -> [{ar, fr}]
