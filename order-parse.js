@@ -194,16 +194,16 @@
       if(off){ r.officeOption = off.commune + ' (' + off.type + ')'; r.sure.office = true; }
     }
 
-    // nom : étiquette « الاسم » / « nom », sinon 1re ligne sans chiffres qui n'est pas un lieu
-    const lab = lines.map(l => l.match(/^\s*(?:الاسم و اللقب|الاسم واللقب|الاسم|اسم|إسم|nom et prenom|nom|name)\s*[:：\-]\s*(.+)$/i)).find(Boolean);
-    if(lab) r.name = lab[1].trim();
+    // nom : étiquette (« الاسم و اللقب », « اسم و لقب », « اسمي », « يسموني », « nom »…), sinon 1re ligne sans chiffres qui n'est pas un lieu
+    const lab = lines.map(l => { const m = l.match(NAME_LBL); const rest = m ? l.slice(m[0].length).trim() : ''; return rest && !/\d{6,}/.test(rest) ? [l, rest] : null; }).find(Boolean);
+    if(lab) r.name = cleanName(lab[1]);
     else{
       const cand = lines.map(l => l.replace(PHONE_IN, ' | ').split('|')[0].trim()).find(l => l && !/\d/.test(l) && l.length <= 40 && !STOP_RE.test(l) && !ADDR_RE.test(N(l))
         && !(I && (findIn(l, I.wil).some(h => h.score >= 100) || findIn(l, I.com).some(h => h.score >= 100)))
         && !(I && (findIn(l, I.wil).some(h => h.score >= 95) || findIn(l, I.com).some(h => h.score >= 95)))
         && !/^(ولايه|بلديه|wilaya|commune|السلام|سلام|عسلامه|salam|slm|bonjour|bonsoir|مرحبا|راني|انا|نحب|حبيت|بغيت|من فضلك|السلعه|المنتوج)/i.test(N(l))
         && !/(حبيت|نحب|نطلب|بغيت|عليكم|commande|نشري)/i.test(N(l)));
-      if(cand) r.name = cand.replace(/^(الاسم|اسم)\s*[:：\-]\s*/, '').trim();
+      if(cand) r.name = cleanName(cand);
     }
     r.sure.name = !!lab;
 
@@ -222,6 +222,15 @@
     return r;
   }
 
+  /* ---------- étiquette du nom à enlever : « اسم و لقب بودية مريم » → « بودية مريم » ---------- */
+  // (le mot doit être suivi d'un espace ou de « : » : « أسماء » reste un prénom)
+  var NAME_LBL = /^\s*(?:(?:انا|أنا|نا)\s+)?(?:(?:ال)?[اإأ]سم(?:ي)?|يسموني|سموني|سميتي|سمي)(?:\s+(?:و\s*)?(?:ال)?لقب(?:ي)?)?(?:\s+الكامل)?(?=[\s:：\-–])\s*[:：\-–]?\s*|^\s*(?:nom\s*(?:et|&)?\s*pr[ée]nom|pr[ée]nom\s*(?:et|&)?\s*nom|nom\s+complet|full\s*name|nom|pr[ée]nom|name)(?=[\s:：\-–])\s*[:：\-–]?\s*/i;
+  function cleanName(v){
+    let t = String(v || '').trim();
+    for(let i = 0; i < 2; i++) t = t.replace(NAME_LBL, '').trim();   // « انا اسمي : … » ou étiquette répétée
+    return t.replace(/^[:：\-–\s]+/, '').trim();
+  }
+
   /* ---------- IA (relais ZR) ---------- */
   async function aiParse(text){
     if(!window.zrCall) return null;
@@ -234,7 +243,7 @@
     if(!a) return r;
     const I = idx();
     if(!r.phone && a.phone){ const p = String(a.phone).replace(/\+?213/, '0').replace(/\D/g, ''); if(/^0[5-7]\d{8}$/.test(p)) r.phone = p; }
-    if(!r.sure.name && a.name && String(a.name).trim().length >= 2) r.name = String(a.name).trim();
+    if(!r.sure.name && a.name && cleanName(a.name).length >= 2) r.name = cleanName(a.name);
     if(a.delivery === 'stopdesk') r.deliveryType = 'stopdesk';
     else if(a.delivery === 'domicile' && !STOP_RE.test(N(r._text || ''))) r.deliveryType = 'domicile';
     if(I){
