@@ -26,11 +26,14 @@
     [13,'Tlemcen','تلمسان','Tlemcen','تلمسان','En face rond-point cité des Oliviers','أمام محور الدوران حي الزيتون','0772.02.93.89','0770.39.69.54','0698.53.00.13 / 0794.03.11.43'],
     [14,'Tiaret','تيارت','Tiaret','تيارت','Route l\'académie, en face de l\'hôpital du rein - à côté de la librairie Mimouni','طريق لكاديمي، مقابل مستشفى الكلى - بجانب مكتبة ميموني','0667.18.42.55','0699.89.72.01','0770.38.32.20 / 0770.07.28.15 / 0770.82.85.87'],
     [15,'Tizi Ouzou','تيزي وزو','Tizi Ouzou','تيزي وزو','Cité 2000, nouvelle ville, bâtiment 2','حي 2000 مسكن، المدينة الجديدة، عمارة رقم 02','0770.18.06.02','0770.59.99.01','0770.18.06.02'],
-    [16,'Alger','الجزائر','Birkhadem','بئر خادم','Rue des Rosiers, El Malha, Birkhadem','عين المالحة بئر خادم - بالقرب من مركز إيداع التأشيرة لتركيا','0770.70.50.07 / 0770.60.18.36','0770.56.66.68 / 0770.78.06.10','0770.58.40.33'],
-    [16,'Alger','الجزائر','Ouled Fayet','أولاد فايت','Ouled Fayet - pas loin du restaurant Zouhair','أولاد فايت - بالقرب من مطعم زهير','0770.07.27.03','0770.07.22.26','0770.06.94.04'],
-    [16,'Alger','الجزائر','Réghaïa','الرغاية','Résidence la Paix A69 - en face la mosquée DNC','إقامة السلام 69 - مقابل مسجد DNC','0799.57.57.15','0770.19.72.98','0770.21.54.48'],
-    [16,'Alger','الجزائر','Bordj El Kiffan','برج الكيفان','Lido - pas loin du stade de tennis','الليدو برج الكيفان - بالقرب من ملعب التنس','0770.36.39.02','0770.37.67.30','0770.36.39.02'],
-    [16,'Alger','الجزائر','Birtouta','بئر توتة','Cité des anciens abattoirs - derrière la poste - Birtouta','حي الباطوار القديم - خلف بريد الجزائر - بئر توتة','0770.93.49.22','0776.06.26.54','0776.06.31.54'],
+    [16,'Alger','الجزائر','Birkhadem','بئر خادم','Rue des Rosiers, El Malha, Birkhadem','عين المالحة بئر خادم - بالقرب من مركز إيداع التأشيرة لتركيا','0770.70.50.07 / 0770.60.18.36','0770.60.18.36 / 0770.70.50.07','0770.58.40.33'],
+    [16,'Alger','الجزائر','Ouled Fayet','أولاد فايت','Ouled Fayet - pas loin du restaurant Zouhair','أولاد فايت - بالقرب من مطعم زهير','0770.07.27.03','0770.07.27.03','0770.06.94.04'],
+    [16,'Alger','الجزائر','Réghaïa','الرغاية','Résidence la Paix A69 - en face la mosquée DNC','إقامة السلام 69 - مقابل مسجد DNC','0799.57.57.15','0799.57.57.15','0770.21.54.48'],
+    [16,'Alger','الجزائر','Bordj El Kiffan','برج الكيفان','Lido - pas loin du stade de tennis','الليدو برج الكيفان - بالقرب من ملعب التنس','0770.36.39.02','0770.36.39.02','0770.36.39.02'],
+    [16,'Alger','الجزائر','Birtouta','بئر توتة','Cité des anciens abattoirs - derrière la poste - Birtouta','حي الباطوار القديم - خلف بريد الجزائر - بئر توتة','0770.93.49.22','0770.93.49.22','0776.06.31.54'],
+    [16,'Alger','الجزائر','Baraki','براقي','Baraki, route de Larbaa Bougara - même bâtiment que la salle Olympic Gym','براقي، طريق الأربعاء بوقرعة - في نفس بناية قاعة كمال الأجسام OLYMPIC GYM','','0770.18.38.44',''],
+    [16,'Alger','الجزائر','Chéraga','شراقة','Villas Aissat Idir - à 100 m de la résidence Djezzy','فيلات عيسات إيدير - على بعد 100 متر من إقامة الجازي','','0770.38.63.57',''],
+    [16,'Alger','الجزائر','Kouba','القبة','Route Moussa Chebihi Ben Omar - près du restaurant Zit w Zaatar','طريق موسى شبيحي بن عمر - بالقرب من مطعم زيت وزعتر','','0660.56.53.82',''],
     [17,'Djelfa','الجلفة','Djelfa','الجلفة','Cité Berbih - à côté de la Direction de l\'action sociale et de la solidarité (DASS)','حي بربيح - بجانب مديرية الشؤون الاجتماعية والتضامن DASS','0657.70.01.76','0770.45.16.00','0770.28.29.35'],
     [18,'Jijel','جيجل','Jijel','جيجل','Cité Konchovali - 190 log, bâtiment 07 - 70 m Gulf Bank','حي كونشوفالي - 190 مسكن عمارة 07 - 70 م تحت بنك الخليج','0657.64.62.84','0657.25.44.90','0660.16.93.08 / 0660.09.76.26'],
     [18,'Jijel','جيجل','Taher','الطاهير','Boukaabour, la route menant à la clinique d\'ophtalmologie Mahanan','بوكعبور، الطريق المؤدي إلى عيادة طب العيون محنان','0670.42.32.04','0770.36.76.18','0670.42.32.05'],
@@ -93,12 +96,29 @@
     try{
       if(typeof db === 'undefined' || !db) return;
       const d = await db.collection('meta').doc('zrBureaux').get();
-      if(d.exists && Array.isArray(d.data().list) && d.data().list.length) list = d.data().list;
+      if(d.exists && Array.isArray(d.data().list) && d.data().list.length){
+        list = d.data().list;
+        if((d.data().v || 0) < 2 && applyAlger2026()) save().catch(()=>{});   // affiche ZR Alger (oct. 2026) appliquée une fois
+      }
     }catch(e){}
     loaded = true;
   }
+  // affiche ZR « 16 مكاتبنا » : n° de réclamation des bureaux d'Alger + bureaux manquants (Baraki, Chéraga, Kouba)
+  function applyAlger2026(){
+    const P = [['Birkhadem', '0770.60.18.36 / 0770.70.50.07'], ['Ouled Fayet', '0770.07.27.03'], ['Réghaïa', '0799.57.57.15'], ['Bordj El Kiffan', '0770.36.39.02'], ['Birtouta', '0770.93.49.22'],
+      ['Baraki', '0770.18.38.44'], ['Chéraga', '0770.38.63.57'], ['Kouba', '0660.56.53.82']];
+    let changed = false;
+    P.forEach(([name, rec]) => {
+      const o = list.find(x => Number(x.n) === 16 && norm(x.name) === norm(name));
+      if(o){ if(o.rec !== rec){ o.rec = rec; changed = true; } return; }
+      const d = DEFAULT.find(a => a[0] === 16 && norm(a[3]) === norm(name));
+      if(d){ list.push({...toObj(d, 0), id: 'b' + Date.now().toString(36) + list.length}); changed = true; }
+    });
+    if(changed) list.sort((a, b) => (Number(a.n) || 0) - (Number(b.n) || 0));
+    return changed;
+  }
   async function save(){
-    await db.collection('meta').doc('zrBureaux').set({list, updatedAt: new Date().toISOString(), by: (currentUser && (currentUser.name || currentUser.username)) || ''});
+    await db.collection('meta').doc('zrBureaux').set({v: 2, list, updatedAt: new Date().toISOString(), by: (currentUser && (currentUser.name || currentUser.username)) || ''});
   }
 
   function css(){
