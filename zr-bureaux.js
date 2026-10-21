@@ -27,7 +27,7 @@
     [12,'Tébessa','تبسة','Tébessa','تبسة','Tahsis El Arebi El Tebsi (Skanska), en face la Direction de la Poste d\'Algérie de Tébessa','تحصيص العربي التبسي (سكنسكا)، مقابل المديرية الولائية لبريد الجزائر تبسة','0659.43.06.81','0775.64.75.14','0779.87.30.36'],
     [13,'Tlemcen','تلمسان','Tlemcen','تلمسان','En face rond-point cité des Oliviers','أمام محور الدوران حي الزيتون','0772.02.93.89','0770.39.69.54','0698.53.00.13 / 0794.03.11.43'],
     [14,'Tiaret','تيارت','Tiaret','تيارت','Route l\'académie, en face de l\'hôpital du rein - à côté de la librairie Mimouni','طريق لكاديمي، مقابل مستشفى الكلى - بجانب مكتبة ميموني','0667.18.42.55','0699.89.72.01','0770.38.32.20 / 0770.07.28.15 / 0770.82.85.87'],
-    [15,'Tizi Ouzou','تيزي وزو','Tizi Ouzou','تيزي وزو','Cité 2000, nouvelle ville, bâtiment 2','حي 2000 مسكن، المدينة الجديدة، عمارة رقم 02','0770.18.06.02','0770.59.99.01','0770.18.06.02'],
+    [15,'Tizi Ouzou','تيزي وزو','Tizi Ouzou','تيزي وزو','En face de l\'hôtel Les Trois Roses et de la salle omnisports Need For Gym','أمام فندق ثلاثة زهور (Les Trois Roses) وقاعة متعددة الرياضة (Need For Gym)','0770.18.06.02','0770.59.99.01','0770.18.06.02'],
     [16,'Alger','الجزائر','Birkhadem','بئر خادم','Rue des Rosiers, El Malha, Birkhadem','عين المالحة بئر خادم - بالقرب من مركز إيداع التأشيرة لتركيا','0770.70.50.07 / 0770.60.18.36','0770.60.18.36 / 0770.70.50.07','0770.58.40.33'],
     [16,'Alger','الجزائر','Ouled Fayet','أولاد فايت','Ouled Fayet - près de la Société Générale','أولاد فايت - بالقرب من سوسيتي جنرال','0770.07.27.03','0770.07.27.03','0770.06.94.04'],
     [16,'Alger','الجزائر','Réghaïa','الرغاية','Cité Amirouche 692 (Batigec), bât. 03 n° A07 - après l\'arrêt de bus de Réghaïa, direction Rouiba','حي عميروش 692 (باتيجاك) عمارة 03 رقم A07 - بعد موقف الحافلات الرغاية اتجاه رويبة','0799.57.57.15','0799.57.57.15','0770.21.54.48'],
@@ -68,7 +68,7 @@
     [38,'Tissemsilt','تيسمسيلت','Tissemsilt','تيسمسيلت','Cité El Merdja, route du lycée Bilal - à côté de la pharmacie Ben Moussa','حي المرجة طريق ثانوية بلال - بجانب صيدلية بن موسى','0770.79.80.60','0770.79.80.60',''],
     [39,'El Oued','الوادي','El Oued','وادي سوف','Cité Sidi Abdellah, derrière la poste','حي سيدي عبد الله - خلف مركز البريد','0791.69.99.02','0660.97.70.78','0698.90.15.50'],
     [40,'Khenchela','خنشلة','Khenchela','خنشلة','Près de la supérette Merrah et de la clinique El Ihsane, route de Babar 1, cité Boumaaraf Lablali','قرب سوبيرات مراح وعيادة الإحسان - طريق بابار 1 حي بومعراف لبلالي','0560.62.23.25','0560.62.23.25',''],
-    [41,'Souk Ahras','سوق أهراس','Souk Ahras','سوق أهراس','Route nationale N°16, Les Sapins','حي تعاونية الياسمين - فوق الصندوق الوطني للتقاعد CNR - سوق أهراس','0792.27.06.61','0795.94.98.08','0770.96.16.15'],
+    [41,'Souk Ahras','سوق أهراس','Souk Ahras','سوق أهراس','Cité coopérative El Yasmine, au-dessus de la CNR (Caisse nationale des retraites)','حي تعاونية الياسمين - فوق الصندوق الوطني للتقاعد CNR - سوق أهراس','0792.27.06.61','0795.94.98.08','0770.96.16.15'],
     [42,'Tipaza','تيبازة','Tipaza','تيبازة','La nouvelle AADL 1700 - en face l\'ONPS','حي عدل 1700 - مقابل الديوان الوطني للمطبوعات','0770.42.07.24','0770.20.04.60','0770.92.31.37'],
     [42,'Tipaza','تيبازة','Koléa','القليعة','Route d\'Alger, à côté du café de Verre','طريق الجزائر، بجانب قهوة الزجاج','0551.20.04.59','0551.20.05.46','0551.21.06.91'],
     [43,'Mila','ميلة','Mila','ميلة','Jamouaa Milkia N°34 - à côté de l\'agence Sonelgaz','تحت مستشفى الإخوة مغلاوي - حوالي 100 متر، بجانب الوكالة التجارية سونلغاز','0657.22.47.73','0659.52.53.82 / 031.46.37.30','0660.90.94.48 / 0660.16.93.28'],
@@ -107,7 +107,8 @@
         if(v < 3) ch = applyAlgerAddr2026() || ch;
         if(v < 4) ch = addFromDefault([[7, 'Tolga']]) || ch;   // nouveau bureau : Tolga (Biskra)
         if(v < 5) ch = addFromDefault([[6, 'Souk El Tenine'], [38, 'Tissemsilt'], [40, 'Khenchela']]) || ch;   // nouveaux bureaux (oct. 2026)
-        if(ch || v < 5) save().catch(()=>{});
+        if(v < 6) ch = addrFromDefault([[41, 'Souk Ahras'], [12, 'Tébessa'], [45, 'Naâma'], [47, 'Ghardaïa'], [15, 'Tizi Ouzou']]) || ch;   // nouvelles adresses (affiches ZR oct. 2026)
+        if(ch || v < 6) save().catch(()=>{});
       }
     }catch(e){}
     loaded = true;
@@ -147,8 +148,18 @@
     if(changed) list.sort((a, b) => (Number(a.n) || 0) - (Number(b.n) || 0));
     return changed;
   }
+  // remet l'adresse de la liste par défaut (FR + AR) sur les bureaux indiqués
+  function addrFromDefault(pairs){
+    let changed = false;
+    pairs.forEach(([n, name]) => {
+      const o = list.find(x => Number(x.n) === n && norm(x.name) === norm(name));
+      const d = DEFAULT.find(a => a[0] === n && norm(a[3]) === norm(name));
+      if(o && d && (o.addr !== d[5] || o.addrAr !== d[6])){ o.addr = d[5]; o.addrAr = d[6]; changed = true; }
+    });
+    return changed;
+  }
   async function save(){
-    await db.collection('meta').doc('zrBureaux').set({v: 5, list, updatedAt: new Date().toISOString(), by: (currentUser && (currentUser.name || currentUser.username)) || ''});
+    await db.collection('meta').doc('zrBureaux').set({v: 6, list, updatedAt: new Date().toISOString(), by: (currentUser && (currentUser.name || currentUser.username)) || ''});
   }
 
   function css(){
