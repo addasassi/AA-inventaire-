@@ -16,6 +16,7 @@
     [6,'Béjaïa','بجاية','Béjaïa','بجاية','Edimco, Cité Somacob','ايدمكو حي سوماكوب','0698.86.12.34','0770.60.34.02','0770.14.38.12'],
     [6,'Béjaïa','بجاية','Akbou','أقبو','Gare ferroviaire, à côté salle des fêtes Hadad','محطة السكة الحديدية، أمام قاعة الحفلات حداد','0770.10.46.84','0770.10.45.78','0770.10.46.92 / 0770.10.48.23'],
     [7,'Biskra','بسكرة','Biskra','بسكرة','El Koures - en face salle des fêtes Soukara','القرص - مقابل قاعة الحفلات سكرة','0771.53.40.58 / 0658.92.66.62','0671.99.66.54','0770.72.87.34 / 0667.66.28.94'],
+    [7,'Biskra','بسكرة','Tolga','طولقة','Cité des Palmiers - en face la mosquée Ettakwa','حي النخيل - مقابل مسجد التقوى','','0550.35.10.75','0550.35.10.64 / 0550.34.93.23'],
     [8,'Béchar','بشار','Béchar','بشار','Cité 220 log - à côté de CNRC','حي 220 مسكن - بجانب مقر السجل التجاري','0770.05.94.98','0673.89.23.26','0770.76.53.73'],
     [9,'Blida','البليدة','Blida - Ville','البليدة - وسط المدينة','Cité Ben Mokadem Mohammed N°276 - Ramoul, en face l\'agence','حي بن مقدم محمد - الرامول، مقابل محطة الحافلات','','0770.77.21.11','0799.71.81.02'],
     [9,'Blida','البليدة','Bougara','بوقرة','Rue Hamidouche Mouloud, Route d\'Alger, Bougara','بوقرة، شارع حميدوش مولود، طريق الجزائر العاصمة','0771.92.80.94','0770.77.21.11','0779.42.62.22'],
@@ -101,7 +102,8 @@
         const v = d.data().v || 0; let ch = false;
         if(v < 2) ch = applyAlger2026() || ch;   // affiche ZR Alger (oct. 2026) appliquée une fois
         if(v < 3) ch = applyAlgerAddr2026() || ch;
-        if(ch || v < 3) save().catch(()=>{});
+        if(v < 4) ch = addFromDefault([[7, 'Tolga']]) || ch;   // nouveau bureau : Tolga (Biskra)
+        if(ch || v < 4) save().catch(()=>{});
       }
     }catch(e){}
     loaded = true;
@@ -130,8 +132,19 @@
     });
     return changed;
   }
+  // ajoute à la liste enregistrée les bureaux de la liste par défaut qui n'y sont pas encore
+  function addFromDefault(pairs){
+    let changed = false;
+    pairs.forEach(([n, name]) => {
+      if(list.some(x => Number(x.n) === n && norm(x.name) === norm(name))) return;
+      const d = DEFAULT.find(a => a[0] === n && norm(a[3]) === norm(name));
+      if(d){ list.push({...toObj(d, 0), id: 'b' + Date.now().toString(36) + list.length}); changed = true; }
+    });
+    if(changed) list.sort((a, b) => (Number(a.n) || 0) - (Number(b.n) || 0));
+    return changed;
+  }
   async function save(){
-    await db.collection('meta').doc('zrBureaux').set({v: 3, list, updatedAt: new Date().toISOString(), by: (currentUser && (currentUser.name || currentUser.username)) || ''});
+    await db.collection('meta').doc('zrBureaux').set({v: 4, list, updatedAt: new Date().toISOString(), by: (currentUser && (currentUser.name || currentUser.username)) || ''});
   }
 
   function css(){
