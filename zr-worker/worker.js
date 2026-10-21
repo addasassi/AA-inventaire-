@@ -784,6 +784,16 @@ export default {
     const path = new URL(req.url).pathname.replace(/\/+$/, '') || '/';
     if(path === '/bot') return botCatalog(req);
     if(path === '/img') return liveImage(req, ctx);
+    if(path === '/dl'){   // photo du catalogue en « pièce jointe » : le navigateur de Messenger la télécharge directement
+      const u = new URL(req.url), src = u.searchParams.get('src') || '', name = (u.searchParams.get('name') || 'photo').slice(0, 80);
+      if(!/^img\/[\w.-]+\.(jpg|jpeg|png|webp)$/i.test(src)) return new Response('bad', {status: 400});
+      const r = await fetch(SITE + src, {cf: {cacheTtl: 86400, cacheEverything: true}});
+      if(!r.ok) return new Response('not found', {status: 404});
+      const ext = src.split('.').pop().toLowerCase(), file = name.replace(/[\\/:*?"<>|]+/g, '_') + '.' + ext;
+      return new Response(r.body, {headers: {'Content-Type': ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg',
+        'Content-Disposition': "attachment; filename=\"photo." + ext + "\"; filename*=UTF-8''" + encodeURIComponent(file),
+        'Cache-Control': 'public, max-age=86400', 'Access-Control-Allow-Origin': '*'}});
+    }
     if(path === '/push/now'){   // l'app ouverte a vu une rupture / commande : on prévient les autres téléphones tout de suite
       // jamais ignoré : deux passages en même temps ne doublent pas (id fixe + le téléphone ne montre qu'une fois)
       pushNowAt = Date.now(); ctx.waitUntil(pushTick().catch(() => {}));
