@@ -34,10 +34,12 @@
   // Stop desk : sans « Rendez-vous » ni « Commune erronée », avec « En attente du client »
   const ROWS_SD = ROWS.filter(r => r[0] !== 'rdv' && r[0] !== 'comm');
   ROWS_SD.splice(ROWS_SD.findIndex(r => r[0] === 'nrp1'), 0, ['att', '#8b5cf6', 'En attente du client', o => !final(o) && /attente/.test(norm(sitOf(o)))]);
-  const isCfb = o => { const t = norm(((o.zr && o.zr.state) || '') + ' ' + sitOf(o)); return /confirm/.test(t) && /bureau/.test(t); };
+  // texte affiché sur le colis : la situation ZR si elle existe, sinon l'état
+  const shownOf = o => norm(sitOf(o) || (o.zr && o.zr.state) || '');
+  const isCfb = o => { const t = shownOf(o); return /confirm/.test(t) && /bureau/.test(t); };
   const FLOW = [
     ['new',  '#94a3b8', 'Créées — pas encore expédiées', o => !final(o) && (o.zr.stage || 'created') === 'created'],
-    ['way',  '#60a5fa', 'Vers la wilaya', o => !final(o) && o.zr.stage === 'in_transit' && /dispatch/.test(norm((o.zr.state || '') + ' ' + sitOf(o))) && /autre wilaya/.test(norm((o.zr.state || '') + ' ' + sitOf(o)))],
+    ['way',  '#60a5fa', 'Vers la wilaya', o => !final(o) && o.zr.stage === 'in_transit' && /dispatch/.test(shownOf(o)) && /autre wilaya/.test(shownOf(o))],
     ['cfb',  '#7c3aed', 'Confirmé au bureau', o => !final(o) && isCfb(o)],
     ['hub',  '#0ea5e9', 'Au bureau / agence', o => !final(o) && o.zr.stage === 'at_hub' && !isCfb(o)],
     ['ret',  '#dc2626', "Retournées aujourd'hui", o => o.zr.stage === 'returned' && o.zr.finalAt && dayKey(o.zr.finalAt) === today()],
