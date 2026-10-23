@@ -1480,6 +1480,24 @@ async function downloadProductImage(id){
 function downloadCurrentProductImage(){
   if(currentProductModalId) downloadProductImage(currentProductModalId);
 }
+/* Vitrine épuisée mais des couleurs restent : la carte montre une couleur dispo
+   et le stock total ; la photo de vitrine passe à l'intérieur (dans les couleurs). */
+function vitrineView(p){
+  const colors = p.colors || [];
+  const colorsStock = colors.reduce((t,c)=> t + Math.max(0, Number(c && c.qty) || 0), 0);
+  const vq = Math.max(0, Number(p.qty) || 0);
+  const vitrineOut = vq <= 0 && colorsStock > 0;
+  let frontIdx = -1;
+  if(vitrineOut){ frontIdx = colors.findIndex(c=> c && (Number(c.qty)||0) > 0 && c.img); }
+  return { total: vq + colorsStock, vitrineOut, frontIdx, img: frontIdx >= 0 ? colors[frontIdx].img : p.img };
+}
+function downloadFrontImage(id){
+  const p = products.find(x=>x.id===id); if(!p) return;
+  const v = vitrineView(p);
+  if(v.frontIdx < 0) return downloadProductImage(id);
+  const c = p.colors[v.frontIdx];
+  fullImg(c).then(src=> downloadDataUrl(src, 'couleur-'+slugForFilename(p.name)+'-'+(c.code || (v.frontIdx+1))+'.jpg'));
+}
 function downloadColorImage(index){
   const p = products.find(x=>x.id===currentColorsProductId);
   if(!p || !p.colors || !p.colors[index] || !p.colors[index].img) return;
@@ -2982,15 +3000,16 @@ function renderList(cat){
   }
   let html = '<div class="grid-wrap">' + addTile;
   items.forEach((p)=>{
-    const isOut = p.qty <= 0;
-    const isLow = !isOut && p.qty <= 2;
+    const v = vitrineView(p);
+    const isOut = v.total <= 0;
+    const isLow = !isOut && v.total <= 2;
     const pillClass = isOut ? 'zero' : (isLow ? 'low' : 'ok');
-    const pillText = isOut ? 'Rupture' : (p.qty + ' en stock');
+    const pillText = isOut ? 'Rupture' : (v.total + ' en stock');
     const colorCount = (p.colors || []).length;
-    html += `<div class="product ${isOut?'out':''}" onclick="openProductModal('${p.id}')">
+    html += `<div class="product ${isOut?'out':''}" onclick="${v.vitrineOut ? `openColorsModal('${p.id}')` : `openProductModal('${p.id}')`}">
       <div class="img-wrap">
-        <img src="${p.img || placeholderImg()}">
-        ${p.img ? `<button class="img-dl-btn" onclick="event.stopPropagation(); downloadProductImage('${p.id}')" title="Télécharger la photo">${dlIconSvg()}</button>` : ''}
+        <img src="${v.img || placeholderImg()}">
+        ${v.img ? `<button class="img-dl-btn" onclick="event.stopPropagation(); downloadFrontImage('${p.id}')" title="Télécharger la photo">${dlIconSvg()}</button>` : ''}
         <span class="qty-badge ${pillClass}">${pillText}</span>
       </div>
       <div class="info">
@@ -3357,6 +3376,19 @@ function renderColorsGrid(){
     <button class="full" style="width:100%;margin-bottom:12px;" onclick="aiNameAllColors()">✨ Nommer toutes les couleurs sans nom (IA)</button>`;
   }
   html += '<div class="grid-wrap">';
+  if(vitrineView(p).vitrineOut){
+    html += `<div class="product out">
+      <div class="img-wrap" onclick="${isOrderContext ? `toast('Rupture de stock', true)` : `closeColorsModal(); openProductModal('${p.id}')`}">
+        <img src="${p.img || placeholderImg()}">
+        <span class="qty-badge zero">Rupture</span>
+      </div>
+      <div class="info">
+        <div class="name">${escapeHtml(p.colorName ? p.name + ' — ' + p.colorName : p.name)}</div>
+        <div class="meta">${Number(p.price).toFixed(2)} DA</div>
+        <div class="code" style="color:var(--mauve-dark);">📸 Photo vitrine</div>
+      </div>
+    </div>`;
+  }
   colors.forEach((c, i)=>{
     const qty = c.qty || 0;
     const price = c.price != null ? c.price : p.price;
