@@ -3387,6 +3387,23 @@ function renderColorsGrid(){
         <div class="meta">${Number(p.price).toFixed(2)} DA</div>
         <div class="code" style="color:var(--mauve-dark);">📸 Photo vitrine</div>
       </div>
+      ${isOrderContext ? '' : `<div class="actions">
+        <button class="full" onclick="showBarcode('${p.id}')">Code-barres</button>
+        ${isAdmin ? `<button onclick="vitrineAdjustQty(1)">+1</button>
+        <button onclick="vitrineAdjustQty(-1)" disabled>-1</button>` : ''}
+      </div>`}
+      ${(isAdmin && !isOrderContext) ? `<div class="color-extra" style="margin-top:0;padding:10px;border-top:1px solid var(--line);">
+        <label>Modifier la quantité</label>
+        <div class="manual-row">
+          <input type="number" min="0" step="1" id="vitrine-setqty" value="0">
+          <button onclick="vitrineSetQty()">Valider</button>
+        </div>
+        <label style="margin-top:10px;">Modifier le prix (DA)</label>
+        <div class="manual-row">
+          <input type="number" min="0" step="0.01" id="vitrine-setprice" value="${p.price}">
+          <button onclick="vitrineSetPrice()">Valider</button>
+        </div>
+      </div>` : ''}
     </div>`;
   }
   colors.forEach((c, i)=>{
@@ -3767,6 +3784,30 @@ document.getElementById('ac-color-save').addEventListener('click', async ()=>{
     })();
   }
 });
+/* photo de vitrine épuisée, affichée dans les couleurs : mêmes réglages que les autres */
+async function vitrineSave(field, val, msg){
+  const p = products.find(x=>x.id===currentColorsProductId); if(!p) return;
+  const prev = p[field]; p[field] = val;
+  refreshCurrentInventoryView(); renderColorsGrid();
+  const ok = await saveProductDoc(p);
+  if(!ok){ p[field] = prev; refreshCurrentInventoryView(); renderColorsGrid(); toast('Échec NON enregistré, réessayez', true); return; }
+  if(msg) toast(msg);
+}
+async function vitrineAdjustQty(delta){
+  await loadProducts();
+  const p = products.find(x=>x.id===currentColorsProductId); if(!p) return;
+  vitrineSave('qty', Math.max(0, (Number(p.qty)||0) + delta));
+}
+function vitrineSetQty(){
+  const v = parseInt(document.getElementById('vitrine-setqty').value, 10);
+  if(isNaN(v) || v < 0){ toast('Entrez une quantité valide', true); return; }
+  vitrineSave('qty', v, 'Quantité mise à jour');
+}
+function vitrineSetPrice(){
+  const v = parseFloat(document.getElementById('vitrine-setprice').value);
+  if(isNaN(v) || v < 0){ toast('Entrez un prix valide', true); return; }
+  vitrineSave('price', v, 'Prix mis à jour');
+}
 async function modalAdjustColorQty(index, delta){
   await loadProducts();
   const p = products.find(x=>x.id===currentColorsProductId);
