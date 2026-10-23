@@ -36,7 +36,7 @@
   ROWS_SD.splice(ROWS_SD.findIndex(r => r[0] === 'nrp1'), 0, ['att', '#8b5cf6', 'En attente du client', o => !final(o) && /attente/.test(norm(sitOf(o)))]);
   const FLOW = [
     ['new',  '#94a3b8', 'Créées — pas encore expédiées', o => !final(o) && (o.zr.stage || 'created') === 'created'],
-    ['way',  '#60a5fa', 'Vers la wilaya', o => !final(o) && (o.zr.stage === 'in_transit')],
+    ['way',  '#60a5fa', 'Vers la wilaya', o => !final(o) && o.zr.stage === 'in_transit' && /dispatch/.test(norm((o.zr.state || '') + ' ' + sitOf(o))) && /autre wilaya/.test(norm((o.zr.state || '') + ' ' + sitOf(o)))],
     ['hub',  '#0ea5e9', 'Au bureau / agence', o => !final(o) && o.zr.stage === 'at_hub'],
     ['ret',  '#dc2626', "Retournées aujourd'hui", o => o.zr.stage === 'returned' && o.zr.finalAt && dayKey(o.zr.finalAt) === today()],
     ['retp', '#b91c1c', 'Retours à récupérer', o => o.zr.stage === 'returned' && !(o.returnInfo && o.returnInfo.at)],
