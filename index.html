@@ -477,7 +477,7 @@
   #colorsModal{position:fixed;inset:0;background:var(--cream);display:none;flex-direction:column;
     z-index:250;overflow-y:auto;}
   #colorsModal.show{display:flex;}
-  .colors-header{position:sticky;top:0;z-index:5;background:var(--cream);border-bottom:1px solid var(--line);
+  .colors-header{position:sticky;top:0;z-index:20;background:var(--cream);border-bottom:1px solid var(--line);
     padding:18px 20px;display:flex;align-items:center;gap:14px;}
   .colors-header button{background:none;border:none;color:var(--mauve-dark);font-weight:700;font-size:14px;
     cursor:pointer;padding:0;white-space:nowrap;}
@@ -488,7 +488,7 @@
     justify-content:center;z-index:300;padding:16px;}
   #colorViewModal.show{display:flex;}
   #colorViewModal img{max-width:100%;max-height:100%;border-radius:10px;object-fit:contain;}
-  .color-add-tile{border:2px dashed var(--mauve);border-radius:14px;min-height:220px;background:var(--card);align-self:start;aspect-ratio:3/4;
+  .color-add-tile{border:2px dashed var(--mauve);border-radius:14px;min-height:220px;background:var(--card);align-self:start;box-sizing:border-box;
     display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;}
   .color-add-tile .cap{font-size:30px;font-weight:800;color:var(--mauve-dark);line-height:1;}
   .color-add-tile .cal{font-size:12px;font-weight:700;color:var(--mauve-dark);margin-top:6px;text-align:center;padding:0 8px;}
@@ -3346,6 +3346,12 @@ function toggleColorSettings(k, btn){
   if(!w){ renderColorsGrid(); return; }
   btn.classList.toggle('on', on); w.classList.toggle('open', on);
 }
+/* la tuile « Ajouter une couleur » prend la hauteur d'une carte couleur (réglages fermés) */
+function fitAddColorTile(){
+  const t = document.querySelector('#cm-grid .color-add-tile'); if(!t) return;
+  const c = [...document.querySelectorAll('#cm-grid .product')].find(x=> !x.querySelector('.cset-wrap.open'));
+  if(c && c.offsetHeight) t.style.height = c.offsetHeight + 'px';
+}
 function openColorsModal(id, context){
   if(id !== currentColorsProductId) csetOpen = new Set();
   currentColorsProductId = id;
@@ -3491,6 +3497,8 @@ function renderColorsGrid(){
   });
   html += addTile + '</div>';
   document.getElementById('cm-grid').innerHTML = html;
+  fitAddColorTile();
+  document.querySelectorAll('#cm-grid .product img').forEach(im=> im.complete || im.addEventListener('load', fitAddColorTile, {once:true}));
   if(isAdmin && !isOrderContext){
     colors.forEach((c, i)=>{
       const photoInput = document.getElementById('color-photo-'+i);
