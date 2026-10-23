@@ -462,6 +462,10 @@
   .pm-actions button:disabled{opacity:0.35;cursor:default;}
   .pm-scan-wrap{margin-top:14px;padding-top:14px;border-top:1px solid var(--line);text-align:left;}
   .color-extra{text-align:left;}
+  .cset-wrap{display:none;} .cset-wrap.open{display:block;}
+  #cm-grid .grid-wrap{align-items:start;}
+  .product .actions button.cset-btn{background:var(--card);color:var(--mauve-dark);}
+  .product .actions button.cset-btn.on{background:var(--plum,#3b2230);color:#fff;border-color:transparent;}
   .color-extra label{display:block;font-size:10px;color:var(--mauve-dark);margin-bottom:4px;font-weight:700;}
   .color-extra .manual-row{gap:4px;}
   .color-extra .manual-row input{width:100%;padding:6px 7px;font-size:11px;border:1px solid var(--line);
@@ -484,7 +488,7 @@
     justify-content:center;z-index:300;padding:16px;}
   #colorViewModal.show{display:flex;}
   #colorViewModal img{max-width:100%;max-height:100%;border-radius:10px;object-fit:contain;}
-  .color-add-tile{border:2px dashed var(--mauve);border-radius:14px;min-height:220px;background:var(--card);
+  .color-add-tile{border:2px dashed var(--mauve);border-radius:14px;min-height:220px;background:var(--card);align-self:start;aspect-ratio:3/4;
     display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;}
   .color-add-tile .cap{font-size:30px;font-weight:800;color:var(--mauve-dark);line-height:1;}
   .color-add-tile .cal{font-size:12px;font-weight:700;color:var(--mauve-dark);margin-top:6px;text-align:center;padding:0 8px;}
@@ -3333,7 +3337,17 @@ function pmOpenColors(id){
 /* ---------- Couleurs disponibles par modèle ---------- */
 let currentColorsProductId = null;
 let currentColorsContext = 'manage';
+/* réglages d'une couleur repliés par défaut (⚙️ pour ouvrir) */
+let csetOpen = new Set();
+function toggleColorSettings(k, btn){
+  const on = !csetOpen.has(k);
+  if(on) csetOpen.add(k); else csetOpen.delete(k);
+  const card = btn && btn.closest('.product'), w = card && card.querySelector('.cset-wrap');
+  if(!w){ renderColorsGrid(); return; }
+  btn.classList.toggle('on', on); w.classList.toggle('open', on);
+}
 function openColorsModal(id, context){
+  if(id !== currentColorsProductId) csetOpen = new Set();
   currentColorsProductId = id;
   currentColorsContext = context || 'manage';
   renderColorsGrid();
@@ -3390,9 +3404,10 @@ function renderColorsGrid(){
       ${isOrderContext ? '' : `<div class="actions">
         <button class="full" onclick="showBarcode('${p.id}')">Code-barres</button>
         ${isAdmin ? `<button onclick="vitrineAdjustQty(1)">+1</button>
-        <button onclick="vitrineAdjustQty(-1)" disabled>-1</button>` : ''}
+        <button onclick="vitrineAdjustQty(-1)" disabled>-1</button>
+        <button class="full cset-btn ${csetOpen.has('v')?'on':''}" onclick="toggleColorSettings('v', this)">⚙️ Réglages</button>` : ''}
       </div>`}
-      ${(isAdmin && !isOrderContext) ? `<div class="color-extra" style="margin-top:0;padding:10px;border-top:1px solid var(--line);">
+      ${(isAdmin && !isOrderContext) ? `<div class="color-extra cset-wrap ${csetOpen.has('v')?'open':''}" style="margin-top:0;padding:10px;border-top:1px solid var(--line);">
         <label>Modifier la quantité</label>
         <div class="manual-row">
           <input type="number" min="0" step="1" id="vitrine-setqty" value="0">
@@ -3434,10 +3449,10 @@ function renderColorsGrid(){
         ${isAdmin ? `
         <button onclick="modalAdjustColorQty(${i},1)">+1</button>
         <button onclick="modalAdjustColorQty(${i},-1)">-1</button>
-        <button class="del full" onclick="deleteColorPhoto(${i})">Supprimer</button>` : ''}`}
+        <button class="full cset-btn ${csetOpen.has(i)?'on':''}" onclick="toggleColorSettings(${i}, this)">⚙️ Réglages</button>` : ''}`}
       </div>
       ${(isAdmin && !isOrderContext) ? `
-      <div class="color-extra" style="margin-top:0;padding:10px;border-top:1px solid var(--line);">
+      <div class="color-extra cset-wrap ${csetOpen.has(i)?'open':''}" style="margin-top:0;padding:10px;border-top:1px solid var(--line);">
         <button class="full" style="width:100%;margin-bottom:10px;" onclick="setVitrineColor(${i})">⭐ Mettre en vitrine</button>
         <label>Nom de la couleur (Shopify)</label>
         <div class="manual-row name-row" style="margin-bottom:10px;">
@@ -3470,6 +3485,7 @@ function renderColorsGrid(){
           <input type="text" id="color-scan-${i}" placeholder="Scannez le code-barres…" autocomplete="off" inputmode="none">
           <button onclick="scanColorAddQty(${i})">+1</button>
         </div>
+        <div class="actions" style="padding:10px 0 0;"><button class="del full" onclick="deleteColorPhoto(${i})">Supprimer</button></div>
       </div>` : ''}
     </div>`;
   });
@@ -3825,6 +3841,7 @@ async function modalAdjustColorQty(index, delta){
   }
 }
 async function deleteColorPhoto(index){
+  csetOpen = new Set();
   await loadProducts();
   const p = products.find(x=>x.id===currentColorsProductId);
   if(!p || !p.colors) return;
