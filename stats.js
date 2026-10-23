@@ -76,6 +76,17 @@
   };
   let ncOpen = false;
   window.zrNcToggle = v => { ncOpen = v; };
+  /* Listes Sponsor / Dépenses : 10 lignes max, puis « Afficher plus » */
+  const LIST_MAX = 10;
+  const listMore = {sp: false, ex: false};
+  window.zrListMore = k => { listMore[k] = !listMore[k]; render(); };
+  function moreList(k, arr, rowFn){
+    if(!arr.length) return '';
+    const shown = listMore[k] ? arr : arr.slice(0, LIST_MAX);
+    const rest = arr.length - LIST_MAX;
+    const btn = rest > 0 ? `<button class="pf-more" onclick="zrListMore('${k}')">${listMore[k] ? 'Afficher moins ▲' : `Afficher plus (${rest}) ▼`}</button>` : '';
+    return `<div class="pf-days">${shown.map(rowFn).join('')}</div>${btn}`;
+  }
   window.zrNcOpen = id => { if(typeof openProductModal === 'function') openProductModal(id); };
   window.zrNcSave = async id => {
     const inp = document.getElementById('nc-' + id);
@@ -580,7 +591,7 @@
         <button id="pf-save" onclick="zrSpSave()">Enregistrer</button>
       </div>
       <div class="st-hint" style="margin:6px 0 0">1 € ≈ ${rate.toFixed(3).replace('.', ',')} $ · 1 USDT = ${SP.usdt} DA → <b>1 € ≈ ${Math.round(rate * SP.usdt)} DA</b>. Le taux € → $ du jour est pris automatiquement.</div>
-      ${p.spDays.length ? `<div class="pf-days">${p.spDays.map(([d, e]) => `<div class="pf-day" onclick="zrSpEdit('${d}')"><span>${fmtDay(d)}</span><span>${e.eur} €</span><b>${money(spDa(e))}</b><i>✏️</i></div>`).join('')}</div>` : ''}
+      ${moreList('sp', p.spDays, ([d, e]) => `<div class="pf-day" onclick="zrSpEdit('${d}')"><span>${fmtDay(d)}</span><span>${e.eur} €</span><b>${money(spDa(e))}</b><i>✏️</i></div>`)}
 
       <h4>🧾 Dépenses extra</h4>
       <div class="pf-sp ex-f">
@@ -592,7 +603,7 @@
         <button id="ex-cancel" class="ex-cancel" onclick="zrExCancel()" style="${exEditId ? '' : 'display:none'}">Annuler</button>
       </div>
       <div class="st-hint" style="margin:6px 0 0">Tout ce que tu achètes pour le e-commerce (sachets, emballage, étiquettes, flexy…) : c'est retiré de « Ce qui reste dans ta poche ».</div>
-      ${p.exList.length ? `<div class="pf-days">${p.exList.map(([id, e]) => `<div class="pf-day ex-d"><span onclick="zrExEdit('${id}')">${fmtDay(e.date)}</span><span onclick="zrExEdit('${id}')">${exCat(e.cat)[1]} ${esc(e.label || exCat(e.cat)[2])}</span><b onclick="zrExEdit('${id}')">${money(e.amount)}</b><i onclick="zrExDel('${id}')" title="Supprimer">🗑️</i></div>`).join('')}</div>` : ''}
+      ${moreList('ex', p.exList, ([id, e]) => `<div class="pf-day ex-d"><span onclick="zrExEdit('${id}')">${fmtDay(e.date)}</span><span onclick="zrExEdit('${id}')">${exCat(e.cat)[1]} ${esc(e.label || exCat(e.cat)[2])}</span><b onclick="zrExEdit('${id}')">${money(e.amount)}</b><i onclick="zrExDel('${id}')" title="Supprimer">🗑️</i></div>`)}
 
       <details class="pf-set"><summary>⚙️ Réglages (prix USDT, retour)</summary>
         <label>Prix d'achat de 1 USDT (DA)<input type="text" inputmode="decimal" id="pf-usdt" value="${SP.usdt}"></label>
@@ -866,6 +877,7 @@
       .pf-sp input[type=date]{flex:1 1 140px;} .pf-sp #pf-eur{flex:1 1 100px;}
       .pf-sp button,.pf-set button{border:none;border-radius:10px;padding:10px 14px;background:var(--plum);color:#fff;font:inherit;font-weight:700;cursor:pointer;}
       .pf-days{margin-top:10px;display:flex;flex-direction:column;gap:4px;}
+      .pf-more{display:block;width:100%;margin-top:6px;padding:9px;border:1px dashed var(--line);border-radius:10px;background:transparent;color:inherit;font:inherit;font-size:13px;font-weight:600;cursor:pointer;}
       .ex-f select{flex:1 1 160px;min-width:0;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:inherit;font:inherit;font-size:14px;}
       .ex-f #ex-date{flex:1 1 130px;} .ex-f #ex-label{flex:2 1 160px;} .ex-f #ex-amt{flex:1 1 100px;}
       .ex-f .ex-cancel{background:var(--line);color:inherit;}
