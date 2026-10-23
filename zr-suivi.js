@@ -35,10 +35,9 @@
   const ROWS_SD = ROWS.filter(r => r[0] !== 'rdv' && r[0] !== 'comm');
   ROWS_SD.splice(ROWS_SD.findIndex(r => r[0] === 'nrp1'), 0, ['att', '#8b5cf6', 'En attente du client', o => !final(o) && /attente/.test(norm(sitOf(o)))]);
   const FLOW = [
-    ['new',  '#94a3b8', 'Créées — pas encore récupérées', o => !final(o) && (o.zr.stage || 'created') === 'created'],
+    ['new',  '#94a3b8', 'Créées — pas encore expédiées', o => !final(o) && (o.zr.stage || 'created') === 'created'],
     ['way',  '#60a5fa', 'Vers la wilaya', o => !final(o) && (o.zr.stage === 'in_transit')],
     ['hub',  '#0ea5e9', 'Au bureau / agence', o => !final(o) && o.zr.stage === 'at_hub'],
-    ['out',  '#14b8a6', 'En livraison', o => !final(o) && o.zr.stage === 'out_for_delivery'],
     ['ret',  '#dc2626', "Retournées aujourd'hui", o => o.zr.stage === 'returned' && o.zr.finalAt && dayKey(o.zr.finalAt) === today()],
     ['retp', '#b91c1c', 'Retours à récupérer', o => o.zr.stage === 'returned' && !(o.returnInfo && o.returnInfo.at)],
   ];
@@ -63,7 +62,7 @@
   }
   // affichage en mosaïque : 3 cases par ligne (seulement les états qui ont des colis), les états à 0 dans une petite ligne
   const SHORT = {'Commande annulée': 'Annulée', 'Commande reportée': 'Reportée', 'Rendez-vous client': 'Rendez-vous', 'Changement Stop desk': 'Chang. Stop desk',
-    'Commune erronée': 'Commune erronée', 'Créées — pas encore récupérées': 'Pas encore récupérées', 'En attente du client': 'Attente cliente'};
+    'Commune erronée': 'Commune erronée', 'Créées — pas encore expédiées': 'Pas encore expédiées', 'En attente du client': 'Attente cliente'};
   function block(type, title, icon, list, rows){
     const data = rows.map(([k, col, label, test]) => ({k, col, label, items: list.filter(o => { try{ return test(o); }catch(e){ return false; } })}));
     const full = data.filter(d => d.items.length), empty = data.filter(d => !d.items.length);
