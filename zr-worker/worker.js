@@ -311,7 +311,10 @@ async function resolveHub(env, city, communeRaw){
   const inner = [...String(communeRaw || '').matchAll(/\(([^)]+)\)/g)].map(m => m[1].trim())
     .filter(t => !/^(bureau|centre de tri|agence|point relais|hub|stop ?desk)$/i.test(t));
   const base = commune.replace(/\s*\([^)]*\)/g, '').trim();
-  const names = [...new Set([...inner, commune, base].filter(Boolean))];
+  // anciens noms de la liste de l'app → nom actuel chez ZR (essayés juste après le quartier)
+  const ALIAS = {'el menzah': 'belle vue', 'ville nouvelle': 'nouvelle ville'};
+  const aliases = [...inner, commune].map(n => ALIAS[norm(n)]).filter(Boolean);
+  const names = [...new Set([...inner, ...aliases, commune, base].filter(Boolean))];
   const list = (await hubs(env)).filter(h => h.isPickupPoint !== false);
   const inCity = list.filter(h => h.address && h.address.cityTerritoryId === city.id);
   let h = null;
@@ -882,6 +885,13 @@ Règles : n'invente rien ; une ville/commune citée (ex. "فالعلمة" = El E
           }catch(e){ err = String(e && e.message || e).slice(0, 200); }
         }
         return out ? json({ok: true, data: out}) : json({ok: false, error: err || 'réponse IA illisible'}, 502);
+      }
+      if(path === '/hubs'){   // bureaux Stop Desk de ZR pour une wilaya (liste officielle, pour le formulaire)
+        const code = Number(body.wilayaCode);
+        if(!(code >= 1 && code <= 58)) return json({ok: false, error: 'wilaya invalide'}, 400);
+        const city = await resolveCity(env, code, WILAYAS[code - 1]);
+        const list = (await hubs(env)).filter(h => h.isPickupPoint !== false && h.address && h.address.cityTerritoryId === city.id);
+        return json({ok: true, hubs: list.map(h => ({id: h.id, name: h.name})).sort((x, y) => x.name.localeCompare(y.name))});
       }
       if(path === '/test'){
         const t = await territories(env, 'alger');

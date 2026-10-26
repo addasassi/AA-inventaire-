@@ -5000,8 +5000,9 @@ function refreshEoCommuneOptions(){
       return;
     }
     communeSel.innerHTML = '<option value="">Sélectionner un bureau…</option>' +
-      offices.map(o=> `<option value="${escapeHtml(o.commune)} (${escapeHtml(o.type)})">${escapeHtml(o.commune)} — ${escapeHtml(o.type)}</option>`).join('');
+      offices.map(o=> `<option value="${escapeHtml(o.commune)} (${escapeHtml(o.type)})" data-ar="${escapeHtml(o.ar)}">${escapeHtml(o.commune)} — ${escapeHtml(o.type)}</option>`).join('');
     communeSel.disabled = false;
+    loadZrHubsInto(communeSel, opt.dataset.code);
   } else {
     const code = opt.dataset.code;
     const communes = code ? (communesByWilaya[code] || []) : [];
@@ -5804,6 +5805,37 @@ function normalizeWilayaName(s){
     .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
     .replace(/[^a-z0-9]/g,'');
 }
+/* Bureaux Stop Desk : la liste officielle vient directement de ZR Express (relais /hubs).
+   La liste fixe ci-dessus ne sert que de secours si ZR ne répond pas. */
+const zrHubsCache = {};
+async function loadZrHubsInto(sel, code){
+  if(!sel || !code || typeof window.zrCall !== 'function' || !(window.zrReady && window.zrReady())) return;
+  await new Promise(r => setTimeout(r, 0));   // laisse le formulaire remettre la valeur déjà enregistrée
+  let hubs = zrHubsCache[code];
+  if(!hubs){
+    try{
+      const j = await window.zrCall('/hubs', {wilayaCode: Number(code)});
+      if(!j || !j.ok || !Array.isArray(j.hubs)) return;
+      hubs = zrHubsCache[code] = j.hubs;
+    }catch(e){ return; }
+  }
+  if(!hubs.length) return;
+  // l'utilisateur a peut-être changé de wilaya entre-temps
+  const wSel = document.getElementById(sel.id === 'eo-commune' ? 'eo-wilaya' : 'o-wilaya');
+  const cur = wSel && wSel.selectedOptions[0];
+  if(!cur || String(cur.dataset.code) !== String(code)) return;
+  const prevOpt = sel.selectedOptions[0];
+  const prev = sel.value, prevAr = prevOpt ? (prevOpt.dataset.ar || '') : '';
+  const arOf = v => { const o = ZR_OFFICES.find(x => `${x.commune} (${x.type})` === v); return o ? o.ar : ''; };
+  const wantAr = prevAr || arOf(prev);
+  let pick = hubs.find(h => h.name === prev);
+  if(!pick && wantAr) pick = hubs.find(h => h.name.includes(wantAr));   // ancien nom → bureau ZR correspondant
+  sel.innerHTML = '<option value="">Sélectionner un bureau…</option>' +
+    hubs.map(h => `<option value="${escapeHtml(h.name)}">${escapeHtml(h.name)}</option>`).join('');
+  sel.disabled = false;
+  if(pick) sel.value = pick.name;
+  else if(prev){ sel.value = ''; toast('⚠️ Bureau « ' + prev + ' » inexistant chez ZR : choisissez un bureau dans la liste', true); }
+}
 function officesForWilaya(name){
   const key = normalizeWilayaName(name);
   return ZR_OFFICES.filter(o=> normalizeWilayaName(o.wilaya) === key);
@@ -5850,6 +5882,7 @@ function refreshCommuneOrOfficeOptions(){
     communeSel.innerHTML = '<option value="">Sélectionner un bureau…</option>' +
       offices.map(o=> `<option value="${escapeHtml(o.commune)} (${escapeHtml(o.type)})" data-ar="${escapeHtml(o.ar)}">${escapeHtml(o.commune)} — ${escapeHtml(o.type)}</option>`).join('');
     communeSel.disabled = false;
+    loadZrHubsInto(communeSel, opt.dataset.code);
   } else {
     const code = opt.dataset.code;
     const communes = code ? (communesByWilaya[code] || []) : [];
