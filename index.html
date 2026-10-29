@@ -4729,12 +4729,17 @@ function daysLate(deferredDate){
   const due = new Date(deferredDate+'T00:00:00');
   return Math.round((today - due) / 86400000);
 }
+// Une commande « reportée » n'est plus en attente dès que le colis est créé chez ZR (envoyée / livrée)
+function stillDeferred(o){
+  return !!(o && o.deferred && o.deferredDate && !(o.zr && o.zr.parcelId));
+}
+window.stillDeferred = stillDeferred;
 function isOrderDueOrLate(o){
-  return o.deferred && o.deferredDate && daysLate(o.deferredDate) >= 0;
+  return stillDeferred(o) && daysLate(o.deferredDate) >= 0;
 }
 // La commande compte dans le badge seulement si elle est due aujourd'hui ou en retard de 2 jours max
 function isOrderInBadgeWindow(o){
-  if(!o.deferred || !o.deferredDate) return false;
+  if(!stillDeferred(o)) return false;
   const late = daysLate(o.deferredDate);
   return late >= 0 && late <= 2;
 }
@@ -4747,7 +4752,7 @@ function getFilteredOrders(){
   const dateFrom = document.getElementById('of-date-from').value;
   const dateTo = document.getElementById('of-date-to').value;
   return orders.filter(o=>{
-    if(ordersFilterDeferredOnly && !o.deferred) return false;
+    if(ordersFilterDeferredOnly && !stillDeferred(o)) return false;
     if(employee && o.createdBy !== employee) return false;
     const orderDate = localDay(o.createdAt);
     if(dateFrom && orderDate < dateFrom) return false;
@@ -4834,7 +4839,7 @@ function renderOrdersHistory(){
     const d = new Date(o.createdAt);
     const dateTxt = d.toLocaleDateString('fr-FR') + ' ' + d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
     const dtLabel = o.customer.deliveryType === 'stopdesk' ? 'Stop Desk' : (o.customer.deliveryType === 'main' ? ((o.deferred && o.deferredDate && !o.handDone) ? '🤝 Remise en main propre (prévue)' : '🤝 En main propre · ✅ Livrée') : 'Livraison à domicile');
-    const deferredBadge = o.deferred && o.deferredDate ? (()=>{
+    const deferredBadge = stillDeferred(o) ? (()=>{
       const late = daysLate(o.deferredDate);
       const dLabel = new Date(o.deferredDate+'T00:00:00').toLocaleDateString('fr-FR');
       const cls = late > 0 ? 'late' : (late === 0 ? 'today' : 'future');
@@ -4844,7 +4849,7 @@ function renderOrdersHistory(){
         : (late > 0 ? `En retard · envoi prévu le ${dLabel}` : `🕓 Reportée · envoi le ${dLabel}`);
       return `<div class="deferred-badge ${cls}">${escapeHtml(txt)}</div>`;
     })() : '';
-    return `<div class="order-card ${o.deferred ? 'deferred' : ''}" onclick="showOrderDetail('${o.id}')">
+    return `<div class="order-card ${stillDeferred(o) ? 'deferred' : ''}" onclick="showOrderDetail('${o.id}')">
       ${deferredBadge}
       ${window.swapBanner ? window.swapBanner(o) : ''}
       ${window.verifyBanner ? window.verifyBanner(o) : ''}
@@ -4908,7 +4913,7 @@ function showOrderDetail(id){
   currentDetailOrderId = id;
   const dtLabel = o.customer.deliveryType === 'stopdesk' ? 'Stop Desk' : (o.customer.deliveryType === 'main' ? ((o.deferred && o.deferredDate && !o.handDone) ? '🤝 Remise en main propre (prévue)' : '🤝 En main propre · ✅ Livrée') : 'Livraison à domicile');
   const odBadgeEl = document.getElementById('od-deferred-badge');
-  if(o.deferred && o.deferredDate){
+  if(stillDeferred(o)){
     const late = daysLate(o.deferredDate);
     const dLabel = new Date(o.deferredDate+'T00:00:00').toLocaleDateString('fr-FR');
     const cls = late > 0 ? 'late' : (late === 0 ? 'today' : 'future');
