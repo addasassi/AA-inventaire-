@@ -1493,7 +1493,8 @@ function vitrineView(p){
   const vitrineOut = vq <= 0 && colorsStock > 0;
   let frontIdx = -1;
   if(vitrineOut){ frontIdx = colors.findIndex(c=> c && (Number(c.qty)||0) > 0 && c.img); }
-  return { total: vq + colorsStock, vitrineOut, frontIdx, img: frontIdx >= 0 ? colors[frontIdx].img : p.img };
+  const shownQty = frontIdx >= 0 ? (Number(colors[frontIdx].qty) || 0) : vq;   // stock de la photo affichée
+  return { total: vq + colorsStock, vitrineOut, frontIdx, shownQty, img: frontIdx >= 0 ? colors[frontIdx].img : p.img };
 }
 function downloadFrontImage(id){
   const p = products.find(x=>x.id===id); if(!p) return;
@@ -3006,9 +3007,9 @@ function renderList(cat){
   items.forEach((p)=>{
     const v = vitrineView(p);
     const isOut = v.total <= 0;
-    const isLow = !isOut && v.total <= 2;
+    const isLow = !isOut && v.shownQty <= 2;
     const pillClass = isOut ? 'zero' : (isLow ? 'low' : 'ok');
-    const pillText = isOut ? 'Rupture' : (v.total + ' en stock');
+    const pillText = isOut ? 'Rupture' : (v.shownQty + ' en stock');
     const colorCount = (p.colors || []).length;
     html += `<div class="product ${isOut?'out':''}" onclick="${v.vitrineOut ? `openColorsModal('${p.id}')` : `openProductModal('${p.id}')`}">
       <div class="img-wrap">
@@ -5376,8 +5377,8 @@ function renderOrderProducts(cat){
     const onlyColors = isOut && colorsStock > 0;
     // vitrine épuisée : on montre une couleur dispo et le stock total, comme dans Stock
     const vv = vitrineView(p);
-    const pillClass = onlyColors ? (vv.total <= 2 ? 'low' : 'ok') : (isOut ? 'zero' : (isLow ? 'low' : 'ok'));
-    const pillText = onlyColors ? (vv.total + ' en stock') : (isOut ? 'Rupture de stock' : (p.qty + ' en stock'));
+    const pillClass = onlyColors ? (vv.shownQty <= 2 ? 'low' : 'ok') : (isOut ? 'zero' : (isLow ? 'low' : 'ok'));
+    const pillText = onlyColors ? (vv.shownQty + ' en stock') : (isOut ? 'Rupture de stock' : (p.qty + ' en stock'));
     const colorCount = (p.colors || []).length;
     const click = onlyColors ? `openColorsModal('${p.id}','order')` : `addToCart('${p.id}')`;
     return `<div class="order-pick ${isOut && !onlyColors?'out-pick':''}" onclick="${click}">
