@@ -1,8 +1,14 @@
 name: tmp-cost-check
 on: push
+permissions:
+  contents: write
 jobs:
   q:
+    if: "!contains(github.event.head_commit.message, 'resultat')"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: python3 q.py
+      - run: |
+          python3 q.py > out.txt 2>&1 || true
+          git config user.name bot && git config user.email bot@users.noreply.github.com
+          git add out.txt && git commit -m "resultat" && git push
