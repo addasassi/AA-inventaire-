@@ -1,25 +1,25 @@
-import urllib.request, re
+import urllib.request, re, json, urllib.parse
 UA={'User-Agent':'Mozilla/5.0'}
-def g(u):
-    return urllib.request.urlopen(urllib.request.Request(u,headers=UA),timeout=30).read().decode('utf-8','ignore')
-base='https://app.zrexpress.app'
-h=g(base+'/'); print('index len',len(h))
-js=set(re.findall(r'(?:src|href)="([^"]+\.js)"',h)); print('js', list(js)[:20])
-seen=set(); queue=[ (j if j.startswith('http') else base+('' if j.startswith('/') else '/')+j) for j in js]
-hits=0
-while queue and len(seen)<120:
-    u=queue.pop(0)
-    if u in seen: continue
-    seen.add(u)
-    try: t=g(u)
-    except Exception as e: print('ERR',u,e); continue
-    for m in re.findall(r'["\'](/?[a-zA-Z0-9_./-]*\.js)["\']', t):
-        if 'chunk' in m or m.startswith('/_next') or m.startswith('assets') or m.startswith('/assets'):
-            queue.append(base+('' if m.startswith('/') else '/')+m)
-    for m in re.finditer(r'(?i)return[-_ ]?meter|returnRate|risk(?:Level|Score)', t):
-        s=t[max(0,m.start()-300):m.end()+300].replace('\n',' ')
-        print('HIT', u.split('/')[-1], '::', s); hits+=1
-        if hits>40: break
-    for m in re.finditer(r'["\'`](/api/v1/[^"\'`]{0,80}|/v1/[^"\'`]{0,80})["\'`]', t):
-        if re.search(r'(?i)return|risk|meter|customer', m.group(1)): print('URL', m.group(1))
-print('files scanned', len(seen))
+t=urllib.request.urlopen(urllib.request.Request('https://app.zrexpress.app/assets/index-CaC-NZSj.js',headers=UA),timeout=60).read().decode('utf-8','ignore')
+seen=set()
+for pat in [r'\.returnMeter\b', r'returnMeter\s*:\s*[a-zA-Z_$]', r'meter\s*:\s*[a-zA-Z_$][\w$.?]*', r'["`/][\w/-]*return-?meter[\w/-]*', r'["`/][\w/-]*ReturnMeter[\w/-]*']:
+    for m in re.finditer(pat, t):
+        s=t[max(0,m.start()-250):m.end()+250]
+        k=s[200:300]
+        if k in seen: continue
+        seen.add(k); print('CTX', pat, '::', s.replace('\n',' ')); print()
+# API probe via worker
+K="AIzaSyAfMIEi1MynF82Jp1j1J1BFQM5w8182JTo"
+B="https://firestore.googleapis.com/v1/projects/aa-inventaire/databases/(default)/documents"
+r=json.load(urllib.request.urlopen(f"{B}/orders?pageSize=50&mask.fieldPaths=zr&key={K}"))
+oid=None
+for d in r.get('documents',[]):
+    z=d.get('fields',{}).get('zr',{}).get('mapValue',{}).get('fields',{})
+    if 'parcelId' in z: oid=d['name'].split('/')[-1]; break
+probes=['POST /parcels/search','/parcels/{id}?includeReturnMeter=true','/parcels/{id}/details','/parcels/by-tracking-number/{tn}','/parcels/tracking/{tn}']
+req=urllib.request.Request("https://atelier-zr.mohammedsassiadda.workers.dev/raw", data=json.dumps({'id':oid,'probe':probes}).encode(), headers={'Content-Type':'application/json','User-Agent':'Mozilla/5.0'})
+out=json.load(urllib.request.urlopen(req))
+for k in probes:
+    v=out.get(k) or ''
+    i=v.lower().find('meter')
+    print('PROBE',k,'len',len(v),'meter@',i, '::', v[max(0,i-300):i+500] if i>=0 else v[:400])
