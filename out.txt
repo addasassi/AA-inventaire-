@@ -1,0 +1,6 @@
+USE nhe :: ria-hidden":"true",children:[R.jsxs("span",{className:"rm-teasing-wordmark-bars",children:[R.jsx("i",{}),R.jsx("i",{}),R.jsx("i",{}),R.jsx("i",{}),R.jsx("i",{})]}),R.jsx("span",{className:"rm-teasing-wordmark-text",children:"ReturnMeter"})]}),R.jsxs("div",{className:"rm-teasing-preview",children:[R.jsx(ahe,{meter:HM}),R.jsx("div",{className:"rm-teasing-sticker","aria-hidden":"true",children:R.jsx(nhe,{meter:uhe,size:"md"})})]}),R.jsxs("div",{className:"rm-teasing-text",children:[R.jsx("h2",{id:"rm-teasing-title",className:"rm-teasing-title",children
+
+USE ahe :: dden":"true"}),t("returnMeterTeasing.badge")]}),R.jsxs("div",{className:"rm-teasing-wordmark","aria-hidden":"true",children:[R.jsxs("span",{className:"rm-teasing-wordmark-bars",children:[R.jsx("i",{}),R.jsx("i",{}),R.jsx("i",{}),R.jsx("i",{}),R.jsx("i",{})]}),R.jsx("span",{className:"rm-teasing-wordmark-text",children:"ReturnMeter"})]}),R.jsxs("div",{className:"rm-teasing-preview",children:[R.jsx(ahe,{meter:HM}),R.jsx("div",{className:"rm-teasing-sticker","aria-hidden":"true",children:R.jsx(nhe,{meter:uhe,size:"md"})})]}),R.jsxs("div",{className:"rm
+
+STR return-meter-${t}
+count meter keys 31 7
