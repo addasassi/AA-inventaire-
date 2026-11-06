@@ -74,7 +74,7 @@
     [42,'Tipaza','تيبازة','Tipaza','تيبازة','La nouvelle AADL 1700 - en face l\'ONPS','حي عدل 1700 - مقابل الديوان الوطني للمطبوعات','0770.42.07.24','0770.20.04.60','0770.92.31.37'],
     [42,'Tipaza','تيبازة','Koléa','القليعة','Route d\'Alger, à côté du café de Verre','طريق الجزائر، بجانب قهوة الزجاج','0551.20.04.59','0551.20.05.46','0551.21.06.91'],
     [43,'Mila','ميلة','Mila','ميلة','Jamouaa Milkia N°34 - à côté de l\'agence Sonelgaz','تحت مستشفى الإخوة مغلاوي - حوالي 100 متر، بجانب الوكالة التجارية سونلغاز','0657.22.47.73','0659.52.53.82 / 031.46.37.30','0660.90.94.48 / 0660.16.93.28'],
-    [44,'Aïn Defla','عين الدفلى','Aïn Defla','عين الدفلى','Rond-point cycliste - en face la daïra','محور الدوران السيكليست - أمام مقر الدائرة','0770.99.42.68','0770.99.45.79','0770.99.45.81'],
+    [44,'Aïn Defla','عين الدفلى','Aïn Defla','عين الدفلى','Sous l\'agence, côté nouveau Trésor','تحت لاجونص، جيهة الطريزور الجديدة','0770.99.42.68','0770.99.45.79','0770.99.45.81'],
     [45,'Naâma','النعامة','Naâma','النعامة','Route nationale N°6, en face de l\'hôtel Al-Amin','الطريق الوطني رقم 6 سابقا، مقابل فندق الأمين','0699.29.60.40','0659.26.93.47','0770.03.39.23'],
     [46,'Aïn Témouchent','عين تموشنت','Aïn Témouchent','عين تموشنت','Hai Ezzitoun - à côté de la mosquée Oussama Abu Zaid (El Bechari)','حي الزيتون - بالقرب من مسجد أسامة أبو زيد البشاري','0770.76.66.82','0770.54.88.78','0770.76.66.90'],
     [47,'Ghardaïa','غرداية','Ghardaïa','غرداية','Hadj Messaoud, en face du commissariat de police et de la protection civile','حاج مسعود، مقابل مركز الشرطة والحماية المدنية','0770.50.50.18','0774.72.81.01','0791.54.44.40 / 0699.62.63.10'],
@@ -113,7 +113,8 @@
         if(v < 7){ ch = addrFromDefault([[8, 'Béchar'], [22, 'Sidi Bel Abbès'], [30, 'Hassi Messaoud'], [32, 'El Bayadh'], [34, 'Bordj Bou Arreridj']]) || ch;   // nouvelles adresses (affiches ZR oct. 2026)
           const b = list.find(x => Number(x.n) === 8 && norm(x.name) === norm('Béchar')); if(b && b.com !== '0671.40.02.42'){ b.com = '0671.40.02.42'; ch = true; } }
         if(v < 8) ch = addFromDefault([[13, 'Remchi'], [10, 'Lakhdaria']]) || ch;   // nouveaux bureaux (nov. 2026)
-        if(ch || v < 8) save().catch(()=>{});
+        if(v < 9) ch = addrFromDefault([[44, 'Aïn Defla']]) || ch;   // nouvelle adresse (nov. 2026)
+        if(ch || v < 9) save().catch(()=>{});
       }
     }catch(e){}
     loaded = true;
@@ -164,7 +165,7 @@
     return changed;
   }
   async function save(){
-    await db.collection('meta').doc('zrBureaux').set({v: 8, list, updatedAt: new Date().toISOString(), by: (currentUser && (currentUser.name || currentUser.username)) || ''});
+    await db.collection('meta').doc('zrBureaux').set({v: 9, list, updatedAt: new Date().toISOString(), by: (currentUser && (currentUser.name || currentUser.username)) || ''});
   }
 
   function css(){
