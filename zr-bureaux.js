@@ -23,9 +23,11 @@
     [9,'Blida','البليدة','Bougara','بوقرة','Rue Hamidouche Mouloud, Route d\'Alger, Bougara','بوقرة، شارع حميدوش مولود، طريق الجزائر العاصمة','0771.92.80.94','0770.77.21.11','0779.42.62.22'],
     [9,'Blida','البليدة','Mouzaïa','موزاية','Rue Ben Ahmed Ali Aslaoui, N°45, Mouzaïa','موزاية، شارع بن أحمد علي عسلاوي','0774.53.19.22','0770.77.21.11','0773.86.25.07'],
     [10,'Bouira','البويرة','Bouira','البويرة','338 log - en face de l\'hôtel Sofy','338 مسكن - مقابل فندق صوفي','0657.70.05.64','0770.38.18.12','0770.77.87.43 / 0770.82.89.97 / 0558.68.92.30'],
+    [10,'Bouira','البويرة','Lakhdaria','الأخضرية','Cité Million, bâtiment A, rez-de-chaussée, section 40, îlot commercial 34, locaux n°03, 04, 05 et 06, Lakhdaria','حي مليون، العمارة A، الطابق السفلي، القسم 40، المجموعة التجارية 34، المحلات رقم 03، 04، 05 و06، الأخضرية','0550.37.26.15','0770.38.18.12','0670.03.01.93 / 0670.03.01.87'],
     [11,'Tamanrasset','تمنراست','Tamanrasset','تمنراست','Cité El Wiam - en face CASNOS','حي الوئام - مقابل الضمان الاجتماعي','0770.99.42.57','0770.99.46.06','0670.74.39.61'],
     [12,'Tébessa','تبسة','Tébessa','تبسة','Tahsis El Arebi El Tebsi (Skanska), en face la Direction de la Poste d\'Algérie de Tébessa','تحصيص العربي التبسي (سكنسكا)، مقابل المديرية الولائية لبريد الجزائر تبسة','0659.43.06.81','0775.64.75.14','0779.87.30.36'],
     [13,'Tlemcen','تلمسان','Tlemcen','تلمسان','En face rond-point cité des Oliviers','أمام محور الدوران حي الزيتون','0772.02.93.89','0770.39.69.54','0698.53.00.13 / 0794.03.11.43'],
+    [13,'Tlemcen','تلمسان','Remchi','الرمشي','Rue Medjaoui Abderrahmane, local n°01','شارع مجاوي عبد الرحمن، المحل رقم 01','0674.74.31.97','0661.49.29.44','0669.46.99.51'],
     [14,'Tiaret','تيارت','Tiaret','تيارت','Route l\'académie, en face de l\'hôpital du rein - à côté de la librairie Mimouni','طريق لكاديمي، مقابل مستشفى الكلى - بجانب مكتبة ميموني','0667.18.42.55','0699.89.72.01','0770.38.32.20 / 0770.07.28.15 / 0770.82.85.87'],
     [15,'Tizi Ouzou','تيزي وزو','Tizi Ouzou','تيزي وزو','En face de l\'hôtel Les Trois Roses et de la salle omnisports Need For Gym','أمام فندق ثلاثة زهور (Les Trois Roses) وقاعة متعددة الرياضة (Need For Gym)','0770.18.06.02','0770.59.99.01','0770.18.06.02'],
     [16,'Alger','الجزائر','Birkhadem','بئر خادم','Rue des Rosiers, El Malha, Birkhadem','عين المالحة بئر خادم - بالقرب من مركز إيداع التأشيرة لتركيا','0770.70.50.07 / 0770.60.18.36','0770.60.18.36 / 0770.70.50.07','0770.58.40.33'],
@@ -110,7 +112,8 @@
         if(v < 6) ch = addrFromDefault([[41, 'Souk Ahras'], [12, 'Tébessa'], [45, 'Naâma'], [47, 'Ghardaïa'], [15, 'Tizi Ouzou']]) || ch;   // nouvelles adresses (affiches ZR oct. 2026)
         if(v < 7){ ch = addrFromDefault([[8, 'Béchar'], [22, 'Sidi Bel Abbès'], [30, 'Hassi Messaoud'], [32, 'El Bayadh'], [34, 'Bordj Bou Arreridj']]) || ch;   // nouvelles adresses (affiches ZR oct. 2026)
           const b = list.find(x => Number(x.n) === 8 && norm(x.name) === norm('Béchar')); if(b && b.com !== '0671.40.02.42'){ b.com = '0671.40.02.42'; ch = true; } }
-        if(ch || v < 7) save().catch(()=>{});
+        if(v < 8) ch = addFromDefault([[13, 'Remchi'], [10, 'Lakhdaria']]) || ch;   // nouveaux bureaux (nov. 2026)
+        if(ch || v < 8) save().catch(()=>{});
       }
     }catch(e){}
     loaded = true;
@@ -161,7 +164,7 @@
     return changed;
   }
   async function save(){
-    await db.collection('meta').doc('zrBureaux').set({v: 7, list, updatedAt: new Date().toISOString(), by: (currentUser && (currentUser.name || currentUser.username)) || ''});
+    await db.collection('meta').doc('zrBureaux').set({v: 8, list, updatedAt: new Date().toISOString(), by: (currentUser && (currentUser.name || currentUser.username)) || ''});
   }
 
   function css(){
