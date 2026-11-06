@@ -246,15 +246,24 @@
     const wrap = document.getElementById('zrPage');
     if(!wrap) return;
     css();
-    const keep = document.getElementById('zr-q');
-    const hadFocus = keep && document.activeElement === keep;
-    const pos = keep ? keep.selectionStart : null;
     const items = list.filter(b=> matches(b, query)).sort((a,b)=> (a.n - b.n));
     const groups = [];
     items.forEach(b=>{ let g = groups[groups.length-1]; if(!g || g.n !== b.n){ g = {n:b.n, w:b.w, wa:b.wa, items:[]}; groups.push(g); } g.items.push(b); });
     const wilCount = new Set(list.map(b=>b.n)).size;
-    let html = `<div class="zr-hero"><div class="zr-logo"><span>ZR</span>EXPRESS</div><div class="zr-sub">🚚 ${list.length} bureaux · ${wilCount} wilayas — البريد السريع</div></div>
-      <div class="zr-search"><input id="zr-q" type="search" inputmode="search" placeholder="🔎 N°, wilaya ou commune…" value="${esc(query)}"><button id="zr-clear" title="Effacer">✕</button></div>`;
+    /* la case de recherche n'est construite qu'une fois : la recréer à chaque lettre
+       faisait revenir le clavier du téléphone sur les lettres après un chiffre */
+    if(!document.getElementById('zr-q') || !document.getElementById('zr-results')){
+      wrap.innerHTML = `<div class="zr-hero"><div class="zr-logo"><span>ZR</span>EXPRESS</div><div class="zr-sub" id="zr-sub"></div></div>
+        <div class="zr-search"><input id="zr-q" type="search" inputmode="search" placeholder="🔎 N°, wilaya ou commune…" value="${esc(query)}"><button id="zr-clear" title="Effacer">✕</button></div>
+        <div id="zr-results"></div>`;
+      const q = document.getElementById('zr-q');
+      q.addEventListener('input', ()=>{ query = q.value; render(); });
+      document.getElementById('zr-clear').onclick = ()=>{ query = ''; q.value = ''; render(); q.focus(); };
+    }
+    document.getElementById('zr-sub').textContent = `🚚 ${list.length} bureaux · ${wilCount} wilayas — البريد السريع`;
+    const qEl = document.getElementById('zr-q'); if(qEl.value !== query && document.activeElement !== qEl) qEl.value = query;
+    const res = document.getElementById('zr-results');
+    let html = '';
     if(query) html += `<div class="zr-count">${items.length} bureau${items.length>1?'x':''} trouvé${items.length>1?'s':''}</div>`;
     if(!items.length) html += `<div class="zr-empty">Aucun bureau trouvé pour « ${esc(query)} »</div>`;
     groups.forEach(g=>{
@@ -275,11 +284,7 @@
       html += `</div>`;
     });
     if(isAdmin()) html += `<button class="zr-add" id="zr-add">+ Ajouter un bureau</button>`;
-    wrap.innerHTML = html;
-    const q = document.getElementById('zr-q');
-    q.addEventListener('input', ()=>{ query = q.value; render(); });
-    if(hadFocus){ q.focus(); try{ q.setSelectionRange(pos, pos); }catch(e){} }
-    document.getElementById('zr-clear').onclick = ()=>{ query = ''; render(); document.getElementById('zr-q').focus(); };
+    res.innerHTML = html;
     wrap.querySelectorAll('.zr-copy').forEach(btn=> btn.onclick = ()=>{ const b = list.find(x=>x.id===btn.dataset.id); if(b) doCopy(copyText(b), btn); });
     wrap.querySelectorAll('.zr-edit').forEach(btn=> btn.onclick = ()=> openEdit(btn.dataset.id));
     const add = document.getElementById('zr-add'); if(add) add.onclick = ()=> openEdit(null);
