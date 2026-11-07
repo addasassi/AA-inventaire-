@@ -8,7 +8,7 @@
   const DEFAULT = [
     [1,'Adrar','أدرار','Adrar','أدرار','À côté du lycée El Moghili, derrière le conseil judiciaire','بجوار ثانوية المغيلي، خلف مجلس القضاء','0661.41.11.00','0661.11.00.53','0661.41.11.00'],
     [2,'Chlef','الشلف','Chlef','الشلف','Hay Aroudj - derrière A.D.E, en face le musée','حي عروج - خلف المديرية الجزائرية للمياه، مقابل المتحف','0770.99.45.28','0770.99.46.75','0770.99.46.74'],
-    [2,'Chlef','الشلف','Ténès','تنس','N°6 commune de Ténès A, Rue Boufadis, Lot 51 Bâtiments - à côté de la caserne militaire, Route Marina, Bâtiments Mandil','رقم 6 بلدية تنس A، شارع بوفاديس حصة 51 عمارة - بجانب الثكنة العسكرية، طريق مارينة عمارات منديل','0770.99.35.71','0770.99.45.62','0770.99.35.72'],
+    [2,'Chlef','الشلف','Ténès','تنس','Route des Chaarir, en face de Sonelgaz, Ténès','طريق الشعارير، مقابل سونلغاز، تنس','0770.99.35.71','0770.99.45.62','0770.99.35.72'],
     [3,'Laghouat','الأغواط','Laghouat','الأغواط','Cité Mhafir - en face parking du département de biologie','','0770.05.34.49','0770.73.56.83','0670.30.03.97'],
     [4,'Oum El Bouaghi','أم البواقي','Aïn El Beïda','عين البيضاء','Tahsise El Amel, en face le collège Koshari, Aïn El Beïda, Oum El Bouaghi','تحصيص الأمل - مقابل متوسطة كوشاري، عين البيضاء، أم البواقي','0698.63.12.34','0660.73.74.74','0660.73.74.78'],
     [4,'Oum El Bouaghi','أم البواقي','Oum El Bouaghi - Centre ville','أم البواقي - المدينة','N°392 cité Ennacer','رقم 392 حي الناصر','0698.63.12.34','0672.96.10.16','0770.07.29.11'],
@@ -114,7 +114,8 @@
           const b = list.find(x => Number(x.n) === 8 && norm(x.name) === norm('Béchar')); if(b && b.com !== '0671.40.02.42'){ b.com = '0671.40.02.42'; ch = true; } }
         if(v < 8) ch = addFromDefault([[13, 'Remchi'], [10, 'Lakhdaria']]) || ch;   // nouveaux bureaux (nov. 2026)
         if(v < 9) ch = addrFromDefault([[44, 'Aïn Defla']]) || ch;   // nouvelle adresse (nov. 2026)
-        if(ch || v < 9) save().catch(()=>{});
+        if(v < 10) ch = addrFromDefault([[2, 'Ténès']]) || ch;   // nouvelle adresse (affiche ZR nov. 2026)
+        if(ch || v < 10) save().catch(()=>{});
       }
     }catch(e){}
     loaded = true;
@@ -165,7 +166,7 @@
     return changed;
   }
   async function save(){
-    await db.collection('meta').doc('zrBureaux').set({v: 9, list, updatedAt: new Date().toISOString(), by: (currentUser && (currentUser.name || currentUser.username)) || ''});
+    await db.collection('meta').doc('zrBureaux').set({v: 10, list, updatedAt: new Date().toISOString(), by: (currentUser && (currentUser.name || currentUser.username)) || ''});
   }
 
   function css(){
