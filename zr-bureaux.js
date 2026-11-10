@@ -13,6 +13,7 @@
     [4,'Oum El Bouaghi','أم البواقي','Aïn El Beïda','عين البيضاء','Tahsise El Amel, en face le collège Koshari, Aïn El Beïda, Oum El Bouaghi','تحصيص الأمل - مقابل متوسطة كوشاري، عين البيضاء، أم البواقي','0698.63.12.34','0660.73.74.74','0660.73.74.78'],
     [4,'Oum El Bouaghi','أم البواقي','Oum El Bouaghi - Centre ville','أم البواقي - المدينة','N°392 cité Ennacer','رقم 392 حي الناصر','0698.63.12.34','0672.96.10.16','0770.07.29.11'],
     [5,'Batna','باتنة','Batna','باتنة','Les allées Jadida Erriad - à côté supérette El Bahja','الرياض - بجانب سوبيرات البهجة','0659.78.12.34','0770.55.52.45','0770.55.80.86 / 0770.59.90.81 / 0770.61.01.55'],
+    [5,'Batna','باتنة','Aïn Touta','عين التوتة','Rue Louchane Tahar, cité Essetta N°29, Aïn Touta - jardin Essetta','شارع لوشان الطاهر حي السطا رقم 29، بلدية عين التوتة - حديقة السطا','0770.06.00.84','0770.06.00.93','0770.39.22.00'],
     [6,'Béjaïa','بجاية','Béjaïa','بجاية','Edimco, Cité Somacob','ايدمكو حي سوماكوب','0698.86.12.34','0770.60.34.02','0770.14.38.12'],
     [6,'Béjaïa','بجاية','Akbou','أقبو','Gare ferroviaire, à côté salle des fêtes Hadad','محطة السكة الحديدية، أمام قاعة الحفلات حداد','0770.10.46.84','0770.10.45.78','0770.10.46.92 / 0770.10.48.23'],
     [6,'Béjaïa','بجاية','Souk El Tenine','سوق الإثنين','Base 7, à côté de la nouvelle école primaire ou à côté des 850 logements','قاعدة 7 بجانب المدرسة الابتدائية الجديدة أو بجانب 850 مسكنا','0551.80.97.00','0778.35.36.91','0551.84.82.65'],
@@ -115,7 +116,8 @@
         if(v < 8) ch = addFromDefault([[13, 'Remchi'], [10, 'Lakhdaria']]) || ch;   // nouveaux bureaux (nov. 2026)
         if(v < 9) ch = addrFromDefault([[44, 'Aïn Defla']]) || ch;   // nouvelle adresse (nov. 2026)
         if(v < 10) ch = addrFromDefault([[2, 'Ténès']]) || ch;   // nouvelle adresse (affiche ZR nov. 2026)
-        if(ch || v < 10) save().catch(()=>{});
+        if(v < 11) ch = addFromDefault([[5, 'Aïn Touta']]) || ch;   // nouveau bureau : Aïn Touta (Batna, nov. 2026)
+        if(ch || v < 11) save().catch(()=>{});
       }
     }catch(e){}
     loaded = true;
@@ -166,7 +168,7 @@
     return changed;
   }
   async function save(){
-    await db.collection('meta').doc('zrBureaux').set({v: 10, list, updatedAt: new Date().toISOString(), by: (currentUser && (currentUser.name || currentUser.username)) || ''});
+    await db.collection('meta').doc('zrBureaux').set({v: 11, list, updatedAt: new Date().toISOString(), by: (currentUser && (currentUser.name || currentUser.username)) || ''});
   }
 
   function css(){
