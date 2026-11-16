@@ -29,6 +29,7 @@
     [12,'Tébessa','تبسة','Tébessa','تبسة','Tahsis El Arebi El Tebsi (Skanska), en face la Direction de la Poste d\'Algérie de Tébessa','تحصيص العربي التبسي (سكنسكا)، مقابل المديرية الولائية لبريد الجزائر تبسة','0659.43.06.81','0775.64.75.14','0779.87.30.36'],
     [13,'Tlemcen','تلمسان','Tlemcen','تلمسان','En face rond-point cité des Oliviers','أمام محور الدوران حي الزيتون','0772.02.93.89','0770.39.69.54','0698.53.00.13 / 0794.03.11.43'],
     [13,'Tlemcen','تلمسان','Remchi','الرمشي','Rue Medjaoui Abderrahmane, local n°01','شارع مجاوي عبد الرحمن، المحل رقم 01','0674.74.31.97','0661.49.29.44','0669.46.99.51'],
+    [13,'Tlemcen','تلمسان','Maghnia','مغنية','Cité Tafna, groupe immobilier n°1, section 206, local 01 - en face l\'école primaire de cité Azzouni (Moudjahid Meghbar Mohamed)','حي تافنة، المجموعة العقارية رقم 1، القسم 206، المحل 01، مقابل المدرسة الابتدائية بحي عزوني، المجاهد مغبر محمد','0672.94.20.73','0661.75.22.46','0673.28.76.51'],
     [14,'Tiaret','تيارت','Tiaret','تيارت','Route l\'académie, en face de l\'hôpital du rein - à côté de la librairie Mimouni','طريق لكاديمي، مقابل مستشفى الكلى - بجانب مكتبة ميموني','0667.18.42.55','0699.89.72.01','0770.38.32.20 / 0770.07.28.15 / 0770.82.85.87'],
     [15,'Tizi Ouzou','تيزي وزو','Tizi Ouzou','تيزي وزو','En face de l\'hôtel Les Trois Roses et de la salle omnisports Need For Gym','أمام فندق ثلاثة زهور (Les Trois Roses) وقاعة متعددة الرياضة (Need For Gym)','0770.18.06.02','0770.59.99.01','0770.18.06.02'],
     [16,'Alger','الجزائر','Birkhadem','بئر خادم','Rue des Rosiers, El Malha, Birkhadem','عين المالحة بئر خادم - بالقرب من مركز إيداع التأشيرة لتركيا','0770.70.50.07 / 0770.60.18.36','0770.60.18.36 / 0770.70.50.07','0770.58.40.33'],
@@ -117,7 +118,8 @@
         if(v < 9) ch = addrFromDefault([[44, 'Aïn Defla']]) || ch;   // nouvelle adresse (nov. 2026)
         if(v < 10) ch = addrFromDefault([[2, 'Ténès']]) || ch;   // nouvelle adresse (affiche ZR nov. 2026)
         if(v < 11) ch = addFromDefault([[5, 'Aïn Touta']]) || ch;   // nouveau bureau : Aïn Touta (Batna, nov. 2026)
-        if(ch || v < 11) save().catch(()=>{});
+        if(v < 12) ch = addFromDefault([[13, 'Maghnia']]) || ch;   // nouveau bureau : Maghnia (Tlemcen, nov. 2026)
+        if(ch || v < 12) save().catch(()=>{});
       }
     }catch(e){}
     loaded = true;
@@ -168,7 +170,7 @@
     return changed;
   }
   async function save(){
-    await db.collection('meta').doc('zrBureaux').set({v: 11, list, updatedAt: new Date().toISOString(), by: (currentUser && (currentUser.name || currentUser.username)) || ''});
+    await db.collection('meta').doc('zrBureaux').set({v: 12, list, updatedAt: new Date().toISOString(), by: (currentUser && (currentUser.name || currentUser.username)) || ''});
   }
 
   function css(){
