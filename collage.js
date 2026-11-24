@@ -1,13 +1,13 @@
 /* ============================================================
    🧩 Collage numéroté des modèles disponibles (pour Messenger)
    - seulement les photos en stock (> 0), produit + couleurs
-   - 12 modèles maximum par image ; s'il y en a plus → plusieurs images
+   - 9 modèles maximum par image ; s'il y en a plus → plusieurs images
    - chaque modèle : un grand numéro (1, 2, 3…) + le prix
    - logo كلش 100 ألف + nom de la catégorie en haut
    La cliente répond « رقم 5 » et on retrouve le modèle sur le même collage.
    ============================================================ */
 (function(){
-  const PER = 12, COLS = 3;
+  const PER = 9, COLS = 3;
   const W = 1440, PAD = 28, GAP = 18;
   const TW = Math.floor((W - PAD * 2 - GAP * (COLS - 1)) / COLS);
   const TH = Math.round(TW * 4 / 3);          // cases verticales (vêtements)
@@ -103,7 +103,7 @@
       const files = [];
       const stamp = new Date().toISOString().slice(5, 16).replace(/[-T:]/g, '');
       for(const grp of groups){
-        // 12 modèles par image ; le reste passe sur l'image suivante
+        // 9 modèles par image ; le reste passe sur l'image suivante
         const pages = Math.ceil(grp.list.length / PER);
         const per = PER;
         for(let pg = 0; pg < pages; pg++){
