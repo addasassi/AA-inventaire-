@@ -47,7 +47,7 @@
     [19,'Sétif','سطيف','El Eulma','العلمة','Logements covalente - derrière hôtel Rif, à côté de la mosquée Imam Chafei','حي التساهمي - خلف فندق الريف وبجانب مسجد الإمام الشافعي','0770.78.80.97','0770.33.99.75','0770.80.40.09'],
     [20,'Saïda','سعيدة','Saïda','سعيدة','Cité 5 Juillet - en face la pharmacie 5 Juillet','حي 5 جويلية - أمام صيدلية 5 جويلية','0795.27.12.65','0770.80.87.91','0770.39.16.95 / 0779.21.46.31'],
     [21,'Skikda','سكيكدة','Skikda','سكيكدة','Cité Mohammed Namous N°02, Mag 02 - pas loin de Hammam Derradji','حي محمد ناموس - بالقرب من حمام دراجي','0770.30.88.09','0792.43.57.32','0773.85.06.22 / 0793.54.04.47'],
-    [22,'Sidi Bel Abbès','سيدي بلعباس','Sidi Bel Abbès','سيدي بلعباس','En face de la station de tramway AADL Benhamouda - à côté des magasins Bébé Luxe','مقابل محطة الطراموي عدل بن حمودة - بجانب محلات BÉBÉ LUXE','0778.15.20.27','0773.98.12.87','0773.57.93.68'],
+    [22,'Sidi Bel Abbès','سيدي بلعباس','Sidi Bel Abbès','سيدي بلعباس','Angle rue Bagui Mohamed n° 12 et rue Taleb Mohamed - Sidi Bel Abbès (Secteur 3)','زاوية شارع باقي محمد رقم 12 و شارع طالب محمد - بلدية سيدي بلعباس، المقطع 3','0550.96.01.64','0550.96.01.48','0550.96.52.12'],
     [23,'Annaba','عنابة','Annaba 1','عنابة 1','Rue l\'Avant-Port - à côté de la supérette Ben Amara','طريق قبل الميناء - جانب سوبيرات بن عمارة','0770.35.07.90','0796.36.96.89','0657.81.29.59 / 0660.97.79.32 / 0660.90.47.91 / 0770.27.05.40'],
     [23,'Annaba','عنابة','Annaba 2 - El Bouni','عنابة 2 - البوني','El Bouni - en face Algérie Télécom','بلدية البوني، وسط المدينة، مقابل اتصالات الجزائر','0797.40.57.33','0796.36.96.89','0770.29.99.73'],
     [24,'Guelma','قالمة','Guelma','قالمة','À côté de la cafétéria La Fontaine','بجانب مقهى La Fontaine','0791.48.22.66','0791.61.67.69','0770.96.22.21'],
@@ -119,7 +119,10 @@
         if(v < 10) ch = addrFromDefault([[2, 'Ténès']]) || ch;   // nouvelle adresse (affiche ZR nov. 2026)
         if(v < 11) ch = addFromDefault([[5, 'Aïn Touta']]) || ch;   // nouveau bureau : Aïn Touta (Batna, nov. 2026)
         if(v < 12) ch = addFromDefault([[13, 'Maghnia']]) || ch;   // nouveau bureau : Maghnia (Tlemcen, nov. 2026)
-        if(ch || v < 12) save().catch(()=>{});
+        if(v < 13){ ch = addrFromDefault([[22, 'Sidi Bel Abbès']]) || ch;   // nouvelle adresse + numéros (affiche ZR nov. 2026)
+          const o = list.find(x => Number(x.n) === 22 && norm(x.name) === norm('Sidi Bel Abbès'));
+          if(o){ o.com = '0550.96.01.64'; o.rec = '0550.96.01.48'; o.desk = '0550.96.52.12'; ch = true; } }
+        if(ch || v < 13) save().catch(()=>{});
       }
     }catch(e){}
     loaded = true;
@@ -170,7 +173,7 @@
     return changed;
   }
   async function save(){
-    await db.collection('meta').doc('zrBureaux').set({v: 12, list, updatedAt: new Date().toISOString(), by: (currentUser && (currentUser.name || currentUser.username)) || ''});
+    await db.collection('meta').doc('zrBureaux').set({v: 13, list, updatedAt: new Date().toISOString(), by: (currentUser && (currentUser.name || currentUser.username)) || ''});
   }
 
   function css(){
