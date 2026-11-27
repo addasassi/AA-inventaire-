@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "329571073759",
+    "project_id": "aa-inventaire",
+    "storage_bucket": "aa-inventaire.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:329571073759:android:6b8b7c0bc27c0d5325336a",
+        "android_client_info": {
+          "package_name": "com.aavetements.atelierstock"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA3gAYXy72pVPgNy_QiwafdUz3p_Zy68hA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
