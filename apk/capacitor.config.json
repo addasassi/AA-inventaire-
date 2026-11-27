@@ -1,0 +1,17 @@
+{
+  "appId": "com.aavetements.atelierstock",
+  "appName": "Atelier Stock",
+  "webDir": "www",
+  "server": {
+    "url": "https://addasassi.github.io/AA-inventaire-/",
+    "errorPath": "offline.html"
+  },
+  "android": {
+    "backgroundColor": "#f6efe9"
+  },
+  "plugins": {
+    "PushNotifications": { "presentationOptions": ["badge", "sound", "alert"] },
+    "SplashScreen": { "launchShowDuration": 600, "backgroundColor": "#3a2632", "showSpinner": false },
+    "LocalNotifications": { "smallIcon": "ic_stat_notify", "iconColor": "#BC4FA0" }
+  }
+}

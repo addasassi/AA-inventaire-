@@ -1,0 +1,17 @@
+{
+  "name": "atelier-stock-android",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Application Android (Capacitor) d'Atelier Stock — construite par GitHub Actions (.github/workflows/apk.yml)",
+  "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/app": "^7.0.0",
+    "@capacitor/cli": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/filesystem": "^7.0.0",
+    "@capacitor/local-notifications": "^7.0.0",
+    "@capacitor/push-notifications": "^7.0.0",
+    "@capacitor/share": "^7.0.0",
+    "@capacitor/splash-screen": "^7.0.0"
+  }
+}

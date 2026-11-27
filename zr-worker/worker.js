@@ -541,7 +541,7 @@ async function pushSubs(){
     const r = await fetch(`${FS}/pushSubs?pageSize=300&key=${FS_KEY}` + (tok ? '&pageToken=' + encodeURIComponent(tok) : ''));
     if(!r.ok) break;
     const j = await r.json();
-    (j.documents || []).forEach(d => { const f = fromFs({mapValue: {fields: d.fields || {}}}); if(f.endpoint) out.push({id: d.name.split('/').pop(), endpoint: f.endpoint}); });
+    (j.documents || []).forEach(d => { const f = fromFs({mapValue: {fields: d.fields || {}}}); if(f.endpoint || f.fcm) out.push({id: d.name.split('/').pop(), endpoint: f.endpoint || '', fcm: f.fcm || ''}); });
     tok = j.nextPageToken || '';
   } while(tok);
   return out;
@@ -552,6 +552,50 @@ async function wake(subs){
       const r = await fetch(s.endpoint, {method: 'POST', headers: {TTL: '3600', Urgency: 'high', Authorization: await vapidHeader(s.endpoint)}});
       if(r.status === 404 || r.status === 410) await fetch(`${FS}/pushSubs/${s.id}?key=${FS_KEY}`, {method: 'DELETE'});   // téléphone désabonné
     }catch(e){}
+  }));
+}
+/* 📱 APK Android : Firebase Cloud Messaging (le téléphone affiche lui-même la notification, même app fermée).
+   Secret Cloudflare FCM_SA = fichier JSON du « compte de service » Firebase. */
+let FCM_SA = '', fcmTok = null;
+async function fcmAccess(){
+  if(!FCM_SA) return null;
+  if(fcmTok && fcmTok.exp > Date.now() + 120000) return fcmTok;
+  const sa = JSON.parse(FCM_SA);
+  const now = Math.floor(Date.now() / 1000);
+  const unsigned = b64uStr(JSON.stringify({alg: 'RS256', typ: 'JWT'})) + '.' + b64uStr(JSON.stringify({iss: sa.client_email,
+    scope: 'https://www.googleapis.com/auth/firebase.messaging', aud: 'https://oauth2.googleapis.com/token', iat: now, exp: now + 3600}));
+  const der = Uint8Array.from(atob(sa.private_key.replace(/-----[^-]+-----/g, '').replace(/\s+/g, '')), c => c.charCodeAt(0));
+  const key = await crypto.subtle.importKey('pkcs8', der, {name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256'}, false, ['sign']);
+  const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(unsigned));
+  const r = await fetch('https://oauth2.googleapis.com/token', {method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+    body: 'grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=' + unsigned + '.' + b64u(sig)});
+  const j = await r.json().catch(() => ({}));
+  if(!j.access_token) throw new Error('FCM auth : ' + (j.error_description || j.error || r.status));
+  return (fcmTok = {token: j.access_token, project: sa.project_id || FS_PROJECT, exp: Date.now() + (Number(j.expires_in) || 3600) * 1000});
+}
+async function fcmSend(subs, items){
+  if(!subs.length || !items.length) return;
+  const a = await fcmAccess().catch(() => null);
+  if(!a) return;
+  await Promise.all(subs.map(async s => {
+    for(const x of items){
+      try{
+        const r = await fetch(`https://fcm.googleapis.com/v1/projects/${a.project}/messages:send`, {method: 'POST',
+          headers: {Authorization: 'Bearer ' + a.token, 'Content-Type': 'application/json'},
+          body: JSON.stringify({message: {token: s.fcm,
+            notification: {title: String(x.title || 'Atelier Stock'), body: String(x.body || '')},
+            data: {id: String(x.id || ''), kind: String(x.kind || '')},
+            android: {priority: 'HIGH', ttl: '3600s', notification: {channel_id: 'atelier', tag: String(x.id || ''), sound: 'default',
+              default_vibrate_timings: true, notification_priority: 'PRIORITY_MAX', visibility: 'PUBLIC', icon: 'ic_stat_notify', color: '#BC4FA0'}}}})});
+        if(!r.ok){
+          const t = await r.text();
+          if(r.status === 404 || /UNREGISTERED|not a valid FCM registration token/i.test(t)){   // app désinstallée
+            await fetch(`${FS}/pushSubs/${s.id}?key=${FS_KEY}`, {method: 'DELETE'}).catch(() => {});
+            break;
+          }
+        }
+      }catch(e){}
+    }
   }));
 }
 async function pushQueue(items){
@@ -568,7 +612,8 @@ async function pushNotify(items, subs){
   const at = new Date().toISOString();
   items = items.map((x, i) => ({id: x.id || ('n' + Date.now().toString(36) + i), at, ...x}));
   await pushQueue(items);
-  await wake(subs || await pushSubs());
+  const all = subs || await pushSubs();
+  await Promise.all([wake(all.filter(s => s.endpoint)), fcmSend(all.filter(s => s.fcm), items)]);
 }
 const fnvHash = str => { let h = 2166136261; for(let i = 0; i < str.length; i++){ h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); };
 const nrpLevel = sit => { const s = String(sit || ''); if(/annul|refus/i.test(s)) return 10; const m = s.match(/r[eé]pond\w*\s+pas\D*(\d)/i); return m ? Number(m[1]) : 0; };
@@ -783,6 +828,7 @@ async function botCatalog(req){
 
 export default {
   async fetch(req, env, ctx){
+    if(env.FCM_SA) FCM_SA = env.FCM_SA;
     if(req.method === 'OPTIONS') return new Response(null, {headers: CORS});
     const path = new URL(req.url).pathname.replace(/\/+$/, '') || '/';
     if(path === '/bot') return botCatalog(req);
@@ -810,6 +856,12 @@ export default {
     }
     if(path === '/push/sub' && req.method === 'POST'){
       const b = await req.json().catch(() => ({}));
+      if(b.fcm && typeof b.fcm === 'string' && b.fcm.length > 20 && b.fcm.length < 4096){   // 📱 APK Android
+        const id = 'f' + b64u(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(b.fcm))).slice(0, 31);
+        await fsSetDoc('pushSubs/' + id, {fcm: b.fcm, user: String(b.user || ''), at: new Date().toISOString()});
+        if(b.test) ctx.waitUntil(pushNotify([{title: '✅ Notifications activées', body: 'Vous recevrez les ruptures, nouvelles commandes et « Ne répond pas » même app fermée.', kind: 'test'}], [{id, fcm: b.fcm}]));
+        return json({ok: true, fcm: !!FCM_SA});
+      }
       if(!b.endpoint || !/^https:\/\//.test(b.endpoint)) return json({ok: false}, 400);
       const id = b64u(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(b.endpoint))).slice(0, 32);
       await fsSetDoc('pushSubs/' + id, {endpoint: b.endpoint, user: String(b.user || ''), at: new Date().toISOString()});
@@ -1021,6 +1073,7 @@ Règles : n'invente rien ; une ville/commune citée (ex. "فالعلمة" = El E
     }
   },
   async scheduled(event, env, ctx){
+    if(env.FCM_SA) FCM_SA = env.FCM_SA;
     // chaque minute : notifications push ; toutes les 10 minutes : suivi ZR (comme avant)
     const zrTurn = new Date(event.scheduledTime || Date.now()).getUTCMinutes() % 10 === 0;
     ctx.waitUntil((async () => {

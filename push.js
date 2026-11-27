@@ -11,7 +11,7 @@
   const set = (k, v) => { try{ localStorage.setItem(k, v); }catch(e){} };
   let running = false;
 
-  async function subscribe(test){
+  let subscribe = async function(test){
     if(running) return;
     if(!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return;
     if(Notification.permission !== 'granted' || get('notifPref') !== 'on') { window.pushOn = false; return; }
@@ -34,7 +34,43 @@
       window.pushOn = true;   // l'app n'affiche plus ses propres notifications (le push le fait) → pas de doublon
     }catch(e){ window.pushOn = false; }
     running = false;
+  };
+  /* 📱 APK (Capacitor) : vraies notifications Android (Firebase Cloud Messaging), affichées par le
+     téléphone lui-même → instantanées et même quand l'app est fermée */
+  let nativeReady = false, nativeTest = false;
+  async function nativeSubscribe(test){
+    const PN = window.Capacitor.Plugins.PushNotifications;
+    if(!PN) return;
+    if(get('notifPref') !== 'on'){ window.pushOn = false; return; }
+    if(running) return;
+    running = true;
+    try{
+      let p = await PN.checkPermissions();
+      if(p.receive === 'prompt' || p.receive === 'prompt-with-rationale') p = await PN.requestPermissions();
+      if(p.receive !== 'granted'){ window.pushOn = false; running = false; return; }
+      if(!nativeReady){
+        nativeReady = true;
+        await PN.addListener('registration', async t => {
+          const user = (typeof currentUser !== 'undefined' && currentUser && currentUser.name) || '';
+          const stale = Date.now() - Number(get('pushAt') || 0) > 3 * 86400000;
+          const fresh = get('pushFcm') !== t.value;
+          if(!(fresh || nativeTest || stale || get('pushUser') !== user)) return;
+          try{
+            const r = await fetch(API + '/push/sub', {method: 'POST', headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify({fcm: t.value, user, test: !!(fresh || nativeTest)})});
+            if(r.ok){ set('pushFcm', t.value); set('pushUser', user); set('pushAt', String(Date.now())); }
+          }catch(e){}
+          nativeTest = false;
+        });
+        await PN.addListener('registrationError', () => { window.pushOn = false; });
+      }
+      nativeTest = nativeTest || !!test;
+      await PN.register();
+      window.pushOn = true;   // le téléphone affiche les notifications du relais (même app ouverte) → l'app n'en ajoute pas
+    }catch(e){ window.pushOn = false; }
+    running = false;
   }
+  if(window.isNativeApp){ subscribe = nativeSubscribe; }
   window.pushSubscribe = subscribe;
   /* 🔔 demande au relais d'envoyer TOUT DE SUITE (sans attendre son passage de chaque minute) */
   let nowT = null;
