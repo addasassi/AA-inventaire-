@@ -68,6 +68,10 @@
     return 'handled';
   }
 
+  // 📱 APK Android : c'est native.js qui reçoit le bouton retour et appelle cette fonction
+  window.appOnBack = onBack;
+  if(window.isNativeApp) return;
+
   /* ---- Méthode 1 (Chrome récent) : CloseWatcher, prévu exactement pour le bouton retour d'Android.
      Chrome autorise un « retour » intercepté par geste de l'utilisateur : on crée donc un
      surveillant à chaque toucher. À l'Accueil (« Appuyez encore pour quitter ») on les retire

@@ -99,6 +99,11 @@
     };
   }
 
-  // touche « retour » du téléphone sur la première page : l'app passe en arrière-plan au lieu de se fermer
-  if(P.App) P.App.addListener('backButton', ({canGoBack}) => { if(canGoBack) history.back(); else P.App.minimizeApp(); });
+  // touche / geste « retour » du téléphone
+  // (même logique que dans le navigateur : menu, fenêtre, page précédente, Accueil, « Appuyez encore pour quitter »)
+  if(P.App) P.App.addListener('backButton', () => {
+    let r = 'exit';
+    try{ if(typeof window.appOnBack === 'function') r = window.appOnBack(); }catch(e){}
+    if(r === 'exit') P.App.minimizeApp();
+  });
 })();
