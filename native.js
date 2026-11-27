@@ -58,16 +58,38 @@
     for(const f of files) uris.push(await toCacheFile(f, f.name));
     await P.Share.share({title: title || (files[0] && files[0].name) || 'Atelier Stock', text: text || undefined, files: uris, dialogTitle: 'Enregistrer ou envoyer'});
   }
+  const EXT = {'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'video/mp4': 'mp4',
+    'application/pdf': 'pdf', 'text/csv': 'csv', 'application/json': 'json', 'application/zip': 'zip', 'text/plain': 'txt'};
+  const MIME = Object.fromEntries(Object.entries(EXT).map(([m, e]) => [e, m]));
+  let saved = 0, savedWhere = '', savedTimer = null;
+  function savedToast(where){
+    saved++; savedWhere = where;
+    clearTimeout(savedTimer);
+    savedTimer = setTimeout(() => {
+      const msg = '✅ ' + (saved > 1 ? saved + ' fichiers enregistrés' : 'Enregistré') + (savedWhere === 'gallery' ? ' dans la Galerie' : ' dans Téléchargements');
+      if(typeof window.toast === 'function') window.toast(msg); else localNotify('Atelier Stock', {body: msg, tag: 'saved'});
+      saved = 0;
+    }, 600);
+  }
+  // téléchargement direct (Galerie / Téléchargements) ; sinon, menu « Partager »
   async function saveUrl(url, name){
     try{
-      const blob = await (await fetch(url)).blob();
-      await shareFiles([new File([blob], safe(name), {type: blob.type})], name);
+      let blob;
+      try{ blob = await (await fetch(url)).blob(); }
+      catch(e){ if(/^https?:/.test(url)){ window.open(url, '_system'); return; } throw e; }
+      let n = safe(name), ext = (n.match(/\.([a-z0-9]{2,5})$/i) || [])[1];
+      const mime = blob.type || MIME[String(ext).toLowerCase()] || 'application/octet-stream';
+      if(!ext && EXT[mime]) n += '.' + EXT[mime];
+      if(P.Saver){
+        try{ const r = await P.Saver.save({data: await b64(blob), name: n, mime}); savedToast(r && r.where); return; }catch(e){}
+      }
+      await shareFiles([new File([blob], n, {type: mime})], n);
     }catch(e){ if(!/cancel/i.test(String(e && e.message))) alert('Fichier non enregistré : ' + (e && e.message || e)); }
   }
   // les liens blob: sont souvent supprimés juste après le clic → on les garde 1 minute
   const revoke = URL.revokeObjectURL.bind(URL);
   URL.revokeObjectURL = u => setTimeout(() => revoke(u), 60000);
-  const isFileLink = a => a && a.hasAttribute && a.hasAttribute('download') && /^(blob:|data:)/.test(a.href || '');
+  const isFileLink = a => a && a.hasAttribute && a.hasAttribute('download') && /^(blob:|data:|https?:)/.test(a.href || '');
   document.addEventListener('click', e => {
     const a = e.target && e.target.closest && e.target.closest('a');
     if(isFileLink(a)){ e.preventDefault(); e.stopPropagation(); saveUrl(a.href, a.getAttribute('download') || 'fichier'); }

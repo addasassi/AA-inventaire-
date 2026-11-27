@@ -16,6 +16,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(PrinterPlugin.class);
+        registerPlugin(SaverPlugin.class);
         super.onCreate(savedInstanceState);
 
         // Android 15+ dessine l'app sous la barre d'état et la barre de navigation :
