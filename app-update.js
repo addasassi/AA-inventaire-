@@ -70,7 +70,9 @@
         if(r.ok && c){ const u = new URL(f, location.href); u.search = ''; await c.put(u.href, r); }
       }));
     }catch(e){}
-    try{ await fetch(FILES[0], {cache:'reload'}); }catch(e){}
+    // copie du navigateur / de l'APK (cache HTTP) : on la remplace aussi, sinon les anciens scripts
+    // reviennent au rechargement et le bandeau réapparaît
+    await Promise.all(FILES.map(f => fetch(f, {cache:'reload'}).catch(()=>{})));
     location.reload();
   }
 
