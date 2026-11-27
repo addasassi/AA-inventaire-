@@ -131,19 +131,44 @@
                      .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
     const done = list.filter(o => o.returnInfo && o.returnInfo.at)
                      .sort((a, b) => String(b.returnInfo.at).localeCompare(String(a.returnInfo.at))).slice(0, 30);
-    const line = (o, right) => { const c = o.customer || {}; return `<div class="rt-row"><div><b>${esc(c.name || '')}</b> · ${esc(c.wilaya || '')}<br><span>${(o.items || []).map(i => esc(i.name) + ' ×' + (i.qty || 1)).join(', ')}</span></div><small>${right}</small></div>`; };
     el.innerHTML = `
       <div class="rt-sec"><div class="rt-h">🟠 Retours à récupérer chez ZR <span>${todo.length}</span></div>
-        ${todo.length ? todo.map(o => line(o, esc(o.zr.tracking || '') + '<br>' + (waitDays(o) > 7 ? '<b style="color:#b3261e">' : '<b>') + 'depuis ' + waitDays(o) + ' j</b>')).join('') : '<div class="rt-empty">Aucun retour en attente</div>'}</div>
+        ${todo.length ? todo.map(todoCard).join('') : '<div class="rt-empty">Aucun retour en attente</div>'}</div>
       <div class="rt-sec"><div class="rt-h">🟢 Retours remis en stock <span>${done.length}</span></div>
         ${done.length ? done.map(doneCard).join('') : '<div class="rt-empty">Aucun pour le moment</div>'}</div>`;
+  }
+  // photo d'un article : celle de la commande, sinon celle de la couleur / du produit dans le stock
+  function imgOf(it){
+    if(it && it.img) return it.img;
+    try{ const loc = it && typeof products !== 'undefined' ? locate(it) : null; if(loc) return (loc.c && loc.c.img) || loc.p.img || ''; }catch(e){}
+    return '';
+  }
+  // carte d'un retour qui revient de chez ZR : photos des modèles, détail en touchant
+  function todoCard(o){
+    const c = o.customer || {}, d = waitDays(o);
+    const items = (o.items || []).filter(i => (Number(i.qty) || 0) > 0).map(i => ({name: i.name, qty: Number(i.qty) || 1, img: imgOf(i), it: i}));
+    const pcs = items.reduce((n, x) => n + x.qty, 0);
+    const big = x => x.img ? `<img src="${esc(x.img)}" loading="lazy" onclick="event.preventDefault();event.stopPropagation();window.openImgViewer&&openImgViewer(this.src)">` : '<span class="rt-noimg"></span>';
+    const thumbs = items.map(x => `<div class="rt-th">${x.img ? `<img src="${esc(x.img)}" loading="lazy">` : '<i class="rt-ph">👗</i>'}<span>×${x.qty}</span></div>`).join('');
+    const rows = items.map(x => `<div class="rt-it">${big(x)}<div>${esc(x.name)}</div><b>×${x.qty}</b></div>`).join('');
+    return `<details class="rt-done rt-todo">
+      <summary>
+        <div class="rt-done-top"><div><b>${esc(c.name || 'Client')}</b> · ${esc(c.wilaya || '')}<br><span>↩️ ${pcs} pièce${pcs > 1 ? 's' : ''} en retour</span></div><small>${esc(o.zr.tracking || '')}<br>${d > 7 ? '<b style="color:#b3261e">' : '<b>'}depuis ${d} j</b></small></div>
+        <div class="rt-ths">${thumbs}</div>
+      </summary>
+      <div class="rt-done-body">
+        ${rows}
+        <div class="rt-meta">📞 ${esc(c.phone || '—')}${c.commune ? ' · ' + esc(c.commune) : ''}<br>🧾 Commande du ${fmtDate(o.createdAt)}${o.createdBy ? ' par ' + esc(o.createdBy) : ''}${Number(o.total) ? ' · ' + Math.round(Number(o.total)) + ' DA' : ''}</div>
+        ${typeof showOrderDetail === 'function' ? `<button class="rt-open" onclick="showOrderDetail('${esc(o.id)}')">Voir la commande</button>` : ''}
+      </div>
+    </details>`;
   }
   // carte d'un retour remis en stock : photos + quantités, détail en touchant
   function doneCard(o){
     const c = o.customer || {}, ri = o.returnInfo || {};
     const back = (ri.items && ri.items.length ? ri.items : (o.items || [])).map(x => {
       const src = (o.items || []).find(i => i.name === x.name) || {};
-      return {name: x.name, qty: Number(x.qty) || 1, img: src.img || ''};
+      return {name: x.name, qty: Number(x.qty) || 1, img: imgOf(src)};
     });
     const pcs = back.reduce((n, x) => n + x.qty, 0);
     const thumbs = back.map(x => `<div class="rt-th">${x.img ? `<img src="${esc(x.img)}" loading="lazy">` : '<i class="rt-ph">👗</i>'}<span>+${x.qty}</span></div>`).join('');
@@ -224,6 +249,13 @@
       .rt-done[open] .rt-ths{display:none;}
       .rt-done-body{padding:0 10px 10px;}
       .rt-done-body .rt-it{background:#f3faf6;}
+      .rt-todo{border-left-color:#f08a24;}
+      .rt-todo .rt-done-top span{color:#c2610c;}
+      .rt-todo .rt-th img,.rt-todo .rt-ph{border-color:#fbd9b6;}
+      .rt-todo .rt-th span{background:#e07a12;}
+      .rt-todo .rt-done-body .rt-it{background:#fff6ec;}
+      .rt-todo .rt-done-body .rt-it img,.rt-todo .rt-done-body .rt-noimg{width:64px;height:64px;}
+      .rt-todo .rt-done-body .rt-it b{color:#c2610c;}
       .rt-meta{font-size:12.5px;opacity:.85;margin-top:8px;line-height:1.6;}
       .rt-open{margin-top:8px;width:100%;border:1px solid var(--line);background:var(--cream,#f6efe9);color:var(--plum);border-radius:10px;padding:9px;font-weight:700;}
       #rt-cam{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px;}
