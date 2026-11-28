@@ -1,0 +1,12 @@
+{
+ "day": "2026-11-28",
+ "at": "2026-11-28T10:34:28.245Z",
+ "counts": {
+  "products": 92,
+  "orders": 762,
+  "customers": 763,
+  "meta": 14,
+  "users": 3
+ },
+ "newPhotos": 2
+}
